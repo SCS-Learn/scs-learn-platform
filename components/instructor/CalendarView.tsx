@@ -2,11 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import {
-  instructorCourses,
-  type CalendarEvent,
-  type CalendarEventType,
-} from "@/lib/instructor/mock-data";
+import type { CalendarEvent, CalendarEventType, InstructorCourse } from "@/lib/instructor/mock-data";
 import { addCalendarEvent, deleteCalendarEvent } from "@/lib/instructor/data/calendar-events";
 import {
   WEEKDAY_LABELS,
@@ -30,9 +26,11 @@ const EMPTY_FORM = {
 
 export default function CalendarView({
   events,
+  courses,
   onClose,
 }: {
   events: CalendarEvent[];
+  courses: InstructorCourse[];
   onClose: () => void;
 }) {
   const todayIso = isoToday();
@@ -116,7 +114,7 @@ export default function CalendarView({
   const scopeOptions = [
     { value: "all", label: "All events" },
     { value: "global", label: "Global" },
-    ...instructorCourses.map((c) => ({ value: c.code, label: c.code })),
+    ...courses.map((c) => ({ value: c.code, label: c.code })),
   ];
 
   return (
@@ -360,7 +358,7 @@ export default function CalendarView({
                 className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 bg-white"
               >
                 <option value="global">Global (all students)</option>
-                {instructorCourses.map((course) => (
+                {courses.map((course) => (
                   <option key={course.code} value={course.code}>
                     {course.code} — {course.title}
                   </option>

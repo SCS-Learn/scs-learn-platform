@@ -1,6 +1,7 @@
 "use client";
 
 import { type Editor } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import {
   Bold,
   Italic,
@@ -11,7 +12,6 @@ import {
   Code,
   Image as ImageIcon,
   Video as VideoIcon,
-  Paperclip,
   Table as TableIcon,
   Undo2,
   Redo2,
@@ -29,6 +29,18 @@ function currentParagraphStyle(editor: Editor) {
   if (editor.isActive("heading", { level: 2 })) return "h2";
   if (editor.isActive("heading", { level: 3 })) return "h3";
   return "paragraph";
+}
+
+const LINKABLE_NODE_TYPES = ["image", "video"];
+
+// Images/videos are block atoms, not text — a selected one shows up as a
+// NodeSelection rather than something `editor.isActive("link")` can see.
+function selectedLinkableNode(editor: Editor) {
+  const { selection } = editor.state;
+  if (selection instanceof NodeSelection && LINKABLE_NODE_TYPES.includes(selection.node.type.name)) {
+    return selection.node;
+  }
+  return null;
 }
 
 function ToolbarButton({
@@ -61,12 +73,10 @@ export default function EditorToolbar({
   editor,
   onInsertImage,
   onInsertVideo,
-  onInsertAttachment,
 }: {
   editor: Editor | null;
   onInsertImage: () => void;
   onInsertVideo: () => void;
-  onInsertAttachment: () => void;
 }) {
   if (!editor) return null;
 
@@ -80,6 +90,15 @@ export default function EditorToolbar({
   };
 
   const setLink = () => {
+    const linkedNode = selectedLinkableNode(editor);
+    if (linkedNode) {
+      const previousUrl = linkedNode.attrs.href as string | undefined;
+      const url = window.prompt(`Link URL for this ${linkedNode.type.name}`, previousUrl ?? "");
+      if (url === null) return;
+      editor.chain().focus().updateAttributes(linkedNode.type.name, { href: url || null }).run();
+      return;
+    }
+
     const previousUrl = editor.getAttributes("link").href as string | undefined;
     const url = window.prompt("URL", previousUrl ?? "");
     if (url === null) return;
@@ -89,6 +108,9 @@ export default function EditorToolbar({
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
+
+  const linkedNode = selectedLinkableNode(editor);
+  const isLinkActive = linkedNode ? !!linkedNode.attrs.href : editor.isActive("link");
 
   const insertTable = () => {
     editor
@@ -134,7 +156,7 @@ export default function EditorToolbar({
         >
           <Underline size={16} />
         </ToolbarButton>
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={setLink}>
+        <ToolbarButton label="Link" active={isLinkActive} onClick={setLink}>
           <Link2 size={16} />
         </ToolbarButton>
       </div>
@@ -173,9 +195,6 @@ export default function EditorToolbar({
         </ToolbarButton>
         <ToolbarButton label="Insert video" onClick={onInsertVideo}>
           <VideoIcon size={16} />
-        </ToolbarButton>
-        <ToolbarButton label="Insert attachment" onClick={onInsertAttachment}>
-          <Paperclip size={16} />
         </ToolbarButton>
         <ToolbarButton label="Insert table" onClick={insertTable}>
           <TableIcon size={16} />

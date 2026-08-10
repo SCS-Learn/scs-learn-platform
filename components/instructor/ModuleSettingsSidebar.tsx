@@ -1,36 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, FileText, Upload } from "lucide-react";
-import {
-  lessonTypeOptions,
-  initialAttachments,
-  type Attachment,
-} from "@/lib/instructor/mock-data";
+import { lessonTypeOptions, type Attachment } from "@/lib/instructor/mock-data";
+import { uploadLessonFile } from "@/lib/instructor/upload";
+import { addAttachment, deleteAttachment } from "@/lib/instructor/data/attachments";
 
 export default function ModuleSettingsSidebar({
+  lessonId,
+  attachments,
   moduleOptions,
   selectedModule,
   onModuleChange,
   selectedType,
   onTypeChange,
 }: {
+  lessonId: string;
+  attachments: Attachment[];
   moduleOptions: string[];
   selectedModule: string;
   onModuleChange: (value: string) => void;
   selectedType: string;
   onTypeChange: (value: string) => void;
 }) {
-  const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments);
+  const [localAttachments, setLocalAttachments] = useState<Attachment[]>(attachments);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setLocalAttachments((prev) => prev.filter((a) => a.id !== id));
+    deleteAttachment(id).catch((err) => window.alert(err.message));
   };
 
-  const addAttachment = () => {
-    const name = window.prompt("File name (mock — no upload yet)");
-    if (name) {
-      setAttachments((prev) => [...prev, { id: `att-${Date.now()}`, name }]);
+  const handleFile = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const uploaded = await uploadLessonFile(lessonId, file);
+      const attachment = await addAttachment(lessonId, { name: file.name, ...uploaded });
+      setLocalAttachments((prev) => [...prev, attachment]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to upload file");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -72,19 +83,24 @@ export default function ModuleSettingsSidebar({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-bold">Attachments</h3>
-          <span className="text-xs text-gray-400">{attachments.length}</span>
+          <span className="text-xs text-gray-400">{localAttachments.length}</span>
         </div>
 
         <div className="flex flex-col gap-1 mb-3">
-          {attachments.map((attachment) => (
+          {localAttachments.map((attachment) => (
             <div
               key={attachment.id}
               className="group flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-gray-50"
             >
               <FileText size={14} className="text-gray-400 shrink-0" />
-              <span className="flex-1 min-w-0 truncate text-gray-700">
+              <a
+                href={attachment.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 min-w-0 truncate text-gray-700 hover:text-primary hover:underline"
+              >
                 {attachment.name}
-              </span>
+              </a>
               <button
                 type="button"
                 aria-label="Remove attachment"
@@ -97,13 +113,24 @@ export default function ModuleSettingsSidebar({
           ))}
         </div>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) handleFile(file);
+          }}
+        />
         <button
           type="button"
-          onClick={addAttachment}
-          className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 border border-dashed border-gray-300 rounded py-2 hover:border-gray-400 hover:text-gray-600"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 border border-dashed border-gray-300 rounded py-2 hover:border-gray-400 hover:text-gray-600 disabled:opacity-50"
         >
           <Upload size={13} />
-          Upload a file
+          {isUploading ? "Uploading…" : "Upload a file"}
         </button>
       </div>
     </div>

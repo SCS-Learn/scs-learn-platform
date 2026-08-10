@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import CourseEditorClient from "@/components/instructor/CourseEditorClient";
-import { instructorCourses } from "@/lib/instructor/mock-data";
+import { getCourseWithContent } from "@/lib/instructor/data/courses";
 
 export default async function CourseEditorPage({
   params,
@@ -8,10 +8,11 @@ export default async function CourseEditorPage({
   params: Promise<{ courseCode: string }>;
 }) {
   const { courseCode } = await params;
+  const course = await getCourseWithContent(courseCode);
 
-  if (!instructorCourses.some((c) => c.code === courseCode)) {
+  if (!course) {
     notFound();
   }
 
-  return <CourseEditorClient courseCode={courseCode} />;
+  return <CourseEditorClient course={course} />;
 }

@@ -2,6 +2,8 @@
 
 import { Node, mergeAttributes, type CommandProps } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react";
+import type { DOMOutputSpec } from "@tiptap/pm/model";
+import { Link2 } from "lucide-react";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -42,10 +44,22 @@ function getVideoEmbed(rawUrl: string): { kind: "iframe" | "file"; src: string }
 
 function VideoView({ node }: ReactNodeViewProps<HTMLDivElement>) {
   const src = node.attrs.src as string;
+  const href = node.attrs.href as string | null;
   const embed = getVideoEmbed(src);
 
   return (
-    <NodeViewWrapper data-video-src={src} className="my-4">
+    <NodeViewWrapper data-video-src={src} className="relative my-4">
+      {href && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          title={`Linked to ${href}`}
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-black/70 text-white text-xs rounded px-1.5 py-1 hover:bg-black"
+        >
+          <Link2 size={12} />
+        </a>
+      )}
       {embed.kind === "iframe" ? (
         <div className="relative w-full rounded-md overflow-hidden bg-black" style={{ paddingTop: "56.25%" }}>
           <iframe
@@ -71,6 +85,14 @@ export const Video = Node.create({
   addAttributes() {
     return {
       src: { default: null },
+      href: {
+        default: null,
+        rendered: false,
+        parseHTML: (element) =>
+          element.parentElement?.tagName === "A"
+            ? element.parentElement.getAttribute("href")
+            : null,
+      },
     };
   },
 
@@ -78,8 +100,9 @@ export const Video = Node.create({
     return [{ tag: "div[data-video-src]" }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-video-src": HTMLAttributes.src })];
+  renderHTML({ HTMLAttributes, node }): DOMOutputSpec {
+    const div = ["div", mergeAttributes(HTMLAttributes, { "data-video-src": HTMLAttributes.src })] as const;
+    return node.attrs.href ? ["a", { href: node.attrs.href }, div] : div;
   },
 
   addNodeView() {

@@ -3,13 +3,15 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import CalendarView from "@/components/instructor/CalendarView";
-import type { CalendarEvent } from "@/lib/instructor/mock-data";
+import type { CalendarEvent, InstructorCourse } from "@/lib/instructor/mock-data";
 
 export default function CalendarModal({
   events,
+  courses,
   onClose,
 }: {
   events: CalendarEvent[];
+  courses: InstructorCourse[];
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function CalendarModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-white text-black rounded-md shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
       >
-        <CalendarView events={events} onClose={onClose} />
+        <CalendarView events={events} courses={courses} onClose={onClose} />
       </div>
     </div>,
     document.body

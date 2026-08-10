@@ -3,10 +3,16 @@
 import { useState } from "react";
 import { CalendarDays, CalendarPlus } from "lucide-react";
 import CalendarModal from "@/components/instructor/CalendarModal";
-import type { CalendarEvent } from "@/lib/instructor/mock-data";
+import type { CalendarEvent, InstructorCourse } from "@/lib/instructor/mock-data";
 import { isoToday, toISODate, parseISODate, TYPE_LABEL, TYPE_STYLE } from "@/lib/instructor/calendar";
 
-export default function CalendarPanel({ events }: { events: CalendarEvent[] }) {
+export default function CalendarPanel({
+  events,
+  courses,
+}: {
+  events: CalendarEvent[];
+  courses: InstructorCourse[];
+}) {
   const [showCalendar, setShowCalendar] = useState(false);
   const today = new Date();
   const todayIso = isoToday();
@@ -103,7 +109,9 @@ export default function CalendarPanel({ events }: { events: CalendarEvent[] }) {
         Subscribe to this calendar
       </button>
 
-      {showCalendar && <CalendarModal events={events} onClose={() => setShowCalendar(false)} />}
+      {showCalendar && (
+        <CalendarModal events={events} courses={courses} onClose={() => setShowCalendar(false)} />
+      )}
     </div>
   );
 }
