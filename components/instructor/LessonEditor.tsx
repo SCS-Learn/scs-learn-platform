@@ -3,25 +3,36 @@
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
 export default function LessonEditor({
+  lessonId,
+  title,
+  onTitleChange,
   content,
   onContentChange,
   wordCount,
-  savedLabel,
 }: {
+  lessonId: string;
+  title: string;
+  onTitleChange: (title: string) => void;
   content: string;
   onContentChange: (html: string) => void;
   wordCount: number;
-  savedLabel: string;
 }) {
   return (
-    <div className="min-w-0 min-h-0 h-full bg-white flex flex-col border border-gray-300 overflow-hidden">
-      <div className="flex-1 min-h-0">
-        <SimpleEditor content={content} onContentChange={onContentChange} />
+    <div className="flex-1 min-w-0 border border-gray-200 rounded-md overflow-hidden bg-white flex flex-col">
+      <div className="px-8 pt-6">
+        <input
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="Lesson title"
+          className="w-full text-3xl font-serif font-bold outline-none placeholder:text-gray-300"
+        />
       </div>
 
-      <div className="shrink-0 border-t border-gray-100 px-4 py-1.5 text-[11px] text-gray-400 tabular-nums">
-        {savedLabel}
-        <span className="mx-1.5 text-gray-300">·</span>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <SimpleEditor lessonId={lessonId} content={content} onContentChange={onContentChange} />
+      </div>
+
+      <div className="border-t border-gray-100 px-8 py-2 text-xs text-gray-400">
         {wordCount.toLocaleString()} words
       </div>
     </div>

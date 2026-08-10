@@ -1,50 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Send, X } from "lucide-react";
-import {
-  instructorName,
-  initialAnnouncements,
-  type Announcement,
-} from "@/lib/instructor/mock-data";
-
-function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import type { Announcement } from "@/lib/instructor/mock-data";
+import { postAnnouncement, deleteAnnouncement } from "@/lib/instructor/data/announcements";
 
 export default function AnnouncementsPanel({
   courses,
+  announcements,
 }: {
   courses: { code: string; title: string }[];
+  announcements: Announcement[];
 }) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(initialAnnouncements);
   const [draft, setDraft] = useState("");
   const [targetCourseCode, setTargetCourseCode] = useState(courses[0]?.code ?? "");
+  const [isPending, startTransition] = useTransition();
 
   const post = () => {
     const message = draft.trim();
     if (!message || !targetCourseCode) return;
-    setAnnouncements((prev) => [
-      {
-        id: `ann-${Date.now()}`,
-        authorName: instructorName,
-        authorInitials: initialsOf(instructorName),
-        courseCode: targetCourseCode,
-        timestamp: "Just now",
-        message,
-      },
-      ...prev,
-    ]);
     setDraft("");
+    startTransition(async () => {
+      await postAnnouncement({ courseCode: targetCourseCode, message });
+    });
   };
 
   const remove = (id: string) => {
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    startTransition(async () => {
+      await deleteAnnouncement(id);
+    });
   };
 
   return (
@@ -75,7 +59,7 @@ export default function AnnouncementsPanel({
         <button
           type="button"
           onClick={post}
-          disabled={!draft.trim() || !targetCourseCode}
+          disabled={!draft.trim() || !targetCourseCode || isPending}
           className="mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-bold bg-primary text-white rounded py-1.5 disabled:opacity-40"
         >
           <Send size={13} />
@@ -83,7 +67,7 @@ export default function AnnouncementsPanel({
         </button>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className={`flex flex-col gap-3 ${isPending ? "opacity-60" : ""}`}>
         {announcements.map((announcement) => (
           <div key={announcement.id} className="group flex gap-2.5">
             <div className="w-7 h-7 rounded-full bg-gray-100 text-[10px] font-bold text-gray-500 flex items-center justify-center shrink-0">

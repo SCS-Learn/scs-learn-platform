@@ -34,13 +34,14 @@ export default function ContentSidebar({
   onDeleteLesson: (unitId: string, lessonId: string) => void;
   onDeleteUnit: (unitId: string) => void;
   onReorderLessons: (unitId: string, draggedLessonId: string, targetLessonId: string) => void;
-  onAddUnit: () => string;
+  onAddUnit: () => Promise<string>;
   onReorderUnits: (draggedUnitId: string, targetUnitId: string) => void;
 }) {
   const lessonCount = units.reduce((sum, u) => sum + u.lessons.length, 0);
 
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    "unit-6": true,
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    const unit = units.find((u) => u.lessons.some((l) => l.id === selectedLessonId));
+    return unit ? { [unit.id]: true } : {};
   });
   const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
   const [dragOverLessonId, setDragOverLessonId] = useState<string | null>(null);
@@ -90,8 +91,8 @@ export default function ContentSidebar({
     setDragOverUnitId(null);
   };
 
-  const handleAddUnit = () => {
-    const newId = onAddUnit();
+  const handleAddUnit = async () => {
+    const newId = await onAddUnit();
     setExpanded((prev) => ({ ...prev, [newId]: true }));
   };
 

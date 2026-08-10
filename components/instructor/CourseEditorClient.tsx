@@ -1,21 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import ContentSidebar from "@/components/instructor/ContentSidebar";
 import ModuleSettingsSidebar from "@/components/instructor/ModuleSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
+import EditorTopBar from "@/components/instructor/EditorTopBar";
+import InstructorHeader from "@/components/instructor/InstructorHeader";
+import { lessonTypeOptions, type InstructorCourse, type Unit } from "@/lib/instructor/mock-data";
+import { formatRelativeTime } from "@/lib/instructor/format";
 import {
-  instructorCourses,
-  initialLessonContent,
-  lessonTypeOptions,
-  type Unit,
-  type LessonItem,
-} from "@/lib/instructor/mock-data";
-
-type LessonDraft = {
-  title: string;
-  html: string;
-};
+  addUnit as addUnitAction,
+  deleteUnit as deleteUnitAction,
+  reorderUnits as reorderUnitsAction,
+  addLesson as addLessonAction,
+  deleteLesson as deleteLessonAction,
+  reorderLessons as reorderLessonsAction,
+  updateLessonContent,
+  publishLesson as publishLessonAction,
+} from "@/lib/instructor/data/lessons";
 
 function wordCountOf(html: string) {
   const text = html.replace(/<[^>]*>/g, " ").trim();
@@ -23,29 +25,24 @@ function wordCountOf(html: string) {
   return text.split(/\s+/).length;
 }
 
-function nextUnitCode(units: Unit[]) {
-  const numbers = units.map((u) => Number(u.code.match(/(\d+)/)?.[1] ?? 0));
-  const max = numbers.length ? Math.max(...numbers) : 0;
-  return `Unit ${max + 1}`;
+function moduleLabel(unit: Unit | undefined) {
+  return unit ? `${unit.code} — ${unit.title}` : "";
 }
 
-export default function CourseEditorClient({ courseCode }: { courseCode: string }) {
-  const activeCourse = useMemo(
-    () => instructorCourses.find((c) => c.code === courseCode),
-    [courseCode]
-  );
+const AUTOSAVE_DELAY_MS = 800;
 
-  const [units, setUnits] = useState<Unit[]>(activeCourse?.units ?? []);
+export default function CourseEditorClient({ course }: { course: InstructorCourse }) {
+  const [units, setUnits] = useState<Unit[]>(course.units);
 
   const firstLessonId = units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
   const [selectedLessonId, setSelectedLessonId] = useState(firstLessonId);
-  const [drafts, setDrafts] = useState<Record<string, LessonDraft>>(
-    firstLessonId === "6.3"
-      ? { "6.3": { title: "Differential expression", html: initialLessonContent } }
-      : {}
-  );
-  const [savedLabel, setSavedLabel] = useState("Saved 2 min ago");
   const [selectedType, setSelectedType] = useState(lessonTypeOptions[0]);
+  const [, startTransition] = useTransition();
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ lessonId: string; title: string; contentHtml: string } | null>(
+    null
+  );
 
   const selectedUnit = useMemo(
     () => units.find((unit) => unit.lessons.some((l) => l.id === selectedLessonId)),
@@ -54,15 +51,48 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
 
   const selectedLesson = selectedUnit?.lessons.find((l) => l.id === selectedLessonId);
 
-  const draft = drafts[selectedLessonId] ?? {
-    title: selectedLesson?.title ?? "",
-    html: "",
+  const [selectedModule, setSelectedModule] = useState(moduleLabel(selectedUnit));
+
+  const moduleOptions = useMemo(
+    () => units.map((unit) => `${unit.code} — ${unit.title}`),
+    [units]
+  );
+
+  const wordCount = useMemo(
+    () => wordCountOf(selectedLesson?.contentHtml ?? ""),
+    [selectedLesson?.contentHtml]
+  );
+
+  const flushPendingSave = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    startTransition(async () => {
+      await updateLessonContent(pending.lessonId, {
+        title: pending.title,
+        contentHtml: pending.contentHtml,
+      });
+    });
   };
 
-  const wordCount = useMemo(() => wordCountOf(draft.html), [draft.html]);
+  const discardPendingSaveFor = (lessonIds: string[]) => {
+    if (pendingSaveRef.current && lessonIds.includes(pendingSaveRef.current.lessonId)) {
+      pendingSaveRef.current = null;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    }
+  };
 
   const applySelection = (unit: Unit | undefined, lessonId: string) => {
+    flushPendingSave();
     setSelectedLessonId(lessonId);
+    setSelectedModule(moduleLabel(unit));
   };
 
   const selectLesson = (lessonId: string) => {
@@ -70,31 +100,32 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
     applySelection(unit, lessonId);
   };
 
-  const updateDraft = (patch: Partial<LessonDraft>) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [selectedLessonId]: { ...draft, ...patch },
-    }));
+  const updateSelectedLesson = (patch: Partial<{ title: string; contentHtml: string }>) => {
+    if (!selectedLesson) return;
+    const nextTitle = patch.title ?? selectedLesson.title;
+    const nextHtml = patch.contentHtml ?? selectedLesson.contentHtml;
+
+    setUnits((prev) =>
+      prev.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) => (l.id === selectedLessonId ? { ...l, ...patch } : l)),
+      }))
+    );
+
+    pendingSaveRef.current = { lessonId: selectedLessonId, title: nextTitle, contentHtml: nextHtml };
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushPendingSave, AUTOSAVE_DELAY_MS);
   };
 
   const addLesson = (unitId: string) => {
-    const unit = units.find((u) => u.id === unitId);
-    if (!unit) return;
-
-    const newId = `${unitId}-lesson-${Date.now()}`;
-    const newCode = `${unit.code.replace(/^Unit\s*/i, "")}.${unit.lessons.length + 1}`;
-    const newLesson: LessonItem = {
-      id: newId,
-      code: newCode,
-      title: "Untitled lesson",
-      type: "lesson",
-    };
-
-    setUnits((prev) =>
-      prev.map((u) => (u.id === unitId ? { ...u, lessons: [...u.lessons, newLesson] } : u))
-    );
-    setDrafts((prev) => ({ ...prev, [newId]: { title: "Untitled lesson", html: "" } }));
-    applySelection(unit, newId);
+    startTransition(async () => {
+      const newLesson = await addLessonAction(course.code, unitId);
+      const unit = units.find((u) => u.id === unitId);
+      setUnits((prev) =>
+        prev.map((u) => (u.id === unitId ? { ...u, lessons: [...u.lessons, newLesson] } : u))
+      );
+      applySelection(unit, newLesson.id);
+    });
   };
 
   const deleteLesson = (unitId: string, lessonId: string) => {
@@ -103,16 +134,13 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
     if (!unit || !lesson) return;
     if (!window.confirm(`Delete "${lesson.title}"? This cannot be undone.`)) return;
 
+    discardPendingSaveFor([lessonId]);
+
     setUnits((prev) =>
       prev.map((u) =>
         u.id === unitId ? { ...u, lessons: u.lessons.filter((l) => l.id !== lessonId) } : u
       )
     );
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[lessonId];
-      return next;
-    });
 
     if (selectedLessonId === lessonId) {
       const fallback =
@@ -122,9 +150,14 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
         const fallbackUnit = units.find((u) => u.lessons.some((l) => l.id === fallback.id));
         applySelection(fallbackUnit, fallback.id);
       } else {
+        flushPendingSave();
         setSelectedLessonId("");
       }
     }
+
+    startTransition(async () => {
+      await deleteLessonAction(course.code, lessonId);
+    });
   };
 
   const deleteUnit = (unitId: string) => {
@@ -132,12 +165,9 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
     if (!unit) return;
     if (!window.confirm(`Delete "${unit.code} — ${unit.title}" and all its lessons?`)) return;
 
+    discardPendingSaveFor(unit.lessons.map((l) => l.id));
+
     setUnits((prev) => prev.filter((u) => u.id !== unitId));
-    setDrafts((prev) => {
-      const next = { ...prev };
-      unit.lessons.forEach((l) => delete next[l.id]);
-      return next;
-    });
 
     if (unit.lessons.some((l) => l.id === selectedLessonId)) {
       const fallbackUnit = units.find((u) => u.id !== unitId);
@@ -145,13 +175,19 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
       if (fallback) {
         applySelection(fallbackUnit, fallback.id);
       } else {
+        flushPendingSave();
         setSelectedLessonId("");
       }
     }
+
+    startTransition(async () => {
+      await deleteUnitAction(course.code, unitId);
+    });
   };
 
   const reorderLessons = (unitId: string, draggedLessonId: string, targetLessonId: string) => {
     if (draggedLessonId === targetLessonId) return;
+    let newOrderIds: string[] = [];
     setUnits((prev) =>
       prev.map((u) => {
         if (u.id !== unitId) return u;
@@ -161,25 +197,26 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
         if (fromIndex === -1 || toIndex === -1) return u;
         const [moved] = lessons.splice(fromIndex, 1);
         lessons.splice(toIndex, 0, moved);
+        newOrderIds = lessons.map((l) => l.id);
         return { ...u, lessons };
       })
     );
+    if (newOrderIds.length) {
+      startTransition(async () => {
+        await reorderLessonsAction(course.code, unitId, newOrderIds);
+      });
+    }
   };
 
-  const addUnit = () => {
-    const newId = `unit-${Date.now()}`;
-    const newUnit: Unit = {
-      id: newId,
-      code: nextUnitCode(units),
-      title: "Untitled unit",
-      lessons: [],
-    };
+  const addUnit = async (): Promise<string> => {
+    const newUnit = await addUnitAction(course.code);
     setUnits((prev) => [...prev, newUnit]);
-    return newId;
+    return newUnit.id;
   };
 
   const reorderUnits = (draggedUnitId: string, targetUnitId: string) => {
     if (draggedUnitId === targetUnitId) return;
+    let newOrderIds: string[] = [];
     setUnits((prev) => {
       const list = [...prev];
       const fromIndex = list.findIndex((u) => u.id === draggedUnitId);
@@ -187,66 +224,94 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
       if (fromIndex === -1 || toIndex === -1) return prev;
       const [moved] = list.splice(fromIndex, 1);
       list.splice(toIndex, 0, moved);
+      newOrderIds = list.map((u) => u.id);
       return list;
+    });
+    if (newOrderIds.length) {
+      startTransition(async () => {
+        await reorderUnitsAction(course.code, newOrderIds);
+      });
+    }
+  };
+
+  const publish = () => {
+    if (!selectedLessonId) return;
+    flushPendingSave();
+    const now = new Date().toISOString();
+    setUnits((prev) =>
+      prev.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) =>
+          l.id === selectedLessonId ? { ...l, isPublished: true, updatedAt: now } : l
+        ),
+      }))
+    );
+    startTransition(async () => {
+      await publishLessonAction(course.code, selectedLessonId);
     });
   };
 
-  if (!activeCourse) {
-    return (
-      <main className="h-screen bg-gray-50 text-black flex items-center justify-center">
-        <div className="text-center text-gray-500">Course not found.</div>
-      </main>
-    );
-  }
-
   return (
-    <main className="h-screen bg-gray-100 text-black grid grid-cols-[1fr_3fr_1fr] gap-2.5 overflow-hidden p-2.5">
-      <ContentSidebar
-        courseCode={activeCourse.code}
-        courseTitle={activeCourse.title}
-        units={units}
-        selectedLessonId={selectedLessonId}
-        onSelectLesson={selectLesson}
-        onAddLesson={addLesson}
-        onDeleteLesson={deleteLesson}
-        onDeleteUnit={deleteUnit}
-        onReorderLessons={reorderLessons}
-        onAddUnit={addUnit}
-        onReorderUnits={reorderUnits}
-      />
+    <main className="min-h-screen bg-gray-50 text-black flex flex-col">
+      <InstructorHeader backHref="/instructor" backLabel="Dashboard" />
 
-      {selectedLessonId ? (
-        <LessonEditor
-          key={selectedLessonId}
-          content={draft.html}
-          onContentChange={(html) => updateDraft({ html })}
+      <div className="flex-1 px-6 py-6">
+        <EditorTopBar
+          unitLabel={moduleLabel(selectedUnit)}
+          lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
           wordCount={wordCount}
-          savedLabel={savedLabel}
+          isPublished={selectedLesson?.isPublished ?? false}
+          savedLabel={
+            selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
+          }
+          onPreview={() => window.alert("Preview would show the learner view of this lesson.")}
+          onSaveDraft={flushPendingSave}
+          onPublish={publish}
         />
-      ) : (
-        <div className="min-w-0 min-h-0 h-full bg-white flex items-center justify-center text-sm text-gray-400 border border-gray-300">
-          Add a unit and a lesson to start writing.
-        </div>
-      )}
 
-      <ModuleSettingsSidebar
-        lessonTitle={draft.title}
-        onLessonTitleChange={(title) => {
-          updateDraft({ title });
-          setUnits((prev) =>
-            prev.map((u) => ({
-              ...u,
-              lessons: u.lessons.map((l) =>
-                l.id === selectedLessonId ? { ...l, title } : l
-              ),
-            }))
-          );
-        }}
-        selectedType={selectedType}
-        onTypeChange={setSelectedType}
-        onSaveDraft={() => setSavedLabel("Saved just now")}
-        onPublish={() => setSavedLabel("Published just now")}
-      />
+        <div className="flex gap-4 items-start">
+          <ContentSidebar
+            courseCode={course.code}
+            courseTitle={course.title}
+            units={units}
+            selectedLessonId={selectedLessonId}
+            onSelectLesson={selectLesson}
+            onAddLesson={addLesson}
+            onDeleteLesson={deleteLesson}
+            onDeleteUnit={deleteUnit}
+            onReorderLessons={reorderLessons}
+            onAddUnit={addUnit}
+            onReorderUnits={reorderUnits}
+          />
+
+          {selectedLessonId && selectedLesson ? (
+            <LessonEditor
+              key={`editor-${selectedLessonId}`}
+              lessonId={selectedLessonId}
+              title={selectedLesson.title}
+              onTitleChange={(title) => updateSelectedLesson({ title })}
+              content={selectedLesson.contentHtml}
+              onContentChange={(contentHtml) => updateSelectedLesson({ contentHtml })}
+              wordCount={wordCount}
+            />
+          ) : (
+            <div className="flex-1 min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
+              Add a section and a lesson to start writing.
+            </div>
+          )}
+
+          <ModuleSettingsSidebar
+            key={`module-settings-${selectedLessonId}`}
+            lessonId={selectedLessonId}
+            attachments={selectedLesson?.attachments ?? []}
+            moduleOptions={moduleOptions}
+            selectedModule={selectedModule}
+            onModuleChange={setSelectedModule}
+            selectedType={selectedType}
+            onTypeChange={setSelectedType}
+          />
+        </div>
+      </div>
     </main>
   );
 }

@@ -27,6 +27,7 @@ import {
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
+import { Video } from "@/components/tiptap-node/video-node/video-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
@@ -38,6 +39,7 @@ import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 // --- Tiptap UI ---
 import { HeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu"
 import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
+import { VideoUploadButton } from "@/components/tiptap-ui/video-upload-button"
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu"
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button"
 import { CodeBlockButton } from "@/components/tiptap-ui/code-block-button"
@@ -71,6 +73,7 @@ import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Lib ---
 import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
+import { createLessonImageUpload } from "@/lib/instructor/upload"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -88,6 +91,7 @@ const MainToolbarContent = ({
   isSearchAndReplaceOpen,
   searchAndReplaceButtonRef,
   isMobile,
+  lessonId,
 }: {
   onHighlighterClick: () => void
   onLinkClick: () => void
@@ -95,6 +99,7 @@ const MainToolbarContent = ({
   isSearchAndReplaceOpen: boolean
   searchAndReplaceButtonRef: React.RefObject<HTMLButtonElement | null>
   isMobile: boolean
+  lessonId?: string
 }) => {
   return (
     <>
@@ -153,6 +158,7 @@ const MainToolbarContent = ({
 
       <ToolbarGroup>
         <ImageUploadButton text="Add" />
+        {lessonId && <VideoUploadButton lessonId={lessonId} text="Video" />}
       </ToolbarGroup>
 
       <Spacer />
@@ -201,9 +207,11 @@ const MobileToolbarContent = ({
 )
 
 export function SimpleEditor({
+  lessonId,
   content,
   onContentChange,
 }: {
+  lessonId?: string
   content?: string
   onContentChange?: (html: string) => void
 } = {}) {
@@ -242,6 +250,7 @@ export function SimpleEditor({
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       Image,
+      Video,
       Typography,
       Superscript,
       Subscript,
@@ -254,7 +263,7 @@ export function SimpleEditor({
         accept: "image/*",
         maxSize: MAX_FILE_SIZE,
         limit: 3,
-        upload: handleImageUpload,
+        upload: lessonId ? createLessonImageUpload(lessonId) : handleImageUpload,
         onError: (error) => console.error("Upload failed:", error),
       }),
     ],
@@ -325,6 +334,7 @@ export function SimpleEditor({
               isSearchAndReplaceOpen={isSearchAndReplaceOpen}
               searchAndReplaceButtonRef={searchAndReplaceButtonRef}
               isMobile={isMobile}
+              lessonId={lessonId}
             />
           ) : (
             <MobileToolbarContent

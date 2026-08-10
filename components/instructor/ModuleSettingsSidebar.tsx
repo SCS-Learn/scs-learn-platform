@@ -1,130 +1,136 @@
 "use client";
 
-import { useState } from "react";
-import { X, FileText, Upload, Save, Send } from "lucide-react";
-import {
-  lessonTypeOptions,
-  initialAttachments,
-  type Attachment,
-} from "@/lib/instructor/mock-data";
+import { useRef, useState } from "react";
+import { X, FileText, Upload } from "lucide-react";
+import { lessonTypeOptions, type Attachment } from "@/lib/instructor/mock-data";
+import { uploadLessonFile } from "@/lib/instructor/upload";
+import { addAttachment, deleteAttachment } from "@/lib/instructor/data/attachments";
 
 export default function ModuleSettingsSidebar({
-  lessonTitle,
-  onLessonTitleChange,
+  lessonId,
+  attachments,
+  moduleOptions,
+  selectedModule,
+  onModuleChange,
   selectedType,
   onTypeChange,
-  onSaveDraft,
-  onPublish,
 }: {
-  lessonTitle: string;
-  onLessonTitleChange: (title: string) => void;
+  lessonId: string;
+  attachments: Attachment[];
+  moduleOptions: string[];
+  selectedModule: string;
+  onModuleChange: (value: string) => void;
   selectedType: string;
   onTypeChange: (value: string) => void;
-  onSaveDraft: () => void;
-  onPublish: () => void;
 }) {
-  const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments);
+  const [localAttachments, setLocalAttachments] = useState<Attachment[]>(attachments);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setLocalAttachments((prev) => prev.filter((a) => a.id !== id));
+    deleteAttachment(id).catch((err) => window.alert(err.message));
   };
 
-  const addAttachment = () => {
-    const name = window.prompt("File name (mock — no upload yet)");
-    if (name) {
-      setAttachments((prev) => [...prev, { id: `att-${Date.now()}`, name }]);
+  const handleFile = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const uploaded = await uploadLessonFile(lessonId, file);
+      const attachment = await addAttachment(lessonId, { name: file.name, ...uploaded });
+      setLocalAttachments((prev) => [...prev, attachment]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to upload file");
+    } finally {
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border border-gray-300">
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-6">
-        <div>
-          <h3 className="text-lg font-bold mb-3">Lesson settings</h3>
+    <div className="w-64 shrink-0 border border-gray-200 rounded-md bg-white p-4 flex flex-col gap-6">
+      <div>
+        <h3 className="text-sm font-bold mb-3">Module settings</h3>
 
-          <label className="block text-sm text-gray-500 mb-1">Title</label>
-          <input
-            value={lessonTitle}
-            onChange={(e) => onLessonTitleChange(e.target.value)}
-            placeholder="Title"
-            className="w-full text-base border border-gray-200 px-3 py-2.5 mb-3 bg-white outline-none focus:border-primary/50"
-          />
+        <label className="block text-xs text-gray-500 mb-1">Module</label>
+        <select
+          value={selectedModule}
+          onChange={(e) => onModuleChange(e.target.value)}
+          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 mb-3 bg-white"
+        >
+          {moduleOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
 
-          <label className="block text-sm text-gray-500 mb-1">Type</label>
-          <select
-            value={selectedType}
-            onChange={(e) => onTypeChange(e.target.value)}
-            className="w-full text-base border border-gray-200 px-3 py-2.5 pr-8 bg-white appearance-none bg-[length:12px] bg-[right_0.75rem_center] bg-no-repeat"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-            }}
-          >
-            {lessonTypeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-400 mt-1">
-            A lesson holds content or a quiz, never both.
-          </p>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-bold">Attachments</h3>
-            <span className="text-sm text-gray-400">{attachments.length}</span>
-          </div>
-
-          <div className="flex flex-col gap-1 mb-3">
-            {attachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="group flex items-center gap-2 text-sm px-3 py-2.5 hover:bg-gray-50"
-              >
-                <FileText size={15} className="text-gray-400 shrink-0" />
-                <span className="flex-1 min-w-0 truncate text-gray-700">
-                  {attachment.name}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Remove attachment"
-                  className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
-                  onClick={() => removeAttachment(attachment.id)}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={addAttachment}
-            className="w-full flex items-center justify-center gap-1.5 text-base text-gray-500 border border-dashed border-gray-300 px-4 py-3 hover:border-gray-400 hover:text-gray-600"
-          >
-            <Upload size={15} />
-            Upload a file
-          </button>
-        </div>
+        <label className="block text-xs text-gray-500 mb-1">Type</label>
+        <select
+          value={selectedType}
+          onChange={(e) => onTypeChange(e.target.value)}
+          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
+        >
+          {lessonTypeOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <p className="text-[10px] text-gray-400 mt-1">
+          A module holds content or a quiz, never both.
+        </p>
       </div>
 
-      <div className="shrink-0 p-3 border-t border-gray-100 flex flex-col gap-2">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold">Attachments</h3>
+          <span className="text-xs text-gray-400">{localAttachments.length}</span>
+        </div>
+
+        <div className="flex flex-col gap-1 mb-3">
+          {localAttachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="group flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-gray-50"
+            >
+              <FileText size={14} className="text-gray-400 shrink-0" />
+              <a
+                href={attachment.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 min-w-0 truncate text-gray-700 hover:text-primary hover:underline"
+              >
+                {attachment.name}
+              </a>
+              <button
+                type="button"
+                aria-label="Remove attachment"
+                className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                onClick={() => removeAttachment(attachment.id)}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) handleFile(file);
+          }}
+        />
         <button
           type="button"
-          onClick={onSaveDraft}
-          className="w-full flex items-center justify-center gap-2 text-base font-bold bg-white text-primary border border-primary px-4 py-3 hover:bg-primary/5"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 border border-dashed border-gray-300 rounded py-2 hover:border-gray-400 hover:text-gray-600 disabled:opacity-50"
         >
-          <Save size={16} />
-          Save draft
-        </button>
-        <button
-          type="button"
-          onClick={onPublish}
-          className="w-full flex items-center justify-center gap-2 text-base font-bold bg-primary text-white px-4 py-3 hover:opacity-90"
-        >
-          <Send size={16} />
-          Publish
+          <Upload size={13} />
+          {isUploading ? "Uploading…" : "Upload a file"}
         </button>
       </div>
     </div>
