@@ -91,7 +91,7 @@ export const instructorCourses: InstructorCourse[] = [
   },
 ];
 
-export const lessonTypeOptions = ["Video lesson", "Reading", "Quiz", "Assignment"];
+export const lessonTypeOptions = ["Content", "Quiz"];
 
 export type Attachment = {
   id: string;

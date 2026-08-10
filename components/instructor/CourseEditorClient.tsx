@@ -4,8 +4,6 @@ import { useMemo, useState } from "react";
 import ContentSidebar from "@/components/instructor/ContentSidebar";
 import ModuleSettingsSidebar from "@/components/instructor/ModuleSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
-import EditorTopBar from "@/components/instructor/EditorTopBar";
-import InstructorHeader from "@/components/instructor/InstructorHeader";
 import {
   instructorCourses,
   initialLessonContent,
@@ -23,10 +21,6 @@ function wordCountOf(html: string) {
   const text = html.replace(/<[^>]*>/g, " ").trim();
   if (!text) return 0;
   return text.split(/\s+/).length;
-}
-
-function moduleLabel(unit: Unit | undefined) {
-  return unit ? `${unit.code} — ${unit.title}` : "";
 }
 
 function nextUnitCode(units: Unit[]) {
@@ -50,7 +44,6 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
       ? { "6.3": { title: "Differential expression", html: initialLessonContent } }
       : {}
   );
-  const [isPublished, setIsPublished] = useState(false);
   const [savedLabel, setSavedLabel] = useState("Saved 2 min ago");
   const [selectedType, setSelectedType] = useState(lessonTypeOptions[0]);
 
@@ -61,13 +54,6 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
 
   const selectedLesson = selectedUnit?.lessons.find((l) => l.id === selectedLessonId);
 
-  const [selectedModule, setSelectedModule] = useState(moduleLabel(selectedUnit));
-
-  const moduleOptions = useMemo(
-    () => units.map((unit) => `${unit.code} — ${unit.title}`),
-    [units]
-  );
-
   const draft = drafts[selectedLessonId] ?? {
     title: selectedLesson?.title ?? "",
     html: "",
@@ -77,8 +63,6 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
 
   const applySelection = (unit: Unit | undefined, lessonId: string) => {
     setSelectedLessonId(lessonId);
-    setSelectedModule(moduleLabel(unit));
-    setIsPublished(false);
   };
 
   const selectLesson = (lessonId: string) => {
@@ -209,68 +193,60 @@ export default function CourseEditorClient({ courseCode }: { courseCode: string 
 
   if (!activeCourse) {
     return (
-      <main className="min-h-screen bg-gray-50 text-black">
-        <InstructorHeader backHref="/instructor" backLabel="Dashboard" />
-        <div className="px-6 py-12 text-center text-gray-500">Course not found.</div>
+      <main className="h-screen bg-gray-50 text-black flex items-center justify-center">
+        <div className="text-center text-gray-500">Course not found.</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black flex flex-col">
-      <InstructorHeader backHref="/instructor" backLabel="Dashboard" />
+    <main className="h-screen bg-gray-100 text-black grid grid-cols-[1fr_3fr_1fr] gap-2.5 overflow-hidden p-2.5">
+      <ContentSidebar
+        courseCode={activeCourse.code}
+        courseTitle={activeCourse.title}
+        units={units}
+        selectedLessonId={selectedLessonId}
+        onSelectLesson={selectLesson}
+        onAddLesson={addLesson}
+        onDeleteLesson={deleteLesson}
+        onDeleteUnit={deleteUnit}
+        onReorderLessons={reorderLessons}
+        onAddUnit={addUnit}
+        onReorderUnits={reorderUnits}
+      />
 
-      <div className="flex-1 px-6 py-6">
-        <EditorTopBar
-          unitLabel={moduleLabel(selectedUnit)}
-          lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
+      {selectedLessonId ? (
+        <LessonEditor
+          key={selectedLessonId}
+          content={draft.html}
+          onContentChange={(html) => updateDraft({ html })}
           wordCount={wordCount}
-          isPublished={isPublished}
           savedLabel={savedLabel}
-          onPreview={() => window.alert("Preview would show the learner view of this lesson.")}
-          onSaveDraft={() => setSavedLabel("Saved just now")}
-          onPublish={() => setIsPublished(true)}
         />
-
-        <div className="flex gap-4 items-start">
-          <ContentSidebar
-            courseCode={activeCourse.code}
-            courseTitle={activeCourse.title}
-            units={units}
-            selectedLessonId={selectedLessonId}
-            onSelectLesson={selectLesson}
-            onAddLesson={addLesson}
-            onDeleteLesson={deleteLesson}
-            onDeleteUnit={deleteUnit}
-            onReorderLessons={reorderLessons}
-            onAddUnit={addUnit}
-            onReorderUnits={reorderUnits}
-          />
-
-          {selectedLessonId ? (
-            <LessonEditor
-              key={selectedLessonId}
-              title={draft.title}
-              onTitleChange={(title) => updateDraft({ title })}
-              content={draft.html}
-              onContentChange={(html) => updateDraft({ html })}
-              wordCount={wordCount}
-            />
-          ) : (
-            <div className="flex-1 min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
-              Add a section and a lesson to start writing.
-            </div>
-          )}
-
-          <ModuleSettingsSidebar
-            moduleOptions={moduleOptions}
-            selectedModule={selectedModule}
-            onModuleChange={setSelectedModule}
-            selectedType={selectedType}
-            onTypeChange={setSelectedType}
-          />
+      ) : (
+        <div className="min-w-0 min-h-0 h-full bg-white flex items-center justify-center text-sm text-gray-400 border border-gray-300">
+          Add a unit and a lesson to start writing.
         </div>
-      </div>
+      )}
+
+      <ModuleSettingsSidebar
+        lessonTitle={draft.title}
+        onLessonTitleChange={(title) => {
+          updateDraft({ title });
+          setUnits((prev) =>
+            prev.map((u) => ({
+              ...u,
+              lessons: u.lessons.map((l) =>
+                l.id === selectedLessonId ? { ...l, title } : l
+              ),
+            }))
+          );
+        }}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        onSaveDraft={() => setSavedLabel("Saved just now")}
+        onPublish={() => setSavedLabel("Published just now")}
+      />
     </main>
   );
 }

@@ -1,25 +1,16 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
+import Link from "next/link";
 import {
+  ArrowLeft,
   ChevronRight,
   ChevronDown,
-  GripVertical,
   Plus,
   Trash2,
   X,
-  FileText,
-  CircleHelp,
 } from "lucide-react";
-import { type Unit, type LessonItem } from "@/lib/instructor/mock-data";
-
-function LessonIcon({ type }: { type: LessonItem["type"] }) {
-  return type === "quiz" ? (
-    <CircleHelp size={14} className="text-gray-400 shrink-0" />
-  ) : (
-    <FileText size={14} className="text-gray-400 shrink-0" />
-  );
-}
+import { type Unit } from "@/lib/instructor/mock-data";
 
 export default function ContentSidebar({
   courseCode,
@@ -105,13 +96,23 @@ export default function ContentSidebar({
   };
 
   return (
-    <div className="w-64 shrink-0 border border-gray-200 rounded-md bg-white flex flex-col">
-      <div className="flex items-center justify-between px-3 py-3 border-b border-gray-100">
-        <div>
-          <p className="text-xs text-gray-400">{courseCode}</p>
-          <p className="text-sm font-bold">{courseTitle}</p>
+    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border border-gray-300">
+      <div className="px-3 py-4 border-b border-gray-100 flex flex-col text-left">
+        <Link
+          href="/instructor"
+          className="inline-flex items-center justify-center gap-1.5 w-full text-base font-bold bg-white text-primary border border-primary px-4 py-3 hover:bg-primary/5"
+        >
+          <ArrowLeft size={16} />
+          Dashboard
+        </Link>
+        <div className="mt-6 w-full min-w-0 pl-1.5">
+          <p className="text-lg font-bold truncate">{courseTitle}</p>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {courseCode}
+            <span className="mx-1.5 text-gray-300">·</span>
+            {lessonCount} lessons
+          </p>
         </div>
-        <span className="text-xs text-gray-400">{lessonCount}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
@@ -129,14 +130,10 @@ export default function ContentSidebar({
                 }
                 onDrop={(e) => handleUnitDrop(e, unit.id)}
                 onDragEnd={handleUnitDragEnd}
-                className={`group flex items-center gap-1.5 px-2 py-1.5 rounded hover:bg-gray-50 border-t-2 ${
+                className={`group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-50 border-t-2 ${
                   isUnitDragOver ? "border-primary" : "border-transparent"
                 } ${draggingUnitId === unit.id ? "opacity-40" : ""}`}
               >
-                <GripVertical
-                  size={14}
-                  className="text-gray-300 opacity-0 group-hover:opacity-100 cursor-grab shrink-0"
-                />
                 <button
                   type="button"
                   onClick={() => toggleUnit(unit.id)}
@@ -146,7 +143,7 @@ export default function ContentSidebar({
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-xs font-bold leading-tight truncate">
+                  <p className="text-sm font-bold leading-tight truncate">
                     {unit.code} — {unit.title}
                   </p>
                 </div>
@@ -172,7 +169,7 @@ export default function ContentSidebar({
               </div>
 
               {isOpen && (
-                <div className="ml-4">
+                <div>
                   {unit.lessons.map((lesson) => {
                     const isSelected = lesson.id === selectedLessonId;
                     const isDragOver = dragOverLessonId === lesson.id && draggingLessonId !== lesson.id;
@@ -190,20 +187,16 @@ export default function ContentSidebar({
                           setDraggingLessonId(null);
                           setDragOverLessonId(null);
                         }}
-                        className={`group flex items-center gap-1.5 pl-2 pr-2 py-1.5 rounded cursor-pointer border-t-2 ${
+                        className={`group flex items-center gap-1.5 px-3 py-2.5 cursor-pointer border-t-2 ${
                           isDragOver ? "border-primary" : "border-transparent"
                         } ${
                           isSelected ? "bg-primary/10" : "hover:bg-gray-50"
                         } ${draggingLessonId === lesson.id ? "opacity-40" : ""}`}
                         onClick={() => onSelectLesson(lesson.id)}
                       >
-                        <GripVertical
-                          size={12}
-                          className="text-gray-300 opacity-0 group-hover:opacity-100 cursor-grab shrink-0"
-                        />
-                        <LessonIcon type={lesson.type} />
+                        <span className="w-3.5 shrink-0" aria-hidden />
                         <p
-                          className={`text-xs flex-1 min-w-0 truncate ${
+                          className={`text-sm flex-1 min-w-0 truncate text-left ${
                             isSelected ? "text-primary font-bold" : "text-gray-700"
                           }`}
                         >
@@ -230,17 +223,14 @@ export default function ContentSidebar({
         })}
       </div>
 
-      <div className="p-2 border-t border-gray-100">
+      <div className="p-3 border-t border-gray-100">
         <button
           type="button"
           onClick={handleAddUnit}
-          className="w-full text-center text-xs font-bold text-primary border border-primary/30 rounded py-1.5 hover:bg-primary/5"
+          className="w-full text-center text-base font-bold bg-primary text-white px-4 py-3 hover:opacity-90"
         >
-          + Add section
+          + Add unit
         </button>
-        <p className="text-[10px] text-gray-400 text-center mt-1.5">
-          Drag to reorder. Sections and lessons publish independently.
-        </p>
       </div>
     </div>
   );
