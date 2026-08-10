@@ -3,8 +3,15 @@ import CourseCard from "@/components/instructor/CourseCard";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import CalendarPanel from "@/components/instructor/CalendarPanel";
 import { instructorName, instructorCourses } from "@/lib/instructor/mock-data";
+import { getVisibleCalendarEvents } from "@/lib/instructor/data/calendar-events";
+import { getAnnouncements } from "@/lib/instructor/data/announcements";
 
-export default function InstructorDashboardPage() {
+export default async function InstructorDashboardPage() {
+  const [calendarEvents, announcements] = await Promise.all([
+    getVisibleCalendarEvents(),
+    getAnnouncements(),
+  ]);
+
   return (
     <main className="min-h-screen bg-gray-50 text-black">
       <InstructorHeader />
@@ -29,8 +36,8 @@ export default function InstructorDashboardPage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <AnnouncementsPanel courses={instructorCourses} />
-          <CalendarPanel />
+          <AnnouncementsPanel courses={instructorCourses} announcements={announcements} />
+          <CalendarPanel events={calendarEvents} />
         </div>
       </div>
     </main>

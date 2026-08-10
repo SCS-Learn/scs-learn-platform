@@ -125,84 +125,18 @@ export type Announcement = {
   message: string;
 };
 
-export const initialAnnouncements: Announcement[] = [
-  {
-    id: "ann-1",
-    authorName: "Phillip Compeau",
-    authorInitials: "PC",
-    courseCode: "02-251",
-    timestamp: "12 minutes ago",
-    message: "The counts matrix for exercise 6.5 is posted. Column names are sample IDs, not conditions.",
-  },
-  {
-    id: "ann-2",
-    authorName: "Marcus Chen",
-    authorInitials: "MC",
-    courseCode: "02-251",
-    timestamp: "Yesterday",
-    message: "Quizzes now take unlimited attempts. Keep going until every answer is right.",
-  },
-];
-
 export type CalendarEventType = "live-talk" | "office-hours" | "new-unit" | "cohort-launch";
+export type CalendarEventScope = "global" | "course";
 
 export type CalendarEvent = {
   id: string;
-  day: number;
-  weekday: string;
-  label: string;
+  date: string; // ISO "YYYY-MM-DD"
+  title: string;
   type: CalendarEventType;
   time: string;
   description: string;
+  scope: CalendarEventScope;
+  courseCode?: string; // set iff scope === "course"
+  hostName: string;
+  hostInitials: string;
 };
-
-export const calendarMonthLabel = "July 2026";
-
-export const calendarWeekStrip = [
-  { day: 27, weekday: "M", hasEvent: false, dimmed: false },
-  { day: 28, weekday: "T", hasEvent: true, dimmed: false },
-  { day: 29, weekday: "W", hasEvent: false, dimmed: false },
-  { day: 30, weekday: "T", hasEvent: true, dimmed: false },
-  { day: 31, weekday: "F", hasEvent: true, dimmed: false },
-  { day: 1, weekday: "S", hasEvent: false, dimmed: true },
-  { day: 2, weekday: "S", hasEvent: false, dimmed: true },
-];
-
-export const calendarEvents: CalendarEvent[] = [
-  {
-    id: "evt-1",
-    day: 28,
-    weekday: "TUE",
-    label: "Why your DE gene list is mostly noise",
-    type: "live-talk",
-    time: "5:00–6:00pm ET",
-    description: "Phillip Compeau · Zoom",
-  },
-  {
-    id: "evt-2",
-    day: 30,
-    weekday: "THU",
-    label: "Exercise 6.5 help, two TAs",
-    type: "office-hours",
-    time: "3:00–5:00pm ET",
-    description: "Discord voice",
-  },
-  {
-    id: "evt-3",
-    day: 31,
-    weekday: "FRI",
-    label: "Unit 7 — Protein structure opens",
-    type: "new-unit",
-    time: "",
-    description: "No deadlines. Open it when you are ready.",
-  },
-  {
-    id: "evt-4",
-    day: 17,
-    weekday: "MON",
-    label: "02-450 Computational Genomics opens",
-    type: "cohort-launch",
-    time: "",
-    description: "Enrollment opens Aug 3 · 12 weeks",
-  },
-];
