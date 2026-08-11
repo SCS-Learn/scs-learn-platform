@@ -9,8 +9,75 @@ import {
   Plus,
   Trash2,
   X,
+  FileText,
+  CircleHelp,
 } from "lucide-react";
-import { type Unit } from "@/lib/instructor/mock-data";
+import { type Unit, type LessonItem } from "@/lib/instructor/mock-data";
+
+function LessonIcon({ type }: { type: LessonItem["type"] }) {
+  return type === "quiz" ? (
+    <CircleHelp size={14} className="text-gray-400 shrink-0" />
+  ) : (
+    <FileText size={14} className="text-gray-400 shrink-0" />
+  );
+}
+
+function AddUnitModal({
+  onCreate,
+  onClose,
+}: {
+  onCreate: (title: string) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState("");
+
+  const submit = () => {
+    onCreate(title.trim() || "Untitled unit");
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white text-black rounded-md shadow-xl w-full max-w-sm p-6"
+      >
+        <h2 className="text-lg font-bold mb-3">Name this unit</h2>
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+            if (e.key === "Escape") onClose();
+          }}
+          placeholder="Untitled unit"
+          className="w-full text-sm border border-gray-200 rounded px-3 py-2 mb-4 outline-none focus:border-primary/50"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm font-bold text-gray-500 px-4 py-2 hover:bg-gray-50 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90"
+          >
+            Create unit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ContentSidebar({
   courseCode,
@@ -34,7 +101,7 @@ export default function ContentSidebar({
   onDeleteLesson: (unitId: string, lessonId: string) => void;
   onDeleteUnit: (unitId: string) => void;
   onReorderLessons: (unitId: string, draggedLessonId: string, targetLessonId: string) => void;
-  onAddUnit: () => Promise<string>;
+  onAddUnit: (title: string) => Promise<string>;
   onReorderUnits: (draggedUnitId: string, targetUnitId: string) => void;
 }) {
   const lessonCount = units.reduce((sum, u) => sum + u.lessons.length, 0);
@@ -47,6 +114,7 @@ export default function ContentSidebar({
   const [dragOverLessonId, setDragOverLessonId] = useState<string | null>(null);
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
   const [dragOverUnitId, setDragOverUnitId] = useState<string | null>(null);
+  const [isAddUnitOpen, setIsAddUnitOpen] = useState(false);
 
   const toggleUnit = (unitId: string) => {
     setExpanded((prev) => ({ ...prev, [unitId]: !prev[unitId] }));
@@ -91,8 +159,9 @@ export default function ContentSidebar({
     setDragOverUnitId(null);
   };
 
-  const handleAddUnit = async () => {
-    const newId = await onAddUnit();
+  const handleAddUnit = async (title: string) => {
+    setIsAddUnitOpen(false);
+    const newId = await onAddUnit(title);
     setExpanded((prev) => ({ ...prev, [newId]: true }));
   };
 
@@ -195,7 +264,7 @@ export default function ContentSidebar({
                         } ${draggingLessonId === lesson.id ? "opacity-40" : ""}`}
                         onClick={() => onSelectLesson(lesson.id)}
                       >
-                        <span className="w-3.5 shrink-0" aria-hidden />
+                        <LessonIcon type={lesson.type} />
                         <p
                           className={`text-sm flex-1 min-w-0 truncate text-left ${
                             isSelected ? "text-primary font-bold" : "text-gray-700"
@@ -227,12 +296,16 @@ export default function ContentSidebar({
       <div className="p-3 border-t border-gray-100">
         <button
           type="button"
-          onClick={handleAddUnit}
+          onClick={() => setIsAddUnitOpen(true)}
           className="w-full text-center text-base font-bold bg-primary text-white px-4 py-3 hover:opacity-90"
         >
           + Add unit
         </button>
       </div>
+
+      {isAddUnitOpen && (
+        <AddUnitModal onCreate={handleAddUnit} onClose={() => setIsAddUnitOpen(false)} />
+      )}
     </div>
   );
 }

@@ -25,7 +25,6 @@ import {
 } from "@/components/tiptap-ui-primitive/toolbar"
 
 // --- Tiptap Node ---
-import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import { Video } from "@/components/tiptap-node/video-node/video-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
@@ -38,8 +37,7 @@ import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 
 // --- Tiptap UI ---
 import { HeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu"
-import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
-import { VideoUploadButton } from "@/components/tiptap-ui/video-upload-button"
+import { MediaUploadButton } from "@/components/tiptap-ui/media-upload-button"
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu"
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button"
 import { CodeBlockButton } from "@/components/tiptap-ui/code-block-button"
@@ -70,10 +68,6 @@ import { LinkIcon } from "@/components/tiptap-icons/link-icon"
 import { useIsBreakpoint } from "@/hooks/use-is-breakpoint"
 import { useWindowSize } from "@/hooks/use-window-size"
 import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
-
-// --- Lib ---
-import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
-import { createLessonImageUpload } from "@/lib/instructor/upload"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -157,8 +151,8 @@ const MainToolbarContent = ({
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <ImageUploadButton text="Add" />
-        {lessonId && <VideoUploadButton lessonId={lessonId} text="Video" />}
+        <MediaUploadButton kind="image" lessonId={lessonId} text="Image" />
+        <MediaUploadButton kind="video" lessonId={lessonId} text="Video" />
       </ToolbarGroup>
 
       <Spacer />
@@ -258,13 +252,6 @@ export function SimpleEditor({
       FindAndReplace.configure({
         searchDebounceMs: 500,
         injectCSS: false,
-      }),
-      ImageUploadNode.configure({
-        accept: "image/*",
-        maxSize: MAX_FILE_SIZE,
-        limit: 3,
-        upload: lessonId ? createLessonImageUpload(lessonId) : handleImageUpload,
-        onError: (error) => console.error("Upload failed:", error),
       }),
     ],
     content: content !== undefined ? content : defaultContent,

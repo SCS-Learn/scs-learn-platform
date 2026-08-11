@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import ContentSidebar from "@/components/instructor/ContentSidebar";
-import ModuleSettingsSidebar from "@/components/instructor/ModuleSettingsSidebar";
+import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
 import EditorTopBar from "@/components/instructor/EditorTopBar";
 import InstructorHeader from "@/components/instructor/InstructorHeader";
@@ -51,13 +51,6 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
   const selectedLesson = selectedUnit?.lessons.find((l) => l.id === selectedLessonId);
 
-  const [selectedModule, setSelectedModule] = useState(moduleLabel(selectedUnit));
-
-  const moduleOptions = useMemo(
-    () => units.map((unit) => `${unit.code} — ${unit.title}`),
-    [units]
-  );
-
   const wordCount = useMemo(
     () => wordCountOf(selectedLesson?.contentHtml ?? ""),
     [selectedLesson?.contentHtml]
@@ -92,7 +85,6 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
   const applySelection = (unit: Unit | undefined, lessonId: string) => {
     flushPendingSave();
     setSelectedLessonId(lessonId);
-    setSelectedModule(moduleLabel(unit));
   };
 
   const selectLesson = (lessonId: string) => {
@@ -208,8 +200,8 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     }
   };
 
-  const addUnit = async (): Promise<string> => {
-    const newUnit = await addUnitAction(course.code);
+  const addUnit = async (title: string): Promise<string> => {
+    const newUnit = await addUnitAction(course.code, title);
     setUnits((prev) => [...prev, newUnit]);
     return newUnit.id;
   };
@@ -300,13 +292,11 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
             </div>
           )}
 
-          <ModuleSettingsSidebar
+          <LessonSettingsSidebar
             key={`module-settings-${selectedLessonId}`}
             lessonId={selectedLessonId}
             attachments={selectedLesson?.attachments ?? []}
-            moduleOptions={moduleOptions}
-            selectedModule={selectedModule}
-            onModuleChange={setSelectedModule}
+            currentModule={selectedLesson ? `Lesson ${selectedLesson.code} — ${selectedLesson.title}` : ""}
             selectedType={selectedType}
             onTypeChange={setSelectedType}
           />

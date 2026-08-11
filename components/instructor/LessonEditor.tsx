@@ -28,7 +28,7 @@ export default function LessonEditor({
         />
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="lesson-content-editor flex-1 min-h-0 overflow-y-auto">
         <SimpleEditor lessonId={lessonId} content={content} onContentChange={onContentChange} />
       </div>
 

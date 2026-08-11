@@ -6,20 +6,16 @@ import { lessonTypeOptions, type Attachment } from "@/lib/instructor/mock-data";
 import { uploadLessonFile } from "@/lib/instructor/upload";
 import { addAttachment, deleteAttachment } from "@/lib/instructor/data/attachments";
 
-export default function ModuleSettingsSidebar({
+export default function LessonSettingsSidebar({
   lessonId,
   attachments,
-  moduleOptions,
-  selectedModule,
-  onModuleChange,
+  currentModule,
   selectedType,
   onTypeChange,
 }: {
   lessonId: string;
   attachments: Attachment[];
-  moduleOptions: string[];
-  selectedModule: string;
-  onModuleChange: (value: string) => void;
+  currentModule: string;
   selectedType: string;
   onTypeChange: (value: string) => void;
 }) {
@@ -48,20 +44,12 @@ export default function ModuleSettingsSidebar({
   return (
     <div className="w-64 shrink-0 border border-gray-200 rounded-md bg-white p-4 flex flex-col gap-6">
       <div>
-        <h3 className="text-sm font-bold mb-3">Module settings</h3>
+        <h3 className="text-sm font-bold mb-3">Lesson settings</h3>
 
         <label className="block text-xs text-gray-500 mb-1">Module</label>
-        <select
-          value={selectedModule}
-          onChange={(e) => onModuleChange(e.target.value)}
-          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 mb-3 bg-white"
-        >
-          {moduleOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <p className="w-full text-sm border border-gray-100 rounded px-2 py-1.5 mb-3 bg-gray-50 text-gray-600 truncate">
+          {currentModule}
+        </p>
 
         <label className="block text-xs text-gray-500 mb-1">Type</label>
         <select

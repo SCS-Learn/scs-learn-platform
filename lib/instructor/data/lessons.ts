@@ -9,7 +9,7 @@ function nextUnitNumber(existingCodes: string[]): number {
   return (numbers.length ? Math.max(...numbers) : 0) + 1;
 }
 
-export async function addUnit(courseCode: string): Promise<Unit> {
+export async function addUnit(courseCode: string, title: string): Promise<Unit> {
   const supabase = await createClient();
 
   const { data: course, error: courseError } = await supabase
@@ -32,7 +32,7 @@ export async function addUnit(courseCode: string): Promise<Unit> {
     .insert({
       course_id: course.id,
       code: `Unit ${unitNumber}`,
-      title: "Untitled unit",
+      title,
       position: (existingUnits ?? []).length + 1,
     })
     .select("id, code, title")
