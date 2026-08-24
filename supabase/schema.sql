@@ -51,6 +51,7 @@ create table public.units (
   code text not null,
   title text not null,
   position integer not null,
+  source_drive_folder_id text,
   created_at timestamptz not null default now()
 );
 
@@ -63,16 +64,19 @@ create table public.lessons (
   position integer not null,
   content_html text not null default '',
   is_published boolean not null default false,
+  source_drive_file_id text,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
 -- Wired up in the file-uploads slice; the table exists now so the FK is in place.
+-- storage_path is nullable: attachments imported from Google Drive point at a
+-- Drive URL directly and have no backing object in the lesson-media bucket.
 create table public.attachments (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references public.lessons (id) on delete cascade,
   name text not null,
-  storage_path text not null,
+  storage_path text,
   url text,
   content_type text,
   size_bytes bigint,

@@ -7,7 +7,13 @@ const BUCKET = "lesson-media";
 
 export async function addAttachment(
   lessonId: string,
-  file: { name: string; url: string; storagePath: string; contentType: string; sizeBytes: number }
+  file: {
+    name: string;
+    url: string;
+    storagePath: string | null;
+    contentType: string;
+    sizeBytes: number;
+  }
 ): Promise<Attachment> {
   const supabase = await createClient();
   const { data, error } = await supabase

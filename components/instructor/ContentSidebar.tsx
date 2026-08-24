@@ -11,8 +11,10 @@ import {
   X,
   FileText,
   CircleHelp,
+  FolderInput,
 } from "lucide-react";
 import { type Unit, type LessonItem } from "@/lib/instructor/mock-data";
+import GoogleDriveImportModal from "@/components/instructor/GoogleDriveImportModal";
 
 function LessonIcon({ type }: { type: LessonItem["type"] }) {
   return type === "quiz" ? (
@@ -115,6 +117,7 @@ export default function ContentSidebar({
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
   const [dragOverUnitId, setDragOverUnitId] = useState<string | null>(null);
   const [isAddUnitOpen, setIsAddUnitOpen] = useState(false);
+  const [isDriveImportOpen, setIsDriveImportOpen] = useState(false);
 
   const toggleUnit = (unitId: string) => {
     setExpanded((prev) => ({ ...prev, [unitId]: !prev[unitId] }));
@@ -293,7 +296,7 @@ export default function ContentSidebar({
         })}
       </div>
 
-      <div className="p-3 border-t border-gray-100">
+      <div className="p-3 border-t border-gray-100 flex flex-col gap-2">
         <button
           type="button"
           onClick={() => setIsAddUnitOpen(true)}
@@ -301,10 +304,33 @@ export default function ContentSidebar({
         >
           + Add unit
         </button>
+        <button
+          type="button"
+          onClick={() => setIsDriveImportOpen(true)}
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-primary border border-primary px-4 py-2.5 hover:bg-primary/5"
+        >
+          <FolderInput size={15} />
+          Import from Google Drive
+        </button>
       </div>
 
       {isAddUnitOpen && (
         <AddUnitModal onCreate={handleAddUnit} onClose={() => setIsAddUnitOpen(false)} />
+      )}
+
+      {isDriveImportOpen && (
+        <GoogleDriveImportModal
+          courseCode={courseCode}
+          onClose={() => setIsDriveImportOpen(false)}
+          onImportComplete={({ unitIds, lessonIds }) => {
+            window.alert(
+              `Imported ${unitIds.length} unit${unitIds.length === 1 ? "" : "s"} and ${lessonIds.length} lesson${
+                lessonIds.length === 1 ? "" : "s"
+              } from Google Drive. Review titles and types before publishing.`
+            );
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );
