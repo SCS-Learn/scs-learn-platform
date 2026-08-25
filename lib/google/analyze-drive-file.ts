@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { DriveImage } from "@/lib/google/extract-drive-images";
+import { buildSourceContentBlock, type FileContentSource } from "@/lib/google/file-content-source";
 
 export type DriveFileAnalysis = {
   title: string;
@@ -49,7 +50,7 @@ const MAX_IMAGES = 12;
  */
 export async function analyzeDriveFileContent(
   course: { title: string; department: string },
-  pdfBase64: string,
+  source: FileContentSource,
   images: DriveImage[] = []
 ): Promise<DriveFileAnalysis | null> {
   const client = new Anthropic();
@@ -80,11 +81,11 @@ export async function analyzeDriveFileContent(
       {
         role: "user",
         content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+          buildSourceContentBlock(source),
           ...imageBlocks,
           {
             type: "text",
-            text: `This PDF is one file from the Drive folder for the course "${course.title}" (${course.department}). Read it and report on what it actually is:
+            text: `This is one file from the Drive folder for the course "${course.title}" (${course.department}). Read it and report on what it actually is:
 
 - "title": a short, specific, descriptive title for this as a course lesson or quiz - based on what it actually covers, not the filename.
 - "type": "quiz" if it's a quiz/test/assessment (questions the student answers), otherwise "lesson" (lecture/reading/slides/reference material).
@@ -95,7 +96,7 @@ export async function analyzeDriveFileContent(
         ],
       },
     ],
-  });
+  }, { timeout: 3 * 60 * 1000 }); // shouldn't legitimately take longer than this - if it does, fall back to a filename-only lesson rather than block the whole import
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") return null;

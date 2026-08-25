@@ -14,9 +14,12 @@ export type ClassifiedUnit = {
   lessons: ClassifiedLesson[];
 };
 
+export type DriveDuplicate = { driveFileId: string; duplicateOfDriveFileId: string; reason: string };
+
 export type DriveClassification = {
   units: ClassifiedUnit[];
   unclassified: { driveFileId: string; name: string; reason: string }[];
+  duplicates: DriveDuplicate[];
 };
 
 const CLASSIFICATION_SCHEMA = {
@@ -59,8 +62,21 @@ const CLASSIFICATION_SCHEMA = {
         additionalProperties: false,
       },
     },
+    duplicates: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          driveFileId: { type: "string" },
+          duplicateOfDriveFileId: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["driveFileId", "duplicateOfDriveFileId", "reason"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["units", "unclassified"],
+  required: ["units", "unclassified", "duplicates"],
   additionalProperties: false,
 };
 
@@ -86,6 +102,7 @@ export async function classifyDriveImport(
         driveFileId: f.id,
         driveFolderId: unit.folderId,
         folderName: importTree.isFlat ? null : unit.folderName,
+        fileName: f.name,
         title: analysis?.title ?? f.name,
         type: analysis?.type ?? "lesson",
         topicSummary: analysis?.topicSummary || null,
@@ -104,11 +121,13 @@ export async function classifyDriveImport(
 
 Group files into units by topic: each unit should represent one coherent topic or section. Prefer MORE, NARROWER units over a few broad ones - if a folder's files span multiple distinct topics, split that folder into several units rather than treating it as one big unit; don't force everything into as few units as possible just because they came from the same folder. A unit may not mix files from two different "driveFolderId" values, but a single folder's files can become multiple units when their topics diverge. Give each unit a specific, descriptive title reflecting what its lessons actually cover - skip generic labels like "Section I" unless that's genuinely the best description available. Order units and lessons by the sequence implied by topic continuity within the given list order, giving each a 1-based "order" integer.
 
+Some files may be exact duplicates of each other's content - the same lecture saved twice, or the same deck exported to two different formats (e.g. the same lecture as both "Genome_Assembly.pptx" and "Genome_Assembly.pdf"). Use "fileName", "title", and "topicSummary" together to spot these: when two or more files are genuinely the same specific content (not just the same general topic - literally the same lecture/document), keep exactly ONE of them as a lesson (prefer whichever looks most complete - a real, non-empty "topicSummary" beats an empty one) and list every other file in that group under "duplicates" instead of "lessons" or "unclassified", with "duplicateOfDriveFileId" pointing at the one you kept. Do not mark files as duplicates just because they cover a similar topic - only when they are really the same content.
+
 Files (JSON):
 ${JSON.stringify(filesForModel, null, 2)}`,
       },
     ],
-  });
+  }, { timeout: 2 * 60 * 1000 });
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -117,6 +136,7 @@ ${JSON.stringify(filesForModel, null, 2)}`,
   const parsed = JSON.parse(textBlock.text) as {
     units: { title: string; order: number; lessons: ClassifiedLesson[] }[];
     unclassified: { driveFileId: string; name: string; reason: string }[];
+    duplicates: DriveDuplicate[];
   };
 
   const units: ClassifiedUnit[] = parsed.units.map((unit) => ({
@@ -126,5 +146,5 @@ ${JSON.stringify(filesForModel, null, 2)}`,
     driveFolderId: folderIdByFileId.get(unit.lessons[0]?.driveFileId) ?? importTree.units[0]?.folderId ?? "",
   }));
 
-  return { units, unclassified: parsed.unclassified };
+  return { units, unclassified: parsed.unclassified, duplicates: parsed.duplicates ?? [] };
 }

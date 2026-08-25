@@ -6,12 +6,12 @@ const BUCKET = "lesson-media";
 /** Uploads one figure Claude chose to keep into the same bucket manual attachment uploads use. */
 export async function uploadDriveImage(
   driveFileId: string,
-  imageIndex: number,
   image: DriveImage
 ): Promise<{ url: string; storagePath: string } | null> {
   const supabase = await createClient();
   const extension = image.contentType.split("/")[1] ?? "png";
-  const path = `drive-import/${driveFileId}/figure-${imageIndex}.${extension}`;
+  const slug = image.sourcePath.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "figure";
+  const path = `drive-import/${driveFileId}/${slug}.${extension}`;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, image.data, {
     contentType: image.contentType,
