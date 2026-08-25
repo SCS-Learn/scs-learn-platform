@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local atom debug dumps (lib/debug/atom-store.ts)
+/debug/atoms/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
