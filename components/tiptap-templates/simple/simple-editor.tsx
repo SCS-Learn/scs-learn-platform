@@ -27,6 +27,7 @@ import {
 // --- Tiptap Node ---
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import { Video } from "@/components/tiptap-node/video-node/video-node-extension"
+import { MathInline, MathBlock } from "@/components/tiptap-node/math-node/math-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
@@ -52,6 +53,7 @@ import {
   LinkButton,
 } from "@/components/tiptap-ui/link-popover"
 import { MarkButton } from "@/components/tiptap-ui/mark-button"
+import { EquationButton } from "@/components/tiptap-ui/equation-button/equation-button"
 import { TextAlignButton } from "@/components/tiptap-ui/text-align-button"
 import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import {
@@ -63,6 +65,7 @@ import {
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
 import { HighlighterIcon } from "@/components/tiptap-icons/highlighter-icon"
 import { LinkIcon } from "@/components/tiptap-icons/link-icon"
+import { SigmaIcon } from "@/components/tiptap-icons/sigma-icon"
 
 // --- Hooks ---
 import { useIsBreakpoint } from "@/hooks/use-is-breakpoint"
@@ -153,6 +156,7 @@ const MainToolbarContent = ({
       <ToolbarGroup>
         <MediaUploadButton kind="image" lessonId={lessonId} text="Image" />
         <MediaUploadButton kind="video" lessonId={lessonId} text="Video" />
+        <EquationButton />
       </ToolbarGroup>
 
       <Spacer />
@@ -245,6 +249,8 @@ export function SimpleEditor({
       Highlight.configure({ multicolor: true }),
       Image,
       Video,
+      MathInline,
+      MathBlock,
       Typography,
       Superscript,
       Subscript,

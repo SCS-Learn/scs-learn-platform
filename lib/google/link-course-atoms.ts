@@ -92,7 +92,7 @@ export async function linkCourseAtoms(
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
-      model: "claude-haiku-4-5",
+      model: "claude-opus-5",
       max_tokens: 16000,
       output_config: { format: { type: "json_schema", schema: LINK_SCHEMA } },
       messages: [

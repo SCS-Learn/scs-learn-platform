@@ -15,6 +15,7 @@ on conflict (id) do nothing;
 
 drop policy if exists "stub_auth_lesson_media_select" on storage.objects;
 drop policy if exists "stub_auth_lesson_media_insert" on storage.objects;
+drop policy if exists "stub_auth_lesson_media_update" on storage.objects;
 drop policy if exists "stub_auth_lesson_media_delete" on storage.objects;
 
 create policy "stub_auth_lesson_media_select"
@@ -23,6 +24,14 @@ using (bucket_id = 'lesson-media');
 
 create policy "stub_auth_lesson_media_insert"
 on storage.objects for insert
+with check (bucket_id = 'lesson-media');
+
+-- Needed because .upload(..., { upsert: true }) does an UPDATE on
+-- storage.objects (not a fresh INSERT) when the path already exists -
+-- e.g. re-running the Drive import against a folder it already imported.
+create policy "stub_auth_lesson_media_update"
+on storage.objects for update
+using (bucket_id = 'lesson-media')
 with check (bucket_id = 'lesson-media');
 
 create policy "stub_auth_lesson_media_delete"

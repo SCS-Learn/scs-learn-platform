@@ -17,7 +17,10 @@ export async function uploadDriveImage(
     contentType: image.contentType,
     upsert: true,
   });
-  if (error) return null;
+  if (error) {
+    console.error(`uploadDriveImage: Supabase Storage upload failed for ${path}:`, error.message);
+    return null;
+  }
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, storagePath: path };

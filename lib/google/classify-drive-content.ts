@@ -111,7 +111,7 @@ export async function classifyDriveImport(
   );
 
   const response = await client.messages.create({
-    model: "claude-haiku-4-5",
+    model: "claude-opus-5",
     max_tokens: 8000,
     output_config: { format: { type: "json_schema", schema: CLASSIFICATION_SCHEMA } },
     messages: [

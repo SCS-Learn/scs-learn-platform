@@ -82,6 +82,9 @@ export async function buildDriveImportTree(
 
   const rootChildren = await listAllChildren(drive, rootFolderId, resourceKeyHeader);
   const subfolders = rootChildren.filter((c) => c.mimeType === FOLDER_MIME_TYPE);
+  console.log(
+    `buildDriveImportTree: root ${rootFolderId} has ${rootChildren.length} direct child(ren): ${rootChildren.map((c) => `${c.name} (${c.mimeType})`).join(", ") || "none"}`
+  );
 
   if (subfolders.length === 0) {
     const looseFiles = rootChildren.filter((c) => c.mimeType !== FOLDER_MIME_TYPE);

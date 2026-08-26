@@ -23,6 +23,7 @@ import { uploadDriveImage } from "@/lib/google/upload-drive-image";
 import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { flushAtomStore, summarizeAtoms, writeAtomRecord } from "@/lib/debug/atom-store";
+import { groupAtomsIntoSlides, renderAtomsToHtml } from "@/lib/google/render-atoms";
 
 type ResolvedFigure = {
   imageIndex: number;
@@ -58,12 +59,18 @@ async function resolveAtomFigures(
   for (const atom of atoms) {
     if (atom.modality !== "figure" || atom.assetImageIndex === null) continue;
     const image = images[atom.assetImageIndex];
-    if (!image) continue;
+    if (!image) {
+      console.error(`resolveAtomFigures: atom ${atom.id} (file ${fileId}) referenced image index ${atom.assetImageIndex}, but only ${images.length} image(s) were extracted - figure will be missing from the rendered lesson`);
+      continue;
+    }
 
     let uploaded = uploadedBySourcePath.get(image.sourcePath);
     if (!uploaded) {
       const result = await uploadDriveImage(fileId, image);
-      if (!result) continue;
+      if (!result) {
+        console.error(`resolveAtomFigures: upload failed for atom ${atom.id} (file ${fileId}, image ${image.sourcePath}) - figure will be missing from the rendered lesson`);
+        continue;
+      }
       uploaded = result;
       uploadedBySourcePath.set(image.sourcePath, uploaded);
     }
@@ -83,47 +90,15 @@ async function resolveAtomFigures(
   return { figures, assetUrlByAtomId };
 }
 
-/** Same idea as resolveAtomFigures, but for the whole-file summary's own "figures" list (imageIndex + caption already provided) rather than atoms. */
-async function resolveFileFigures(
-  fileId: string,
-  fileFigures: { imageIndex: number; caption: string }[],
-  images: DriveImage[]
-): Promise<{ figures: ResolvedFigure[] }> {
-  const uploadedBySourcePath = new Map<string, { url: string; storagePath: string }>();
-  const figures: ResolvedFigure[] = [];
-
-  for (const figure of fileFigures) {
-    const image = images[figure.imageIndex];
-    if (!image) continue;
-
-    let uploaded = uploadedBySourcePath.get(image.sourcePath);
-    if (!uploaded) {
-      const result = await uploadDriveImage(fileId, image);
-      if (!result) continue;
-      uploaded = result;
-      uploadedBySourcePath.set(image.sourcePath, uploaded);
-    }
-
-    figures.push({
-      imageIndex: figure.imageIndex,
-      sourcePath: image.sourcePath,
-      url: uploaded.url,
-      storagePath: uploaded.storagePath,
-      contentType: image.contentType,
-      caption: figure.caption,
-      sizeBytes: image.data.length,
-    });
-  }
-
-  return { figures };
-}
-
 const MAX_IMAGES_PER_CALL = 12;
 // A deck past this many slides gets split into parallel batches for atom
 // extraction instead of one call - a 200+ slide deck was always going to be
 // slow (and prone to truncating) as a single request no matter what
-// max_tokens was set to.
-const SLIDE_BATCH_SIZE = 20;
+// max_tokens was set to. Kept smaller than you'd think necessary because
+// atoms now carry full elaborated explanations, not one-liners - each atom
+// costs a lot more output budget than it used to, so a smaller slide window
+// per call keeps well clear of the 48000 max_tokens ceiling.
+const SLIDE_BATCH_SIZE = 12;
 
 /** Every image path referenced by these slides, in slide order, deduped, up to `cap` - a diverse sample instead of an arbitrary whole-file scan. */
 function collectSlideImagePaths(slides: SlideText[], cap: number): string[] {
@@ -199,23 +174,6 @@ async function extractAtomsInBatches(
     })
   );
   return mergeAtomResults(batchResults);
-}
-
-function escapeHtmlAttr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-/** Fills in the placeholder <img data-figure-index="N"> tags Claude left in contentHtml with the uploaded URL. */
-function embedFigures(contentHtml: string, figures: ResolvedFigure[]): string {
-  let html = contentHtml;
-  for (const figure of figures) {
-    const placeholder = new RegExp(`<img[^>]*data-figure-index=["']${figure.imageIndex}["'][^>]*>`, "i");
-    const imgTag = `<img src="${figure.url}" alt="${escapeHtmlAttr(figure.caption)}">`;
-    html = placeholder.test(html)
-      ? html.replace(placeholder, imgTag)
-      : `${html}<figure>${imgTag}<figcaption>${escapeHtmlAttr(figure.caption)}</figcaption></figure>`;
-  }
-  return html;
 }
 
 /** Null when only GOOGLE_API_KEY is configured - "Anyone with the link" is then the only option. */
@@ -324,7 +282,7 @@ export async function runDriveImport(
             : null;
 
         const [analysis, atomResult] = await Promise.all([
-          source ? analyzeDriveFileContent(course, source, images).catch(() => null) : Promise.resolve(null),
+          source ? analyzeDriveFileContent(course, source).catch(() => null) : Promise.resolve(null),
           !source
             ? Promise.resolve(EMPTY_ATOM_RESULT)
             : source.kind === "slideText" && source.slides.length > SLIDE_BATCH_SIZE && zip
@@ -346,32 +304,18 @@ export async function runDriveImport(
         const atoms = atomResult.atoms;
         atomsByFileId.set(file.id, atoms);
         assetUrlByAtomIdByFileId.set(file.id, atomResult.assetUrlByAtomId);
-
-        // Resolve the whole-file summary's own figure references separately
-        // (against the same whole-file `images` array) - uploadDriveImage is
-        // upsert-keyed by each image's own identity, so re-uploading one an
-        // atom already resolved is harmless.
-        const { figures: contentFigures } = await resolveFileFigures(file.id, analysis?.figures ?? [], images);
-        // The same picture can be referenced by both the whole-file summary
-        // and an atom - dedupe by its stable identity so it isn't attached
-        // to the lesson twice.
-        const dedupedFigures = Array.from(
-          new Map([...contentFigures, ...atomResult.figures].map((figure) => [figure.sourcePath, figure])).values()
-        );
-        figuresByFileId.set(file.id, dedupedFigures);
+        figuresByFileId.set(file.id, atomResult.figures);
 
         if (!analysis) {
-          const fallback = {
+          const fallback: DriveFileAnalysis = {
             title: cleanFilenameTitle(file.name),
             type: file.mimeType === "application/vnd.google-apps.form" ? "quiz" : "lesson",
             topicSummary: "",
-            contentHtml: "",
-            figures: [],
-          } as DriveFileAnalysis;
+          };
           return [file.id, fallback] as const;
         }
 
-        return [file.id, { ...analysis, contentHtml: embedFigures(analysis.contentHtml, contentFigures) }] as const;
+        return [file.id, analysis] as const;
       })
     )
   );
@@ -418,53 +362,100 @@ export async function runDriveImport(
   const unitIds: string[] = [];
   const lessonIds: string[] = [];
 
+  // Splitting a file's atoms into several slide-sized pages means a unit can
+  // now accumulate far more lesson rows than it used to (one file used to be
+  // one lesson; now it can be many). Past this many pages, break the unit
+  // into several - always at a file boundary, never splitting one file's own
+  // pages across two units - so the sidebar doesn't end up with one unit
+  // holding dozens of lessons.
+  const MAX_LESSONS_PER_UNIT = 20;
+
   const sortedUnits = [...classification.units].sort((a, b) => a.order - b.order);
   for (const unit of sortedUnits) {
-    const newUnit = await addUnitFromImport(courseCode, unit.title, unit.driveFolderId);
-    unitIds.push(newUnit.id);
-
     // Defensive: a duplicate should already be absent from unit.lessons per
     // classifyDriveImport's prompt, but filter before numbering positions
     // anyway so one leaking through can't also leave a numbering gap.
     const sortedLessons = [...unit.lessons]
       .filter((lesson) => !duplicateFileIds.has(lesson.driveFileId))
       .sort((a, b) => a.order - b.order);
-    for (const [index, lesson] of sortedLessons.entries()) {
+
+    const fileEntries = sortedLessons.map((lesson) => {
       const analysis = analysisByFileId.get(lesson.driveFileId);
-      const newLesson = await addLessonFromImport(newUnit.id, {
-        title: analysis?.title ?? "Untitled lesson",
-        type: analysis?.type ?? "lesson",
-        position: index + 1,
-        sourceDriveFileId: lesson.driveFileId,
-        contentHtml: analysis?.contentHtml || undefined,
-      });
-      lessonIds.push(newLesson.id);
+      const atoms = atomsByFileId.get(lesson.driveFileId) ?? [];
+      const assetUrlByAtomId = assetUrlByAtomIdByFileId.get(lesson.driveFileId) ?? new Map<string, string>();
+      const slides =
+        atoms.length > 0 ? groupAtomsIntoSlides(atoms) : [{ title: analysis?.title ?? "Untitled lesson", sections: [] }];
+      return { lesson, analysis, assetUrlByAtomId, slides };
+    });
 
-      // The surviving file, plus every duplicate folded into it - so the
-      // original .pptx (say) is still reachable even though only the .pdf's
-      // content became the lesson.
-      const sourceFileIds = [lesson.driveFileId, ...(duplicatesBySurvivorId.get(lesson.driveFileId) ?? [])];
-      for (const sourceFileId of sourceFileIds) {
-        const driveFile = driveFilesById.get(sourceFileId);
-        if (driveFile?.webViewLink) {
-          await addAttachment(newLesson.id, {
-            name: driveFile.name,
-            url: driveFile.webViewLink,
-            storagePath: null,
-            contentType: driveFile.mimeType,
-            sizeBytes: 0,
-          });
-        }
+    const subUnits: (typeof fileEntries)[] = [];
+    let currentSubUnit: typeof fileEntries = [];
+    let currentPageCount = 0;
+    for (const entry of fileEntries) {
+      if (currentSubUnit.length > 0 && currentPageCount + entry.slides.length > MAX_LESSONS_PER_UNIT) {
+        subUnits.push(currentSubUnit);
+        currentSubUnit = [];
+        currentPageCount = 0;
       }
+      currentSubUnit.push(entry);
+      currentPageCount += entry.slides.length;
+    }
+    if (currentSubUnit.length > 0) subUnits.push(currentSubUnit);
 
-      for (const figure of figuresByFileId.get(lesson.driveFileId) ?? []) {
-        await addAttachment(newLesson.id, {
-          name: `${analysis?.title ?? "Figure"} - ${figure.caption}`.slice(0, 200),
-          url: figure.url,
-          storagePath: figure.storagePath,
-          contentType: figure.contentType,
-          sizeBytes: figure.sizeBytes,
-        });
+    for (const [subUnitIndex, subUnitEntries] of subUnits.entries()) {
+      const title = subUnits.length > 1 ? `${unit.title} (Part ${subUnitIndex + 1})` : unit.title;
+      const newUnit = await addUnitFromImport(courseCode, title, unit.driveFolderId);
+      unitIds.push(newUnit.id);
+
+      // Position counts pages within the unit, not files - a single dense
+      // file's atoms split into several slide-sized pages, each becoming its
+      // own lesson row, so the instructor sees short, focused pages instead
+      // of one long scroll.
+      let position = 0;
+      for (const { lesson, analysis, assetUrlByAtomId, slides } of subUnitEntries) {
+        for (const [slideIndex, slide] of slides.entries()) {
+          position += 1;
+          const newLesson = await addLessonFromImport(newUnit.id, {
+            title: slide.title || analysis?.title || "Untitled lesson",
+            type: analysis?.type ?? "lesson",
+            position,
+            sourceDriveFileId: lesson.driveFileId,
+            contentHtml: slide.sections.length > 0 ? renderAtomsToHtml(slide, assetUrlByAtomId) : undefined,
+          });
+          lessonIds.push(newLesson.id);
+
+          // Attachments (source file link + figures) belong to the file as a
+          // whole, so they only go on its first page - repeating them on
+          // every split-out page would just spam the attachment list.
+          if (slideIndex !== 0) continue;
+
+          // The surviving file, plus every duplicate folded into it - so the
+          // original .pptx (say) is still reachable even though only the
+          // .pdf's content became the lesson.
+          const sourceFileIds = [lesson.driveFileId, ...(duplicatesBySurvivorId.get(lesson.driveFileId) ?? [])];
+          for (const sourceFileId of sourceFileIds) {
+            const driveFile = driveFilesById.get(sourceFileId);
+            if (driveFile?.webViewLink) {
+              await addAttachment(newLesson.id, {
+                name: driveFile.name,
+                url: driveFile.webViewLink,
+                storagePath: null,
+                contentType: driveFile.mimeType,
+                sizeBytes: 0,
+              });
+            }
+          }
+
+          for (const figure of figuresByFileId.get(lesson.driveFileId) ?? []) {
+            await addAttachment(newLesson.id, {
+              name: `${analysis?.title ?? "Figure"} - ${figure.caption}`.slice(0, 200),
+              url: figure.url,
+              storagePath: figure.storagePath,
+              contentType: figure.contentType,
+              sizeBytes: figure.sizeBytes,
+            });
+          }
+        }
       }
     }
   }

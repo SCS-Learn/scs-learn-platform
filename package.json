@@ -39,6 +39,7 @@
     "clsx": "^2.1.1",
     "googleapis": "^176.0.0",
     "jszip": "^3.10.1",
+    "katex": "^0.18.4",
     "lodash.throttle": "^4.1.1",
     "lucide": "^1.28.0",
     "lucide-react": "^1.28.0",
