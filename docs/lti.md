@@ -158,10 +158,24 @@ One gotcha found in that test: Cogniterra's `/lti/continue/` step is Django and
 `Referrer-Policy: no-referrer` on the lesson page or add `referrerpolicy="no-referrer"`
 to the iframe, or the launch dies after a signature that verified correctly.
 
-The last mile still to confirm in a real browser is that Cogniterra renders
-inside the iframe rather than refusing to be framed. If it refuses, the fallback
-is `openInNewTab` on `ExternalActivity`, and grade passback is unaffected either
-way because it does not travel through the browser.
+**The full redirect chain was then replayed the way a browser walks it** (POST,
+then follow the 302 as a GET carrying the cookies and a Referer):
+
+```
+POST /lti/                     302  -> /lti/continue/<token>/   (sets csrftoken, sessionid)
+GET  /lti/continue/<token>/    302  -> /lesson/59284/?unit=50771
+GET  /lesson/59284/?unit=50771 200
+```
+
+The lesson page comes back reporting `is_guest: false` with the launched
+learner's name, so the launch really does provision and authenticate the user
+inside course 782, not just pass a signature check.
+
+**Framing is fine.** Cogniterra sends no `X-Frame-Options` and no CSP
+`frame-ancestors` on `/`, `/lti/`, a course page, or the lesson page the launch
+lands on, so it does not refuse to be embedded. `openInNewTab` on
+`ExternalActivity` remains available, and grade passback is unaffected by the
+choice either way because it does not travel through the browser.
 
 ## Connecting an Autolab assessment
 
