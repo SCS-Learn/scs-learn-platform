@@ -114,7 +114,7 @@ signature" with no other diagnostic.
    ```sql
    insert into public.lti_links (lesson_id, tool_id, title, custom_params, points_possible)
    values ('<lesson uuid>', '<tool uuid>', 'Hidden messages exercise',
-           '{"course": "838"}'::jsonb, 100);
+           '{"course": "782"}'::jsonb, 100);
 
    update public.lessons set type = 'external' where id = '<lesson uuid>';
    ```
@@ -124,10 +124,31 @@ signature" with no other diagnostic.
 Grades then arrive on their own: Cogniterra POSTs to `/api/lti/outcomes` when a
 learner passes a graded step, and the score lands in `lti_results`.
 
+### The course the first demo points at
+
+**Cogniterra course 782, "02-180 Coding Assignments (Spring 2026 Mini 4)"**
+(Phillip's decision, 2026-08-31). It already has LTI enabled, and its launch was
+verified with the checks below.
+
+Get its consumer key and secret from Phillip or the `SCS Learn` 1Password vault.
+They are not in this repo, and should not be: a shared secret in git is a shared
+secret in every fork and every CI log.
+
+Two things to know about that course:
+
+- **A Cogniterra course has exactly one consumer key/secret pair.** There is no
+  per-consumer registration, so SCS Learn and Canvas share one credential on
+  course 782 rather than holding separate ones. Fine for a demo. Before this is
+  real, the 02-180 content should be cloned into its own course so SCS Learn gets
+  its own credential slot and its own roster.
+- 782 is **free and private** and its LTI works anyway, so Stepik's
+  documented "paid courses only" restriction does not apply on Cogniterra. There
+  is no risk of an LTI launch giving away paid course content here.
+
 ### Verified against the live server
 
 The signing implementation was checked end to end against `https://cogniterra.org/lti/`
-using the credentials already stored on course 838:
+using the credentials stored on courses 838 and 782:
 
 - Correct secret: accepted, redirects to `/lti/continue/<token>/`.
 - Wrong secret: rejected with "Wrong LTI Key (Consumer) or LTI Secret".
