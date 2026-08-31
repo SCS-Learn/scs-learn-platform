@@ -58,13 +58,15 @@ const ROLE_LABELS: Record<string, string> = {
   synthesis: "Takeaway",
 };
 
-function renderAtom(atom: Atom, assetUrlByAtomId: Map<string, string>): string {
+function renderAtom(atom: Atom, assetUrlByAtomId: Map<string, string>, seenImageUrls: Set<string>): string {
   switch (atom.modality) {
     case "figure": {
       const url = assetUrlByAtomId.get(atom.id);
       if (!url) return "";
+      if (seenImageUrls.has(url)) return "";
+      seenImageUrls.add(url);
       const caption = atom.altText ?? atom.title;
-      return `<figure><img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(caption)}"><figcaption>${escapeHtml(caption)}</figcaption></figure>`;
+      return `<figure><img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(caption)}"></figure>`;
     }
     case "equation": {
       const latex = atom.latex ?? atom.content;
@@ -84,10 +86,11 @@ function renderAtom(atom: Atom, assetUrlByAtomId: Map<string, string>): string {
 
 /** Renders one lesson's atoms, grouped by groupAtomsIntoSlides, back into per-section HTML with a heading between sections after the first. */
 export function renderAtomsToHtml(lesson: AtomLesson, assetUrlByAtomId: Map<string, string>): string {
+  const seenImageUrls = new Set<string>();
   return lesson.sections
     .map((section, index) => {
       const heading = index > 0 ? `<h3>${escapeHtml(section.title)}</h3>` : "";
-      const body = section.atoms.map((atom) => renderAtom(atom, assetUrlByAtomId)).filter(Boolean).join("\n");
+      const body = section.atoms.map((atom) => renderAtom(atom, assetUrlByAtomId, seenImageUrls)).filter(Boolean).join("\n");
       return heading ? `${heading}\n${body}` : body;
     })
     .filter(Boolean)

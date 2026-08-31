@@ -38,6 +38,7 @@
     "@tiptap/starter-kit": "^3.29.2",
     "clsx": "^2.1.1",
     "googleapis": "^176.0.0",
+    "jose": "^5.9.6",
     "jszip": "^3.10.1",
     "katex": "^0.18.4",
     "lodash.throttle": "^4.1.1",

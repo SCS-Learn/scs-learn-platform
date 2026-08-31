@@ -126,6 +126,90 @@ create policy "stub_auth_allow_all" on public.attachments for all using (true) w
 create policy "stub_auth_allow_all" on public.announcements for all using (true) with check (true);
 create policy "stub_auth_allow_all" on public.calendar_events for all using (true) with check (true);
 
+-- LTI 1.3 + autograding -------------------------------------------------------
+-- One row per LMS registration (Canvas, Moodle, etc.) this tool is installed into.
+-- issuer + client_id + deployment_id together identify a platform per the LTI spec -
+-- a single LMS can host more than one deployment of this tool.
+drop table if exists public.lti_submissions cascade;
+drop table if exists public.lti_assignments cascade;
+drop table if exists public.lti_launches cascade;
+drop table if exists public.lti_platforms cascade;
+
+create table public.lti_platforms (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  issuer text not null,
+  client_id text not null,
+  deployment_id text not null,
+  auth_login_url text not null,
+  auth_token_url text not null,
+  jwks_url text not null,
+  created_at timestamptz not null default now(),
+  unique (issuer, client_id, deployment_id)
+);
+
+-- Short-lived state/nonce bookkeeping for the OIDC login -> launch round trip.
+-- Rows are consumed (deleted) as soon as the launch validates; expires_at is a
+-- backstop for launches that are abandoned mid-flow.
+create table public.lti_launches (
+  id uuid primary key default gen_random_uuid(),
+  platform_id uuid not null references public.lti_platforms (id) on delete cascade,
+  state text unique not null,
+  nonce text not null,
+  target_link_uri text,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '10 minutes'
+);
+
+-- Links one LTI resource link (an assignment placed in the LMS) to a lesson here
+-- and to the autograder that owns it. line_item_url is the AGS endpoint on the
+-- platform that score passback POSTs to - populated from the launch's AGS claim
+-- the first time a given resource link is seen.
+create table public.lti_assignments (
+  id uuid primary key default gen_random_uuid(),
+  platform_id uuid not null references public.lti_platforms (id) on delete cascade,
+  lesson_id uuid references public.lessons (id) on delete set null,
+  resource_link_id text not null,
+  line_item_url text,
+  max_score numeric not null default 100,
+  source text not null default 'cogniterra' check (source in ('cogniterra', 'autograder', 'manual')),
+  external_ref text,
+  created_at timestamptz not null default now(),
+  unique (platform_id, resource_link_id)
+);
+
+-- One row per (assignment, student) grading result. lti_user_id is the opaque
+-- "sub" claim from the platform - the only stable student identifier LTI gives us.
+-- passback_status tracks whether the score has actually been POSTed back to the
+-- LMS yet, since grading (autograder finishes) and passback (AGS call succeeds)
+-- are two separate steps that can fail independently.
+create table public.lti_submissions (
+  id uuid primary key default gen_random_uuid(),
+  assignment_id uuid not null references public.lti_assignments (id) on delete cascade,
+  lti_user_id text not null,
+  score numeric not null,
+  max_score numeric not null,
+  raw_payload jsonb,
+  passback_status text not null default 'pending' check (passback_status in ('pending', 'sent', 'failed')),
+  passback_error text,
+  graded_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (assignment_id, lti_user_id)
+);
+
+alter table public.lti_platforms enable row level security;
+alter table public.lti_launches enable row level security;
+alter table public.lti_assignments enable row level security;
+alter table public.lti_submissions enable row level security;
+
+-- No student/instructor session identity to check against yet (see stub-auth note
+-- above) and these tables are only ever touched server-side via the service role
+-- from route handlers, never from the browser - stub policy matches the rest.
+create policy "stub_auth_allow_all" on public.lti_platforms for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.lti_launches for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.lti_assignments for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.lti_submissions for all using (true) with check (true);
+
 -- Seed data (mirrors today's lib/instructor/mock-data.ts) -------------------
 
 insert into public.instructors (id, name, initials) values
