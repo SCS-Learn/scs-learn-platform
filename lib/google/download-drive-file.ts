@@ -24,7 +24,7 @@ export async function downloadDriveFileAsPdfBase64(
   try {
     if (file.mimeType === "application/pdf") {
       const { data } = await drive.files.get(
-        { fileId: file.id, alt: "media" },
+        { fileId: file.id, alt: "media", supportsAllDrives: true },
         { ...requestOptions, responseType: "arraybuffer" }
       );
       return Buffer.from(data as ArrayBuffer).toString("base64");

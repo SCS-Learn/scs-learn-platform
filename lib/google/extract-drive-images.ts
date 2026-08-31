@@ -90,7 +90,7 @@ export async function extractDriveFileImages(
   try {
     if (file.mimeType.startsWith("image/")) {
       const { data } = await drive.files.get(
-        { fileId: file.id, alt: "media" },
+        { fileId: file.id, alt: "media", supportsAllDrives: true },
         { ...requestOptions, responseType: "arraybuffer" }
       );
       return [{ data: Buffer.from(data as ArrayBuffer), contentType: file.mimeType, sourcePath: `direct:${file.id}` }];

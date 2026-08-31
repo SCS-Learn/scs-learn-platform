@@ -41,7 +41,7 @@ export async function loadOoxmlZip(
     let zipBuffer: Buffer;
     if (ALREADY_OOXML_MIME_TYPES.has(file.mimeType)) {
       const { data } = await drive.files.get(
-        { fileId: file.id, alt: "media" },
+        { fileId: file.id, alt: "media", supportsAllDrives: true },
         { ...requestOptions, responseType: "arraybuffer" }
       );
       zipBuffer = Buffer.from(data as ArrayBuffer);

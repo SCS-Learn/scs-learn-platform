@@ -7,6 +7,8 @@ export type DriveEntry = {
   name: string;
   mimeType: string;
   webViewLink: string | null;
+  /** Chain of subfolder names from the owning unit folder down to this file - empty when the file sits directly in the unit folder. Informational only; the file's owning unit/driveFolderId is always the top-level folder, never one of these. */
+  folderPath: string[];
 };
 
 export type DriveImportUnit = {
@@ -38,6 +40,11 @@ async function listAllChildren(
         pageSize: 200,
         pageToken,
         spaces: "drive",
+        // files.list excludes Shared Drive content by default - without these,
+        // a folder that lives in an org Shared Drive (common for course
+        // material) silently comes back with zero children, no error.
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       },
       resourceKeyHeader ? { headers: { "X-Goog-Drive-Resource-Keys": resourceKeyHeader } } : undefined
     );
@@ -49,12 +56,48 @@ async function listAllChildren(
         name: file.name,
         mimeType: file.mimeType,
         webViewLink: file.webViewLink ?? null,
+        folderPath: [],
       });
     }
     pageToken = data.nextPageToken ?? undefined;
   } while (pageToken);
 
   return entries;
+}
+
+const MAX_RECURSION_DEPTH = 6;
+
+/**
+ * Lists every file under a folder at any depth, not just its direct
+ * children - a unit folder's own subfolders (e.g. "Lectures/Week 3/") are
+ * real content, not noise to discard. Each returned file's folderPath is the
+ * chain of subfolder names from the starting folder down to where the file
+ * actually lives. Capped at MAX_RECURSION_DEPTH as a defensive guard against
+ * pathological/cyclical structures - returns whatever was found so far past
+ * the cap rather than erroring or recursing forever.
+ */
+async function listAllFilesRecursive(
+  drive: drive_v3.Drive,
+  folderId: string,
+  resourceKeyHeader: string | undefined,
+  folderPath: string[],
+  depth = 1
+): Promise<DriveEntry[]> {
+  const children = await listAllChildren(drive, folderId, resourceKeyHeader);
+  const files = children
+    .filter((c) => c.mimeType !== FOLDER_MIME_TYPE)
+    .map((f) => ({ ...f, folderPath }));
+
+  if (depth >= MAX_RECURSION_DEPTH) return files;
+
+  const subfolders = children.filter((c) => c.mimeType === FOLDER_MIME_TYPE);
+  const nested = await Promise.all(
+    subfolders.map((folder) =>
+      listAllFilesRecursive(drive, folder.id, resourceKeyHeader, [...folderPath, folder.name], depth + 1)
+    )
+  );
+
+  return [...files, ...nested.flat()];
 }
 
 /**
@@ -91,7 +134,7 @@ export async function buildDriveImportTree(
     if (looseFiles.length === 0) return { units: [], isFlat: true };
 
     const { data: rootFolder } = await drive.files.get(
-      { fileId: rootFolderId, fields: "name" },
+      { fileId: rootFolderId, fields: "name", supportsAllDrives: true },
       requestOptions
     );
     return {
@@ -102,8 +145,11 @@ export async function buildDriveImportTree(
 
   const units: DriveImportUnit[] = [];
   for (const folder of subfolders) {
-    const children = await listAllChildren(drive, folder.id, resourceKeyHeader);
-    const files = children.filter((c) => c.mimeType !== FOLDER_MIME_TYPE);
+    const files = await listAllFilesRecursive(drive, folder.id, resourceKeyHeader, []);
+    const depths = new Set(files.map((f) => f.folderPath.length));
+    console.log(
+      `buildDriveImportTree: unit "${folder.name}" found ${files.length} file(s) across ${depths.size} subfolder level(s) (depths seen: ${[...depths].sort().join(", ") || "none"})`
+    );
     units.push({ folderId: folder.id, folderName: folder.name, files });
   }
   return { units, isFlat: false };

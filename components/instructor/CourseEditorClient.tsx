@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import ContentSidebar from "@/components/instructor/ContentSidebar";
 import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
+import BlockLessonViewer from "@/components/instructor/BlockLessonViewer";
 import EditorTopBar from "@/components/instructor/EditorTopBar";
 import InstructorHeader from "@/components/instructor/InstructorHeader";
 import { lessonTypeOptions, type InstructorCourse, type Unit } from "@/lib/instructor/mock-data";
@@ -276,7 +277,13 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
             onReorderUnits={reorderUnits}
           />
 
-          {selectedLessonId && selectedLesson ? (
+          {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
+            <BlockLessonViewer
+              key={`blocks-${selectedLessonId}`}
+              blocks={selectedLesson.blocks}
+              lessonType={selectedLesson.type}
+            />
+          ) : selectedLessonId && selectedLesson ? (
             <LessonEditor
               key={`editor-${selectedLessonId}`}
               lessonId={selectedLessonId}

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { getDriveImportPreview, runDriveImport, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
+import { getDriveImportPreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
+import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
+import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
 
 type Status = "input" | "scanning" | "confirm" | "importing" | "error";
 
@@ -22,9 +24,11 @@ export default function GoogleDriveImportModal({
     null
   );
   const [shareEmail, setShareEmail] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     void getDriveShareEmail().then(setShareEmail);
+    void getGoogleOAuthConnectionStatus().then(setGoogleConnected);
   }, []);
 
   const scanFolder = async () => {
@@ -43,7 +47,7 @@ export default function GoogleDriveImportModal({
   const confirmImport = async () => {
     setStatus("importing");
     try {
-      const result = await runDriveImport(courseCode, folderUrl);
+      const result = await runDriveImportOrganize(courseCode, folderUrl);
       onImportComplete(result);
       onClose();
     } catch (error) {
@@ -73,16 +77,45 @@ export default function GoogleDriveImportModal({
               file inside it becomes a lesson - or, if the folder just has files with no subfolders,
               they all become lessons in one unit. Claude will classify each one as a lecture or a quiz.
             </p>
-            <p className="text-xs text-gray-400 mb-4">
-              Share the folder as &ldquo;Anyone with the link&rdquo;
-              {shareEmail && (
-                <>
-                  , or keep it private by sharing it directly with{" "}
-                  <span className="font-mono text-gray-500">{shareEmail}</span>
-                </>
-              )}
-              .
-            </p>
+            {googleConnected === false && (
+              <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-blue-700">
+                  Connect your Google account to import a folder you haven&rsquo;t shared anywhere, and get
+                  true per-slide rendering for PowerPoint files.
+                </p>
+                <a
+                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-1.5 rounded hover:opacity-90"
+                >
+                  Connect Google Drive
+                </a>
+              </div>
+            )}
+            {googleConnected === true && (
+              <p className="text-xs text-green-700 mb-4 flex items-center justify-between gap-3">
+                <span>Google Drive connected - private folders and true slide rendering are available.</span>
+                <a
+                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  className="shrink-0 underline hover:no-underline"
+                >
+                  Switch account
+                </a>
+              </p>
+            )}
+            {googleConnected ? (
+              <p className="text-xs text-gray-400 mb-4">Paste a link to any folder your connected account can see.</p>
+            ) : (
+              <p className="text-xs text-gray-400 mb-4">
+                Or, without connecting: share the folder as &ldquo;Anyone with the link&rdquo;
+                {shareEmail && (
+                  <>
+                    , or keep it private by sharing it directly with{" "}
+                    <span className="font-mono text-gray-500">{shareEmail}</span>
+                  </>
+                )}
+                .
+              </p>
+            )}
             <input
               type="url"
               value={folderUrl}
@@ -156,7 +189,7 @@ export default function GoogleDriveImportModal({
         {status === "importing" && (
           <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10">
             <Loader2 size={20} className="animate-spin" />
-            Reading each file and writing lesson content - this can take a bit for larger folders...
+            Reading each file and porting its slides, videos, and questions - this can take a bit for larger folders...
           </div>
         )}
 

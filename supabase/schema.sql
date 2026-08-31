@@ -210,6 +210,119 @@ create policy "stub_auth_allow_all" on public.lti_launches for all using (true) 
 create policy "stub_auth_allow_all" on public.lti_assignments for all using (true) with check (true);
 create policy "stub_auth_allow_all" on public.lti_submissions for all using (true) with check (true);
 
+-- Organize-mode lesson composition -------------------------------------------
+-- A lesson built by "organize" import doesn't carry AI-elaborated content_html
+-- at all - instead it's composed of whole existing assets (a slide file, a
+-- lecture video, or a near-verbatim question set) in display order.
+-- content_source on lessons tells readers which representation a given lesson
+-- actually uses, since both can exist side by side (old atomized lessons keep
+-- 'html', organize-mode lessons use 'blocks').
+drop table if exists public.questions cascade;
+drop table if exists public.question_groups cascade;
+drop table if exists public.lesson_blocks cascade;
+
+-- One quiz/assignment file becomes one question_group; its questions are
+-- extracted near-verbatim (see questions.prompt_source below), never authored.
+create table public.question_groups (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.lessons (id) on delete cascade,
+  source_drive_file_id text not null,
+  title text not null default 'Untitled assignment',
+  position integer not null,
+  created_at timestamptz not null default now()
+);
+
+-- One row per whole asset (a slide file, a video, or a question group) that
+-- composes a lesson, in display order - this is the "subunit is composed of"
+-- structure an atomized lessons.content_html page never needed.
+create table public.lesson_blocks (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.lessons (id) on delete cascade,
+  position integer not null,
+  kind text not null check (kind in ('slide_file', 'video', 'question_group')),
+  title text,
+  source_drive_file_id text,
+  render_mode text check (render_mode in ('pdf_embed', 'slide_card_images', 'slide_rendered_images')),
+  -- Deterministically assembled per-slide text+image cards for the
+  -- slide_card_images render_mode (see render-pptx-slide-cards.ts) - code
+  -- assembly only, never model-authored. Null for every other kind/render_mode;
+  -- a pdf_embed block's PDF lives in attachments instead.
+  body_html text,
+  -- Ordered, durable PNG URLs for the slide_rendered_images render_mode - a
+  -- true per-slide render (via a temporary Google Slides conversion, see
+  -- render-pptx-slide-images.ts) rather than the text+image card fallback.
+  -- Only populated when the instructor has connected Google OAuth; null
+  -- otherwise, same as body_html is null outside slide_card_images.
+  rendered_image_urls text[],
+  video_url text,
+  question_group_id uuid references public.question_groups (id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint lesson_blocks_kind_payload_ck check (
+    (kind = 'slide_file' and render_mode is not null and video_url is null and question_group_id is null) or
+    (kind = 'video' and video_url is not null and render_mode is null and question_group_id is null) or
+    (kind = 'question_group' and question_group_id is not null and render_mode is null and video_url is null)
+  )
+);
+
+-- Near-verbatim question rows. prompt_text/choices/answer_key are always
+-- sliced by application code from deterministically-extracted source text -
+-- classify-content-units.ts only ever supplies page/slide routing (indices
+-- and role labels), never prose, so nothing here is model-authored except the
+-- rare llm_transcribed fallback for a scanned page with no text layer, which
+-- is flagged via prompt_source/needs_review rather than silently trusted.
+create table public.questions (
+  id uuid primary key default gen_random_uuid(),
+  question_group_id uuid not null references public.question_groups (id) on delete cascade,
+  position integer not null,
+  prompt_text text not null,
+  prompt_source text not null default 'verbatim_extracted'
+    check (prompt_source in ('verbatim_extracted', 'llm_transcribed')),
+  choices jsonb,
+  answer_key text,
+  question_type text not null default 'unknown'
+    check (question_type in ('multiple_choice', 'short_answer', 'free_response', 'unknown')),
+  source_slide_or_page_index integer,
+  needs_review boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.lessons
+  add column content_source text not null default 'html' check (content_source in ('html', 'blocks'));
+
+alter table public.attachments
+  add column lesson_block_id uuid references public.lesson_blocks (id) on delete cascade,
+  add column position integer;
+
+alter table public.lesson_blocks enable row level security;
+alter table public.question_groups enable row level security;
+alter table public.questions enable row level security;
+create policy "stub_auth_allow_all" on public.lesson_blocks for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.question_groups for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.questions for all using (true) with check (true);
+
+-- Google OAuth Drive access ---------------------------------------------------
+-- Holds the single stub instructor's Google OAuth refresh token, so the app
+-- can read whatever Drive folders/files that instructor's own account can
+-- already see (no folder-sharing step at all), and use the same grant to
+-- render true per-slide images for a real .pptx (see render-pptx-slide-images.ts).
+-- Deliberately NOT the permissive "stub_auth_allow_all" policy used above -
+-- this is a real third-party secret, not app-owned metadata, so it gets no
+-- client-reachable policy at all. Only the service-role client
+-- (lib/supabase/admin.ts) can read or write this table.
+drop table if exists public.instructor_google_credentials cascade;
+
+create table public.instructor_google_credentials (
+  instructor_id uuid primary key references public.instructors (id) on delete cascade,
+  refresh_token text not null,
+  scope text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.instructor_google_credentials enable row level security;
+-- No policy created on purpose: RLS enabled with zero policies denies every
+-- client-key request; only the service-role key (which bypasses RLS) can
+-- touch this table.
+
 -- Seed data (mirrors today's lib/instructor/mock-data.ts) -------------------
 
 insert into public.instructors (id, name, initials) values

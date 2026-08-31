@@ -144,6 +144,8 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     title: newLesson.title,
     type: newLesson.type as LessonType,
     contentHtml: newLesson.content_html,
+    contentSource: "html",
+    blocks: [],
     isPublished: newLesson.is_published,
     attachments: [],
     updatedAt: newLesson.updated_at,
@@ -158,6 +160,8 @@ export async function addLessonFromImport(
     position: number;
     sourceDriveFileId: string;
     contentHtml?: string;
+    /** 'blocks' for organize-mode lessons (composed of lesson_blocks, no content_html); defaults to 'html' for the atomizer path. */
+    contentSource?: "html" | "blocks";
   }
 ): Promise<LessonItem> {
   const supabase = await createClient();
@@ -181,6 +185,7 @@ export async function addLessonFromImport(
       type: patch.type,
       position: patch.position,
       source_drive_file_id: patch.sourceDriveFileId,
+      content_source: patch.contentSource ?? "html",
       ...(patch.contentHtml ? { content_html: patch.contentHtml } : {}),
     })
     .select("id, code, title, type, content_html, is_published, updated_at")
@@ -193,6 +198,8 @@ export async function addLessonFromImport(
     title: newLesson.title,
     type: newLesson.type as LessonType,
     contentHtml: newLesson.content_html,
+    contentSource: patch.contentSource ?? "html",
+    blocks: [],
     isPublished: newLesson.is_published,
     attachments: [],
     updatedAt: newLesson.updated_at,

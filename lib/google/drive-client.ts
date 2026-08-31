@@ -1,4 +1,5 @@
 import { google, type drive_v3 } from "googleapis";
+import { getOAuthDriveClient } from "@/lib/google/oauth-client";
 
 const DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 
@@ -15,14 +16,20 @@ function parseServiceAccountKey(): Record<string, unknown> | null {
 }
 
 /**
- * Two supported auth modes, so instructors can share their folder however
- * they prefer - GOOGLE_SERVICE_ACCOUNT_KEY takes priority when both are set:
+ * Three supported auth modes, tried in priority order:
+ *  - Google OAuth (instructor-connected): reads whatever the instructor's own
+ *    account can already see - no sharing step at all. Highest priority
+ *    since it's the most capable and requires the instructor to have
+ *    deliberately connected their account.
  *  - Service account: reads folders shared privately with the service
  *    account's own email, and anything shared "Anyone with the link" too.
  *  - Plain API key: only reads folders shared "Anyone with the link" - a key
  *    has no identity of its own to share a private folder with.
  */
-export function getDriveClient(): drive_v3.Drive {
+export async function getDriveClient(): Promise<drive_v3.Drive> {
+  const oauthDrive = await getOAuthDriveClient();
+  if (oauthDrive) return oauthDrive;
+
   const credentials = parseServiceAccountKey();
   if (credentials) {
     const auth = new google.auth.GoogleAuth({ credentials, scopes: [DRIVE_READONLY_SCOPE] });

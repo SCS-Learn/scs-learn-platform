@@ -1,11 +1,38 @@
 export type LessonType = "lesson" | "quiz";
 
+export type QuestionView = {
+  id: string;
+  promptText: string;
+  choices: string[] | null;
+  answerKey: string | null;
+  questionType: string;
+  needsReview: boolean;
+};
+
+/** A whole existing asset (a slide file, a video, or a question set) composing an organize-mode lesson - see lesson_blocks in supabase/schema.sql. */
+export type LessonBlockView = {
+  id: string;
+  kind: "slide_file" | "video" | "question_group";
+  title: string | null;
+  renderMode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
+  bodyHtml: string | null;
+  /** Ordered, durable per-slide PNG URLs - only set for renderMode "slide_rendered_images". */
+  renderedImageUrls: string[] | null;
+  pdfUrl: string | null;
+  videoUrl: string | null;
+  questions: QuestionView[] | null;
+};
+
+export type LessonContentSource = "html" | "blocks";
+
 export type LessonItem = {
   id: string;
   code: string;
   title: string;
   type: LessonType;
   contentHtml: string;
+  contentSource: LessonContentSource;
+  blocks: LessonBlockView[];
   isPublished: boolean;
   updatedAt: string; // ISO timestamp
   attachments: Attachment[];

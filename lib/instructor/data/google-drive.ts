@@ -193,7 +193,7 @@ export async function getDriveImportPreview(
   folderUrl: string
 ): Promise<{ unitCount: number; lessonCount: number; isFlat: boolean }> {
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
-  const drive = getDriveClient();
+  const drive = await getDriveClient();
   try {
     const tree = await buildDriveImportTree(drive, folderId, resourceKey);
     return {
@@ -225,7 +225,7 @@ export async function runDriveImport(
 
   await flushAtomStore();
 
-  const drive = getDriveClient();
+  const drive = await getDriveClient();
   const tree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
     throw new Error(driveErrorMessage(error));
   });
@@ -307,10 +307,20 @@ export async function runDriveImport(
         figuresByFileId.set(file.id, atomResult.figures);
 
         if (!analysis) {
+          // Couldn't read this file at all (no source to even ask Claude
+          // about) - a Google Form is a real quiz format we just can't parse
+          // yet (stays isCourseContent: true, a known gap); anything else
+          // reaching here most likely isn't portable content at all.
+          const isForm = file.mimeType === "application/vnd.google-apps.form";
           const fallback: DriveFileAnalysis = {
             title: cleanFilenameTitle(file.name),
-            type: file.mimeType === "application/vnd.google-apps.form" ? "quiz" : "lesson",
+            type: isForm ? "quiz" : "lesson",
+            category: isForm ? "homework" : "other",
             topicSummary: "",
+            isCourseContent: isForm,
+            notCourseContentReason: isForm
+              ? ""
+              : "Could not read this file type (not exportable to PDF or a readable document format) - most likely not portable lecture or assessment content.",
           };
           return [file.id, fallback] as const;
         }
