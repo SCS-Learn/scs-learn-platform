@@ -1,4 +1,5 @@
 import type { drive_v3 } from "googleapis";
+import { withDriveRetry } from "@/lib/google/drive-retry";
 
 const PDF_EXPORTABLE_MIME_TYPES = new Set([
   "application/vnd.google-apps.document",
@@ -23,16 +24,20 @@ export async function downloadDriveFileAsPdfBase64(
 
   try {
     if (file.mimeType === "application/pdf") {
-      const { data } = await drive.files.get(
-        { fileId: file.id, alt: "media", supportsAllDrives: true },
-        { ...requestOptions, responseType: "arraybuffer" }
+      const { data } = await withDriveRetry(`get pdf ${file.id}`, () =>
+        drive.files.get(
+          { fileId: file.id, alt: "media", supportsAllDrives: true },
+          { ...requestOptions, responseType: "arraybuffer" }
+        )
       );
       return Buffer.from(data as ArrayBuffer).toString("base64");
     }
     if (PDF_EXPORTABLE_MIME_TYPES.has(file.mimeType)) {
-      const { data } = await drive.files.export(
-        { fileId: file.id, mimeType: "application/pdf" },
-        { ...requestOptions, responseType: "arraybuffer" }
+      const { data } = await withDriveRetry(`export pdf ${file.id}`, () =>
+        drive.files.export(
+          { fileId: file.id, mimeType: "application/pdf" },
+          { ...requestOptions, responseType: "arraybuffer" }
+        )
       );
       return Buffer.from(data as ArrayBuffer).toString("base64");
     }

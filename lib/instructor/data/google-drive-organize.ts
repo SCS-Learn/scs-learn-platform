@@ -16,6 +16,7 @@ import { uploadDriveImage } from "@/lib/google/upload-drive-image";
 import { uploadDriveFile } from "@/lib/google/upload-drive-file";
 import { getOAuthClients } from "@/lib/google/oauth-client";
 import { convertAndRenderPptxSlides } from "@/lib/google/render-pptx-slide-images";
+import { mapWithConcurrencyLimit } from "@/lib/google/with-concurrency-limit";
 import type { FileContentSource } from "@/lib/google/file-content-source";
 import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
@@ -34,6 +35,11 @@ function driveErrorMessage(error: unknown): string {
 }
 
 const MAX_IMAGES_PER_FILE = 36;
+
+// Drive's per-user rate limit is easily tripped by a folder tree with
+// thousands of files (a "Recitations" or "Code Repository" subfolder, say) -
+// this caps how many files.get/export calls run at once during resolution.
+const DRIVE_IMPORT_CONCURRENCY = 8;
 
 /**
  * What one file resolved to, before any DB writes happen - kept separate from
@@ -251,10 +257,10 @@ export async function runDriveImportOrganize(
   const driveFilesById = new Map(tree.units.flatMap((u) => u.files).map((f) => [f.id, f]));
 
   const resolvedByFileId = new Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>(
-    await Promise.all(
-      Array.from(driveFilesById.values()).map(
-        async (file) => [file.id, await resolveFile(drive, file, resourceKeyHeader, course)] as const
-      )
+    await mapWithConcurrencyLimit(
+      Array.from(driveFilesById.values()),
+      DRIVE_IMPORT_CONCURRENCY,
+      async (file) => [file.id, await resolveFile(drive, file, resourceKeyHeader, course)] as const
     )
   );
 

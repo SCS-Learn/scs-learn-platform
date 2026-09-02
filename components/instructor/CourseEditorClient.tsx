@@ -257,7 +257,9 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
           savedLabel={
             selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
           }
-          onPreview={() => window.alert("Preview would show the learner view of this lesson.")}
+          onPreview={() =>
+            window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
+          }
           onSaveDraft={flushPendingSave}
           onPublish={publish}
         />

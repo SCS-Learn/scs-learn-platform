@@ -1,5 +1,6 @@
 import type { drive_v3, slides_v1 } from "googleapis";
 import { uploadDriveFile } from "@/lib/google/upload-drive-file";
+import { withDriveRetry } from "@/lib/google/drive-retry";
 
 const CONVERTED_MIME_TYPE = "application/vnd.google-apps.presentation";
 const SOURCE_PPTX_MIME_TYPE =
@@ -30,23 +31,29 @@ export async function convertAndRenderPptxSlides(
 
   let tempPresentationId: string | null = null;
   try {
-    const { data: rawBytes } = await clients.drive.files.get(
-      { fileId, alt: "media", supportsAllDrives: true },
-      { ...requestOptions, responseType: "arraybuffer" }
+    const { data: rawBytes } = await withDriveRetry(`get pptx source ${fileId}`, () =>
+      clients.drive.files.get(
+        { fileId, alt: "media", supportsAllDrives: true },
+        { ...requestOptions, responseType: "arraybuffer" }
+      )
     );
 
-    const created = await clients.drive.files.create({
-      requestBody: { name: `__render_tmp__${title}`, mimeType: CONVERTED_MIME_TYPE },
-      media: { mimeType: SOURCE_PPTX_MIME_TYPE, body: Buffer.from(rawBytes as ArrayBuffer) },
-      fields: "id",
-      supportsAllDrives: true,
-    });
+    const created = await withDriveRetry(`create temp slides for ${fileId}`, () =>
+      clients.drive.files.create({
+        requestBody: { name: `__render_tmp__${title}`, mimeType: CONVERTED_MIME_TYPE },
+        media: { mimeType: SOURCE_PPTX_MIME_TYPE, body: Buffer.from(rawBytes as ArrayBuffer) },
+        fields: "id",
+        supportsAllDrives: true,
+      })
+    );
     tempPresentationId = created.data.id ?? null;
     if (!tempPresentationId) return null;
 
-    const { data: pdfBytes } = await clients.drive.files.export(
-      { fileId: tempPresentationId, mimeType: "application/pdf" },
-      { responseType: "arraybuffer" }
+    const { data: pdfBytes } = await withDriveRetry(`export temp slides ${tempPresentationId}`, () =>
+      clients.drive.files.export(
+        { fileId: tempPresentationId!, mimeType: "application/pdf" },
+        { responseType: "arraybuffer" }
+      )
     );
 
     const uploaded = await uploadDriveFile(
@@ -56,7 +63,8 @@ export async function convertAndRenderPptxSlides(
       `${title}.pdf`
     );
     return uploaded?.url ?? null;
-  } catch {
+  } catch (error) {
+    console.warn(`convertAndRenderPptxSlides failed for ${fileId}, falling back to text+image cards:`, error);
     return null;
   } finally {
     if (tempPresentationId) {

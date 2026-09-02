@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import type { drive_v3 } from "googleapis";
+import { withDriveRetry } from "@/lib/google/drive-retry";
 
 const OOXML_EXPORT_MIME_TYPES: Record<string, string> = {
   "application/vnd.google-apps.document":
@@ -40,17 +41,21 @@ export async function loadOoxmlZip(
   try {
     let zipBuffer: Buffer;
     if (ALREADY_OOXML_MIME_TYPES.has(file.mimeType)) {
-      const { data } = await drive.files.get(
-        { fileId: file.id, alt: "media", supportsAllDrives: true },
-        { ...requestOptions, responseType: "arraybuffer" }
+      const { data } = await withDriveRetry(`get ooxml ${file.id}`, () =>
+        drive.files.get(
+          { fileId: file.id, alt: "media", supportsAllDrives: true },
+          { ...requestOptions, responseType: "arraybuffer" }
+        )
       );
       zipBuffer = Buffer.from(data as ArrayBuffer);
     } else {
       const exportMimeType = OOXML_EXPORT_MIME_TYPES[file.mimeType];
       if (!exportMimeType) return null;
-      const { data } = await drive.files.export(
-        { fileId: file.id, mimeType: exportMimeType },
-        { ...requestOptions, responseType: "arraybuffer" }
+      const { data } = await withDriveRetry(`export ooxml ${file.id}`, () =>
+        drive.files.export(
+          { fileId: file.id, mimeType: exportMimeType },
+          { ...requestOptions, responseType: "arraybuffer" }
+        )
       );
       zipBuffer = Buffer.from(data as ArrayBuffer);
     }
