@@ -5,8 +5,6 @@ import ContentSidebar from "@/components/instructor/ContentSidebar";
 import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
 import BlockLessonViewer from "@/components/instructor/BlockLessonViewer";
-import EditorTopBar from "@/components/instructor/EditorTopBar";
-import InstructorHeader from "@/components/instructor/InstructorHeader";
 import { lessonTypeOptions, type InstructorCourse, type Unit } from "@/lib/instructor/mock-data";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import {
@@ -245,72 +243,65 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black flex flex-col">
-      <InstructorHeader backHref="/instructor" backLabel="Dashboard" />
+    <main className="h-screen bg-gray-50 text-black grid grid-cols-[1fr_3fr_1fr] overflow-hidden">
+      <ContentSidebar
+        courseCode={course.code}
+        courseTitle={course.title}
+        units={units}
+        selectedLessonId={selectedLessonId}
+        onSelectLesson={selectLesson}
+        onAddLesson={addLesson}
+        onDeleteLesson={deleteLesson}
+        onDeleteUnit={deleteUnit}
+        onReorderLessons={reorderLessons}
+        onAddUnit={addUnit}
+        onReorderUnits={reorderUnits}
+      />
 
-      <div className="flex-1 px-6 py-6">
-        <EditorTopBar
-          unitLabel={moduleLabel(selectedUnit)}
-          lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
-          wordCount={wordCount}
-          isPublished={selectedLesson?.isPublished ?? false}
-          savedLabel={
-            selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
-          }
-          onPreview={() =>
-            window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
-          }
-          onSaveDraft={flushPendingSave}
-          onPublish={publish}
-        />
-
-        <div className="flex gap-4 items-start">
-          <ContentSidebar
-            courseCode={course.code}
-            courseTitle={course.title}
-            units={units}
-            selectedLessonId={selectedLessonId}
-            onSelectLesson={selectLesson}
-            onAddLesson={addLesson}
-            onDeleteLesson={deleteLesson}
-            onDeleteUnit={deleteUnit}
-            onReorderLessons={reorderLessons}
-            onAddUnit={addUnit}
-            onReorderUnits={reorderUnits}
+      <div className="min-h-0 h-full overflow-y-auto bg-white border-x border-gray-300">
+        {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
+          <BlockLessonViewer
+            key={`blocks-${selectedLessonId}`}
+            blocks={selectedLesson.blocks}
+            lessonType={selectedLesson.type}
+            lessonTitle={selectedLesson.title}
           />
-
-          {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
-            <BlockLessonViewer
-              key={`blocks-${selectedLessonId}`}
-              blocks={selectedLesson.blocks}
-              lessonType={selectedLesson.type}
-            />
-          ) : selectedLessonId && selectedLesson ? (
-            <LessonEditor
-              key={`editor-${selectedLessonId}`}
-              lessonId={selectedLessonId}
-              title={selectedLesson.title}
-              onTitleChange={(title) => updateSelectedLesson({ title })}
-              content={selectedLesson.contentHtml}
-              onContentChange={(contentHtml) => updateSelectedLesson({ contentHtml })}
-              wordCount={wordCount}
-            />
-          ) : (
-            <div className="flex-1 min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
-              Add a section and a lesson to start writing.
-            </div>
-          )}
-
-          <LessonSettingsSidebar
-            key={`module-settings-${selectedLessonId}`}
+        ) : selectedLessonId && selectedLesson ? (
+          <LessonEditor
+            key={`editor-${selectedLessonId}`}
             lessonId={selectedLessonId}
-            attachments={selectedLesson?.attachments ?? []}
-            currentModule={selectedLesson ? `Lesson ${selectedLesson.code} — ${selectedLesson.title}` : ""}
-            selectedType={selectedType}
-            onTypeChange={setSelectedType}
+            title={selectedLesson.title}
+            onTitleChange={(title) => updateSelectedLesson({ title })}
+            content={selectedLesson.contentHtml}
+            onContentChange={(contentHtml) => updateSelectedLesson({ contentHtml })}
           />
-        </div>
+        ) : (
+          <div className="h-full flex items-center justify-center text-sm text-gray-400">
+            Add a section and a lesson to start writing.
+          </div>
+        )}
       </div>
+
+      <LessonSettingsSidebar
+        key={`module-settings-${selectedLessonId}`}
+        lessonId={selectedLessonId}
+        attachments={selectedLesson?.attachments ?? []}
+        unitLabel={moduleLabel(selectedUnit)}
+        lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
+        currentModule={selectedLesson ? `Lesson ${selectedLesson.code} — ${selectedLesson.title}` : ""}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        wordCount={wordCount}
+        isPublished={selectedLesson?.isPublished ?? false}
+        savedLabel={
+          selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
+        }
+        onPreview={() =>
+          window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
+        }
+        onSaveDraft={flushPendingSave}
+        onPublish={publish}
+      />
     </main>
   );
 }

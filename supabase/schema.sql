@@ -239,7 +239,7 @@ create table public.lesson_blocks (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references public.lessons (id) on delete cascade,
   position integer not null,
-  kind text not null check (kind in ('slide_file', 'video', 'question_group')),
+  kind text not null check (kind in ('slide_file', 'video', 'question_group', 'course_notes')),
   title text,
   source_drive_file_id text,
   render_mode text check (render_mode in ('pdf_embed', 'slide_card_images', 'slide_rendered_images')),
@@ -260,7 +260,8 @@ create table public.lesson_blocks (
   constraint lesson_blocks_kind_payload_ck check (
     (kind = 'slide_file' and render_mode is not null and video_url is null and question_group_id is null) or
     (kind = 'video' and video_url is not null and render_mode is null and question_group_id is null) or
-    (kind = 'question_group' and question_group_id is not null and render_mode is null and video_url is null)
+    (kind = 'question_group' and question_group_id is not null and render_mode is null and video_url is null) or
+    (kind = 'course_notes' and body_html is not null and render_mode is null and video_url is null and question_group_id is null)
   )
 );
 

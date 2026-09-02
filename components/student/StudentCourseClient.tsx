@@ -51,7 +51,7 @@ export default function StudentCourseClient({
           {selectedLesson ? (
             <StudentLessonViewer key={selectedLesson.id} lesson={selectedLesson} />
           ) : (
-            <div className="flex-1 min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
+            <div className="flex-[3] min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
               This course has no published lessons yet.
             </div>
           )}

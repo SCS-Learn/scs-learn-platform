@@ -13,6 +13,7 @@ export async function addAttachment(
     storagePath: string | null;
     contentType: string;
     sizeBytes: number;
+    lessonBlockId?: string | null;
   }
 ): Promise<Attachment> {
   const supabase = await createClient();
@@ -20,6 +21,7 @@ export async function addAttachment(
     .from("attachments")
     .insert({
       lesson_id: lessonId,
+      lesson_block_id: file.lessonBlockId ?? null,
       name: file.name,
       url: file.url,
       storage_path: file.storagePath,

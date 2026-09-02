@@ -12,7 +12,7 @@ export type QuestionView = {
 /** A whole existing asset (a slide file, a video, or a question set) composing an organize-mode lesson - see lesson_blocks in supabase/schema.sql. */
 export type LessonBlockView = {
   id: string;
-  kind: "slide_file" | "video" | "question_group";
+  kind: "slide_file" | "video" | "question_group" | "course_notes";
   title: string | null;
   renderMode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
   bodyHtml: string | null;

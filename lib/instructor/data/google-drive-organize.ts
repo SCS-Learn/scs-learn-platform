@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, parseDriveFolderUrl } from "@/lib/google/drive-client";
 import { buildDriveImportTree, type DriveEntry } from "@/lib/google/drive-traversal";
-import { classifyDriveImport } from "@/lib/google/classify-drive-content";
+import { classifyUnitIntoTopics, detectDuplicatesFromUnits } from "@/lib/google/classify-drive-topics";
+import { classifyFileRole } from "@/lib/google/file-role";
+import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/export-drive-notes-html";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
-import { analyzeDriveFileContent, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
+import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
+import type { DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
 import { detectVideoLink } from "@/lib/google/detect-video-link";
+import { detectVideoUrlInDocument } from "@/lib/google/extract-document-text";
 import { renderPptxSlideCards } from "@/lib/google/render-pptx-slide-cards";
 import { extractSlideTextFromZip, type SlideText } from "@/lib/google/extract-slide-text";
 import { extractImagesFromZipByPaths } from "@/lib/google/extract-drive-images";
@@ -15,9 +19,15 @@ import { loadOoxmlZip } from "@/lib/google/load-ooxml-zip";
 import { uploadDriveImage } from "@/lib/google/upload-drive-image";
 import { uploadDriveFile } from "@/lib/google/upload-drive-file";
 import { getOAuthClients } from "@/lib/google/oauth-client";
-import { convertAndRenderPptxSlides } from "@/lib/google/render-pptx-slide-images";
+import { getSlidesClients, GOOGLE_SLIDES_MIME } from "@/lib/google/slides-client";
+import { renderGoogleSlidesThumbnails } from "@/lib/google/render-slides-thumbnails";
+import {
+  convertAndRenderPptxSlides,
+  convertPptxToGoogleSlides,
+  deleteTempPresentation,
+  exportPresentationAsPdf,
+} from "@/lib/google/render-pptx-slide-images";
 import { mapWithConcurrencyLimit } from "@/lib/google/with-concurrency-limit";
-import type { FileContentSource } from "@/lib/google/file-content-source";
 import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { addLessonBlock } from "@/lib/instructor/data/lesson-blocks";
@@ -43,11 +53,11 @@ const DRIVE_IMPORT_CONCURRENCY = 8;
 
 /**
  * What one file resolved to, before any DB writes happen - kept separate from
- * persistence so every file's Drive read/Claude classification call can run
- * in parallel up front, same as runDriveImport does for the atomizer path.
+ * persistence so every file's Drive download can run in parallel up front.
  */
 type ResolvedFile =
   | { routing: "video"; videoUrl: string }
+  | { routing: "google_slides" }
   | {
       routing: "slide_pdf";
       pdfBase64: string;
@@ -62,13 +72,19 @@ type ResolvedFile =
 async function resolveFile(
   drive: Awaited<ReturnType<typeof getDriveClient>>,
   file: DriveEntry,
-  resourceKeyHeader: string | undefined,
-  course: { title: string; department: string }
+  resourceKeyHeader: string | undefined
 ): Promise<{ analysis: DriveFileAnalysis; resolved: ResolvedFile }> {
   if (file.mimeType.startsWith("video/")) {
     return {
-      analysis: { title: cleanFilenameTitle(file.name), type: "lesson", category: "lecture", topicSummary: "", isCourseContent: true, notCourseContentReason: "" },
+      analysis: analysisFromFilename(file.name, true),
       resolved: { routing: "video", videoUrl: file.webViewLink ?? "" },
+    };
+  }
+
+  if (file.mimeType === GOOGLE_SLIDES_MIME) {
+    return {
+      analysis: analysisFromFilename(file.name, true),
+      resolved: { routing: "google_slides" },
     };
   }
 
@@ -77,106 +93,130 @@ async function resolveFile(
     loadOoxmlZip(drive, file, resourceKeyHeader).catch(() => null),
   ]);
 
-  // A real (already OOXML) .pptx can't be exported to PDF via the Drive API -
-  // fall back to the deck's own slide text, same as the atomizer path.
   const slides = pdfBase64 || !zip ? [] : await extractSlideTextFromZip(zip).catch(() => []);
 
-  // Only checked on the slide-text fallback path: a native PDF/Doc/Sheet
-  // export is the real content, not just a pointer to a video.
   if (slides.length > 0) {
     const videoUrl = detectVideoLink(slides.flatMap((s) => s.texts));
     if (videoUrl) {
       return {
-        analysis: { title: cleanFilenameTitle(file.name), type: "lesson", category: "lecture", topicSummary: "", isCourseContent: true, notCourseContentReason: "" },
+        analysis: analysisFromFilename(file.name, true),
         resolved: { routing: "video", videoUrl },
       };
     }
   }
 
-  const source: FileContentSource | null = pdfBase64
-    ? { kind: "pdf", pdfBase64 }
-    : slides.length > 0
-      ? { kind: "slideText", slides }
-      : null;
+  const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
+  const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (file.mimeType === GOOGLE_DOC_MIME || file.mimeType === DOCX_MIME) {
+    const videoUrl = await detectVideoUrlInDocument(drive, file, resourceKeyHeader, pdfBase64, zip);
+    if (videoUrl) {
+      return {
+        analysis: analysisFromFilename(file.name, true),
+        resolved: { routing: "video", videoUrl },
+      };
+    }
+  }
 
-  // A Google Form is a real quiz format this pipeline just can't parse yet -
-  // stays isCourseContent: true (a known gap, not junk). Anything else that
-  // reaches this fallback couldn't be read at all (not PDF-exportable, not
-  // already-OOXML with slide text, and no source to even ask Claude about) -
-  // defaulting that to "yes, real content" is backwards, and is exactly how
-  // raw source files, images, and spreadsheets from folders like "Code
-  // Repository"/"Grading"/"Photos" were turning into empty junk lessons.
   const isForm = file.mimeType === "application/vnd.google-apps.form";
-  const analysis =
-    (source ? await analyzeDriveFileContent(course, source).catch(() => null) : null) ??
-    ({
-      title: cleanFilenameTitle(file.name),
-      type: isForm ? "quiz" : "lesson",
-      category: isForm ? "homework" : "other",
-      topicSummary: "",
-      isCourseContent: isForm,
-      notCourseContentReason: isForm
-        ? ""
-        : "Could not read this file type (not exportable to PDF or a readable document format) - most likely not portable lecture or assessment content.",
-    } as DriveFileAnalysis);
+  const unreadableReason =
+    "Could not read this file type (not exportable to PDF or a readable document format) - most likely not portable lecture or assessment content.";
 
-  // A quiz/homework file is embedded as a whole file exactly like a lecture -
-  // "type"/"category" only ever affect the lesson's label and how the
-  // classifier groups/attaches it, never how its content gets rendered.
-  if (pdfBase64) return { analysis, resolved: { routing: "slide_pdf", pdfBase64 } };
-  if (zip && slides.length > 0) return { analysis, resolved: { routing: "slide_cards", slides, zip } };
-  return { analysis, resolved: { routing: "unsupported" } };
+  if (pdfBase64) {
+    return {
+      analysis: analysisFromFilename(file.name, true),
+      resolved: { routing: "slide_pdf", pdfBase64 },
+    };
+  }
+  if (zip && slides.length > 0) {
+    return {
+      analysis: analysisFromFilename(file.name, true),
+      resolved: { routing: "slide_cards", slides, zip },
+    };
+  }
+  return {
+    analysis: analysisFromFilename(file.name, isForm, isForm ? "" : unreadableReason),
+    resolved: { routing: "unsupported" },
+  };
 }
 
-/** Uploads a PDF's bytes durably and adds a pdf_embed lesson block for it - shared by the native-PDF and successful-pptx-conversion cases below, both of which end up with the exact same scrollable PDF viewer. */
+/** Adds a slide deck rendered as Google Slides thumbnails — pixel-accurate backgrounds and layout. */
+async function addRenderedSlidesBlock(
+  lessonId: string,
+  file: DriveEntry,
+  analysis: DriveFileAnalysis,
+  renderedImageUrls: string[],
+  position: number
+): Promise<void> {
+  await addLessonBlock(lessonId, {
+    kind: "slide_file",
+    position,
+    title: analysis.title || null,
+    sourceDriveFileId: file.id,
+    renderMode: "slide_rendered_images",
+    bodyHtml: null,
+    renderedImageUrls,
+  });
+}
+
+async function tryRenderSlidesAsThumbnails(
+  presentationId: string,
+  file: DriveEntry,
+  title: string
+): Promise<string[] | null> {
+  const clients = await getSlidesClients();
+  if (!clients) return null;
+  return renderGoogleSlidesThumbnails(clients, presentationId, file.id, title);
+}
+
+/** Uploads a PDF durably, creates the lesson block, then links the attachment to it. */
 async function addPdfEmbedBlock(
   lessonId: string,
   file: DriveEntry,
   analysis: DriveFileAnalysis,
   pdfUrl: string | null,
-  pdfBytes: Buffer | null
+  pdfBytes: Buffer | null,
+  position: number
 ): Promise<void> {
   const uploaded = pdfBytes
     ? await uploadDriveFile(file.id, pdfBytes, "application/pdf", `${cleanFilenameTitle(file.name)}.pdf`)
     : null;
   const url = uploaded?.url ?? pdfUrl;
-  if (url) {
-    await addAttachment(lessonId, {
-      name: `${cleanFilenameTitle(file.name)}.pdf`,
-      url,
-      storagePath: uploaded?.storagePath ?? null,
-      contentType: "application/pdf",
-      sizeBytes: 0,
-    });
-  }
-  await addLessonBlock(lessonId, {
+  if (!url) return;
+
+  const block = await addLessonBlock(lessonId, {
     kind: "slide_file",
-    position: 1,
+    position,
     title: analysis.title || null,
     sourceDriveFileId: file.id,
     renderMode: "pdf_embed",
     bodyHtml: null,
   });
+
+  await addAttachment(lessonId, {
+    name: `${cleanFilenameTitle(file.name)}.pdf`,
+    url,
+    storagePath: uploaded?.storagePath ?? null,
+    contentType: "application/pdf",
+    sizeBytes: pdfBytes?.length ?? 0,
+    lessonBlockId: block.id,
+  });
 }
 
 /**
- * Persists whatever a file resolved to as a single whole-file lesson block -
- * the same rendering mechanism regardless of category (lecture, homework,
- * practice problems, ...): a PDF/slide deck is embedded in full, never
- * decomposed into extracted pieces. Always lands at position 1 - every
- * lesson gets exactly one block now.
+ * Adds one slide/video file as a lesson block at the given position.
  */
-async function addWholeFileBlock(
+async function addSlideFileBlock(
   lessonId: string,
   file: DriveEntry,
   resolved: ResolvedFile,
   analysis: DriveFileAnalysis,
-  resourceKeyHeader: string | undefined
+  resourceKeyHeader: string | undefined,
+  position: number
 ): Promise<void> {
   if (resolved.routing === "video") {
     await addLessonBlock(lessonId, {
       kind: "video",
-      position: 1,
+      position,
       title: analysis.title || null,
       sourceDriveFileId: file.id,
       videoUrl: resolved.videoUrl,
@@ -184,30 +224,83 @@ async function addWholeFileBlock(
     return;
   }
 
+  const title = analysis.title || cleanFilenameTitle(file.name);
+
+  if (resolved.routing === "google_slides") {
+    const thumbnailUrls = await tryRenderSlidesAsThumbnails(file.id, file, title);
+    if (thumbnailUrls) {
+      await addRenderedSlidesBlock(lessonId, file, analysis, thumbnailUrls, position);
+      return;
+    }
+
+    const drive = await getDriveClient();
+    const pdfBase64 = await downloadDriveFileAsPdfBase64(drive, file, resourceKeyHeader);
+    if (pdfBase64) {
+      await addPdfEmbedBlock(lessonId, file, analysis, null, Buffer.from(pdfBase64, "base64"), position);
+    }
+    return;
+  }
+
   if (resolved.routing === "slide_pdf") {
-    await addPdfEmbedBlock(lessonId, file, analysis, null, Buffer.from(resolved.pdfBase64, "base64"));
+    await addPdfEmbedBlock(
+      lessonId,
+      file,
+      analysis,
+      null,
+      Buffer.from(resolved.pdfBase64, "base64"),
+      position
+    );
     return;
   }
 
   if (resolved.routing === "slide_cards") {
-    // True, fully-scrollable rendering (a real PDF export of a temporary
-    // Slides conversion) when the instructor has connected Google OAuth -
-    // falls back to the text+image card below on any failure (not
-    // connected, conversion unsupported, quota, etc.) rather than failing
-    // the import.
     const oauthClients = await getOAuthClients();
-    const renderedPdfUrl = oauthClients
-      ? await convertAndRenderPptxSlides(
-          oauthClients,
-          file.id,
-          resourceKeyHeader,
-          analysis.title || cleanFilenameTitle(file.name)
-        )
-      : null;
+    if (oauthClients) {
+      const tempPresentationId = await convertPptxToGoogleSlides(
+        oauthClients.drive,
+        file.id,
+        resourceKeyHeader,
+        title
+      );
 
-    if (renderedPdfUrl) {
-      await addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null);
-      return;
+      if (tempPresentationId) {
+        try {
+          const thumbnailUrls = await renderGoogleSlidesThumbnails(
+            oauthClients,
+            tempPresentationId,
+            file.id,
+            title
+          );
+          if (thumbnailUrls) {
+            await addRenderedSlidesBlock(lessonId, file, analysis, thumbnailUrls, position);
+            return;
+          }
+
+          const renderedPdfUrl = await exportPresentationAsPdf(
+            oauthClients.drive,
+            tempPresentationId,
+            file.id,
+            title
+          );
+          if (renderedPdfUrl) {
+            await addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
+            return;
+          }
+        } finally {
+          await deleteTempPresentation(oauthClients.drive, tempPresentationId);
+        }
+      }
+
+      const renderedPdfUrl = await convertAndRenderPptxSlides(
+        oauthClients,
+        file.id,
+        resourceKeyHeader,
+        title
+      );
+      if (renderedPdfUrl) {
+        await addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
+        return;
+      }
     }
 
     const imagePaths = [...new Set(resolved.slides.flatMap((s) => s.imagePaths))].slice(0, MAX_IMAGES_PER_FILE);
@@ -220,18 +313,134 @@ async function addWholeFileBlock(
     const bodyHtml = renderPptxSlideCards(resolved.slides, imageUrlBySourcePath);
     await addLessonBlock(lessonId, {
       kind: "slide_file",
-      position: 1,
+      position,
       title: analysis.title || null,
       sourceDriveFileId: file.id,
       renderMode: "slide_card_images",
       bodyHtml,
     });
-    return;
+  }
+}
+
+async function buildNotesHtmlForFiles(
+  drive: Awaited<ReturnType<typeof getDriveClient>>,
+  files: DriveEntry[],
+  resolvedByFileId: Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>,
+  resourceKeyHeader: string | undefined
+): Promise<string | null> {
+  const sections: { title: string; html: string }[] = [];
+
+  for (const file of files) {
+    const entry = resolvedByFileId.get(file.id);
+    if (!entry) continue;
+
+    const pdfBase64 =
+      entry.resolved.routing === "slide_pdf" ? entry.resolved.pdfBase64 : null;
+
+    const html = await exportDriveFileAsNotesHtml(drive, file, resourceKeyHeader, pdfBase64);
+    if (html) {
+      sections.push({ title: cleanFilenameTitle(file.name), html });
+    }
   }
 
-  // "unsupported" (e.g. a Google Form, or a type with no extractable content
-  // at all): the Drive-link attachment (added by the caller) is all this
-  // file gets - no lesson block, no generated content.
+  return sections.length > 0 ? mergeNotesSections(sections) : null;
+}
+
+async function addDriveLinkAttachments(
+  lessonId: string,
+  fileIds: string[],
+  driveFilesById: Map<string, DriveEntry>
+): Promise<void> {
+  for (const fileId of fileIds) {
+    const driveFile = driveFilesById.get(fileId);
+    if (driveFile?.webViewLink) {
+      await addAttachment(lessonId, {
+        name: driveFile.name,
+        url: driveFile.webViewLink,
+        storagePath: null,
+        contentType: driveFile.mimeType,
+        sizeBytes: 0,
+      });
+    }
+  }
+}
+
+async function populateTopicLesson(
+  lessonId: string,
+  topic: {
+    videoFiles: DriveEntry[];
+    slideFiles: DriveEntry[];
+    notesFiles: DriveEntry[];
+  },
+  resolvedByFileId: Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>,
+  driveFilesById: Map<string, DriveEntry>,
+  duplicatesBySurvivorId: Map<string, string[]>,
+  resourceKeyHeader: string | undefined,
+  drive: Awaited<ReturnType<typeof getDriveClient>>
+): Promise<void> {
+  let blockPosition = 0;
+  const allFileIds = new Set<string>();
+
+  // 1. Video at top (first video only)
+  const videoFile = topic.videoFiles[0];
+  if (videoFile) {
+    const entry = resolvedByFileId.get(videoFile.id);
+    if (entry) {
+      blockPosition += 1;
+      await addSlideFileBlock(
+        lessonId,
+        videoFile,
+        entry.resolved,
+        entry.analysis,
+        resourceKeyHeader,
+        blockPosition
+      );
+      allFileIds.add(videoFile.id);
+    }
+  }
+
+  // 2. Toggleable slide files
+  for (const file of topic.slideFiles) {
+    const entry = resolvedByFileId.get(file.id);
+    if (!entry || entry.resolved.routing === "unsupported") continue;
+    blockPosition += 1;
+    await addSlideFileBlock(
+      lessonId,
+      file,
+      entry.resolved,
+      entry.analysis,
+      resourceKeyHeader,
+      blockPosition
+    );
+    allFileIds.add(file.id);
+  }
+
+  // 3. Course notes as HTML at the bottom
+  if (topic.notesFiles.length > 0) {
+    const notesHtml = await buildNotesHtmlForFiles(
+      drive,
+      topic.notesFiles,
+      resolvedByFileId,
+      resourceKeyHeader
+    );
+    if (notesHtml) {
+      blockPosition += 1;
+      await addLessonBlock(lessonId, {
+        kind: "course_notes",
+        position: blockPosition,
+        title: "Course Notes",
+        sourceDriveFileId: topic.notesFiles[0]?.id ?? null,
+        bodyHtml: notesHtml,
+      });
+      for (const file of topic.notesFiles) allFileIds.add(file.id);
+    }
+  }
+
+  // Drive link attachments for every file in this topic
+  for (const fileId of allFileIds) {
+    const dupes = duplicatesBySurvivorId.get(fileId) ?? [];
+    await addDriveLinkAttachments(lessonId, [fileId, ...dupes], driveFilesById);
+  }
 }
 
 export async function runDriveImportOrganize(
@@ -242,12 +451,8 @@ export async function runDriveImportOrganize(
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
   const supabase = await createClient();
-  const { data: course, error: courseError } = await supabase
-    .from("courses")
-    .select("title, department")
-    .eq("code", courseCode)
-    .single();
-  if (courseError || !course) throw new Error("Unknown course code");
+  const { error: courseError } = await supabase.from("courses").select("code").eq("code", courseCode).single();
+  if (courseError) throw new Error("Unknown course code");
 
   const drive = await getDriveClient();
   const tree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
@@ -260,7 +465,7 @@ export async function runDriveImportOrganize(
     await mapWithConcurrencyLimit(
       Array.from(driveFilesById.values()),
       DRIVE_IMPORT_CONCURRENCY,
-      async (file) => [file.id, await resolveFile(drive, file, resourceKeyHeader, course)] as const
+      async (file) => [file.id, await resolveFile(drive, file, resourceKeyHeader)] as const
     )
   );
 
@@ -284,9 +489,6 @@ export async function runDriveImportOrganize(
     }
   }
 
-  const filteredAnalysisByFileId = new Map(
-    Array.from(analysisByFileId.entries()).filter(([fileId]) => !excludedFileIds.has(fileId))
-  );
   const filteredTree = {
     ...tree,
     units: tree.units.map((unit) => ({
@@ -295,65 +497,97 @@ export async function runDriveImportOrganize(
     })),
   };
 
-  const classification = await classifyDriveImport(course, filteredTree, filteredAnalysisByFileId);
-
-  // A duplicate doesn't get its own lesson - folded into whichever copy the
-  // classifier kept, same as the atomizer path.
-  const duplicateFileIds = new Set(classification.duplicates.map((d) => d.driveFileId));
+  const { duplicates, duplicateFileIds } = detectDuplicatesFromUnits(filteredTree.units);
   const duplicatesBySurvivorId = new Map<string, string[]>();
-  for (const duplicate of classification.duplicates) {
+  for (const duplicate of duplicates) {
     const list = duplicatesBySurvivorId.get(duplicate.duplicateOfDriveFileId) ?? [];
     list.push(duplicate.driveFileId);
     duplicatesBySurvivorId.set(duplicate.duplicateOfDriveFileId, list);
   }
 
+  const roleByFileId = new Map<string, ReturnType<typeof classifyFileRole>>();
+  for (const [fileId, { analysis, resolved }] of resolvedByFileId) {
+    if (excludedFileIds.has(fileId)) continue;
+    const file = driveFilesById.get(fileId);
+    if (!file) continue;
+    roleByFileId.set(
+      fileId,
+      classifyFileRole(file, resolved.routing, analysis.isCourseContent !== false)
+    );
+  }
+
   const unitIds: string[] = [];
   const lessonIds: string[] = [];
 
-  const sortedUnits = [...classification.units].sort((a, b) => a.order - b.order);
-  for (const unit of sortedUnits) {
-    const sortedLessons = [...unit.lessons]
-      .filter((lesson) => !duplicateFileIds.has(lesson.driveFileId))
-      .sort((a, b) => a.order - b.order);
-    if (sortedLessons.length === 0) continue;
+  for (const unit of filteredTree.units) {
+    const { topics, quizzes } = classifyUnitIntoTopics(unit, roleByFileId, duplicateFileIds);
+    if (topics.length === 0 && quizzes.length === 0) continue;
 
-    const newUnit = await addUnitFromImport(courseCode, unit.title, unit.driveFolderId);
+    const newUnit = await addUnitFromImport(
+      courseCode,
+      unit.folderName,
+      unit.folderId
+    );
     unitIds.push(newUnit.id);
 
-    for (const [index, lessonRef] of sortedLessons.entries()) {
-      const file = driveFilesById.get(lessonRef.driveFileId);
-      const entry = resolvedByFileId.get(lessonRef.driveFileId);
-      if (!file || !entry) continue;
-      const { analysis, resolved } = entry;
-      const position = index + 1;
+    let lessonPosition = 0;
+
+    for (const topic of topics) {
+      lessonPosition += 1;
+      const primaryFile =
+        topic.videoFiles[0] ?? topic.slideFiles[0] ?? topic.notesFiles[0];
+      if (!primaryFile) continue;
 
       const newLesson = await addLessonFromImport(newUnit.id, {
-        title: analysis.title || cleanFilenameTitle(file.name),
-        type: analysis.type,
-        position,
-        sourceDriveFileId: file.id,
+        title: topic.title,
+        type: "lesson",
+        position: lessonPosition,
+        sourceDriveFileId: primaryFile.id,
         contentSource: "blocks",
       });
       lessonIds.push(newLesson.id);
 
-      // The original Drive file (plus every duplicate folded into it) stays
-      // reachable as a plain attachment link - separate from whatever gets
-      // durably copied into Storage for actual rendering below.
-      const sourceFileIds = [file.id, ...(duplicatesBySurvivorId.get(file.id) ?? [])];
-      for (const sourceFileId of sourceFileIds) {
-        const driveFile = driveFilesById.get(sourceFileId);
-        if (driveFile?.webViewLink) {
-          await addAttachment(newLesson.id, {
-            name: driveFile.name,
-            url: driveFile.webViewLink,
-            storagePath: null,
-            contentType: driveFile.mimeType,
-            sizeBytes: 0,
-          });
-        }
-      }
+      await populateTopicLesson(
+        newLesson.id,
+        topic,
+        resolvedByFileId,
+        driveFilesById,
+        duplicatesBySurvivorId,
+        resourceKeyHeader,
+        drive
+      );
+    }
 
-      await addWholeFileBlock(newLesson.id, file, resolved, analysis, resourceKeyHeader);
+    for (const quiz of quizzes) {
+      const entry = resolvedByFileId.get(quiz.file.id);
+      if (!entry) continue;
+
+      lessonPosition += 1;
+      const newLesson = await addLessonFromImport(newUnit.id, {
+        title: quiz.title,
+        type: "quiz",
+        position: lessonPosition,
+        sourceDriveFileId: quiz.file.id,
+        contentSource: "blocks",
+      });
+      lessonIds.push(newLesson.id);
+
+      await addDriveLinkAttachments(
+        newLesson.id,
+        [quiz.file.id, ...(duplicatesBySurvivorId.get(quiz.file.id) ?? [])],
+        driveFilesById
+      );
+
+      if (entry.resolved.routing !== "unsupported") {
+        await addSlideFileBlock(
+          newLesson.id,
+          quiz.file,
+          entry.resolved,
+          entry.analysis,
+          resourceKeyHeader,
+          1
+        );
+      }
     }
   }
 

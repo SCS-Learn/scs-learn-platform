@@ -1,67 +1,8 @@
 "use client";
 
 import { CircleHelp } from "lucide-react";
+import TopicLessonViewer, { type TopicLessonBlock } from "@/components/lesson/TopicLessonViewer";
 import type { LessonBlockView, LessonType } from "@/lib/instructor/mock-data";
-
-function youtubeEmbedUrl(url: string): string | null {
-  const watch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-  return watch ? `https://www.youtube.com/embed/${watch[1]}` : null;
-}
-
-function VideoBlock({ block }: { block: LessonBlockView }) {
-  if (!block.videoUrl) return null;
-  const embedUrl = youtubeEmbedUrl(block.videoUrl);
-  return (
-    <div className="px-8 py-6">
-      {block.title && <h3 className="text-lg font-bold mb-3">{block.title}</h3>}
-      {embedUrl ? (
-        <iframe
-          src={embedUrl}
-          className="w-full aspect-video rounded-md border border-gray-200"
-          allowFullScreen
-        />
-      ) : (
-        <a
-          href={block.videoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-sm text-primary underline"
-        >
-          Watch video
-        </a>
-      )}
-    </div>
-  );
-}
-
-function SlideFileBlock({ block }: { block: LessonBlockView }) {
-  return (
-    <div className="px-8 py-6">
-      {block.title && <h3 className="text-lg font-bold mb-3">{block.title}</h3>}
-      {block.renderMode === "pdf_embed" && block.pdfUrl && (
-        <iframe src={block.pdfUrl} className="w-full h-[70vh] rounded-md border border-gray-200" />
-      )}
-      {block.renderMode === "slide_card_images" && block.bodyHtml && (
-        <div
-          className="lesson-content-editor prose prose-sm max-w-none [&_.slide-card]:border [&_.slide-card]:border-gray-200 [&_.slide-card]:rounded-md [&_.slide-card]:p-4 [&_.slide-card]:mb-4"
-          dangerouslySetInnerHTML={{ __html: block.bodyHtml }}
-        />
-      )}
-      {block.renderMode === "slide_rendered_images" && block.renderedImageUrls && (
-        <div className="flex flex-col gap-4">
-          {block.renderedImageUrls.map((url, index) => (
-            <img
-              key={url}
-              src={url}
-              alt={`Slide ${index + 1}`}
-              className="w-full rounded-md border border-gray-200"
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function QuestionGroupBlock({ block }: { block: LessonBlockView }) {
   return (
@@ -70,12 +11,7 @@ function QuestionGroupBlock({ block }: { block: LessonBlockView }) {
       <div className="flex flex-col gap-6">
         {(block.questions ?? []).map((question, index) => (
           <div key={question.id} className="border border-gray-200 rounded-md p-4">
-            <p className="text-xs text-gray-400 mb-1">
-              Question {index + 1}
-              {question.needsReview && (
-                <span className="ml-2 text-amber-600 font-bold">needs review - couldn&rsquo;t verify verbatim text</span>
-              )}
-            </p>
+            <p className="text-xs text-gray-400 mb-1">Question {index + 1}</p>
             <p className="text-sm whitespace-pre-wrap mb-2">{question.promptText}</p>
             {question.choices && (
               <ul className="text-sm text-gray-600 list-disc pl-5">
@@ -94,43 +30,57 @@ function QuestionGroupBlock({ block }: { block: LessonBlockView }) {
   );
 }
 
-/**
- * Read-only render for an organize-mode lesson (content_source === "blocks") -
- * whole slide files, lecture videos, and near-verbatim questions, in position
- * order. No rich-text editing here: unlike an atomized lesson's content_html,
- * there's no free-text body to edit - only re-importing changes what a block
- * shows.
- */
+function SlideFileFallback({ block }: { block: LessonBlockView }) {
+  if (block.renderMode === "pdf_embed" && block.pdfUrl) {
+    return <iframe src={block.pdfUrl} className="slide-deck-pdf w-full" title={block.title ?? "File"} />;
+  }
+  if (block.renderMode === "slide_card_images" && block.bodyHtml) {
+    return (
+      <div
+        className="slide-deck lesson-content-editor prose prose-sm max-w-none px-8 py-4"
+        dangerouslySetInnerHTML={{ __html: block.bodyHtml }}
+      />
+    );
+  }
+  return null;
+}
+
 export default function BlockLessonViewer({
   blocks,
   lessonType,
+  lessonTitle,
 }: {
   blocks: LessonBlockView[];
   lessonType: LessonType;
+  lessonTitle: string;
 }) {
+  const questionBlocks = blocks.filter((b) => b.kind === "question_group");
+
   if (blocks.length === 0) {
     return (
-      <div className="flex-1 min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
+      <div className="min-h-full flex items-center justify-center text-sm text-gray-400">
         This lesson has no content yet.
       </div>
     );
   }
 
-  return (
-    <div className="flex-1 min-w-0 border border-gray-200 rounded-md overflow-hidden bg-white flex flex-col">
-      {lessonType === "quiz" && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wide">
+  if (lessonType === "quiz" || questionBlocks.length > 0) {
+    return (
+      <div className="topic-lesson min-h-full flex flex-col">
+        <div className="flex items-center gap-2 px-8 py-3 bg-amber-50 border-b border-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wide">
           <CircleHelp size={14} />
           Quiz / Homework
         </div>
-      )}
-      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-100">
+        <h1 className="topic-lesson-title">{lessonTitle}</h1>
         {blocks.map((block) => {
-          if (block.kind === "video") return <VideoBlock key={block.id} block={block} />;
-          if (block.kind === "slide_file") return <SlideFileBlock key={block.id} block={block} />;
-          return <QuestionGroupBlock key={block.id} block={block} />;
+          if (block.kind === "question_group") return <QuestionGroupBlock key={block.id} block={block} />;
+          return <SlideFileFallback key={block.id} block={block} />;
         })}
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <TopicLessonViewer blocks={blocks as TopicLessonBlock[]} lessonTitle={lessonTitle} />
   );
 }

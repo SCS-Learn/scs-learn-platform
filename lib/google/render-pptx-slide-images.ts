@@ -7,20 +7,12 @@ const SOURCE_PPTX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 /**
- * True, fully-scrollable rendering for a real (already-OOXML) .pptx, which
- * the Drive API can't export to PDF directly itself. Uploads the file's own
- * raw bytes with a Google Slides target mimeType - that's what triggers
- * Drive's own conversion into a real, editable Slides file - and a REAL
- * Google Slides file (unlike the original raw .pptx) can be exported to PDF,
- * so the temp conversion's PDF export is durably uploaded and embedded via
- * the exact same scrollable PDF viewer already used for native PDF lectures,
- * rather than a sequence of static per-slide thumbnail images. The temporary
- * Slides copy is always deleted afterward, success or failure, so nothing
- * lingers in the instructor's Drive. Returns null (never throws) on any
- * failure, so the caller falls back to the text+image card fallback.
+ * Uploads a native .pptx to Drive as a temporary Google Slides file (Drive's
+ * own conversion). Returns the new presentation id, or null on failure.
+ * Caller is responsible for deleting the temp file when done.
  */
-export async function convertAndRenderPptxSlides(
-  clients: { drive: drive_v3.Drive; slides: slides_v1.Slides },
+export async function convertPptxToGoogleSlides(
+  drive: drive_v3.Drive,
   fileId: string,
   resourceKeyHeader: string | undefined,
   title: string
@@ -29,49 +21,87 @@ export async function convertAndRenderPptxSlides(
     ? { headers: { "X-Goog-Drive-Resource-Keys": resourceKeyHeader } }
     : {};
 
-  let tempPresentationId: string | null = null;
   try {
     const { data: rawBytes } = await withDriveRetry(`get pptx source ${fileId}`, () =>
-      clients.drive.files.get(
+      drive.files.get(
         { fileId, alt: "media", supportsAllDrives: true },
         { ...requestOptions, responseType: "arraybuffer" }
       )
     );
 
     const created = await withDriveRetry(`create temp slides for ${fileId}`, () =>
-      clients.drive.files.create({
+      drive.files.create({
         requestBody: { name: `__render_tmp__${title}`, mimeType: CONVERTED_MIME_TYPE },
         media: { mimeType: SOURCE_PPTX_MIME_TYPE, body: Buffer.from(rawBytes as ArrayBuffer) },
         fields: "id",
         supportsAllDrives: true,
       })
     );
-    tempPresentationId = created.data.id ?? null;
-    if (!tempPresentationId) return null;
 
-    const { data: pdfBytes } = await withDriveRetry(`export temp slides ${tempPresentationId}`, () =>
-      clients.drive.files.export(
-        { fileId: tempPresentationId!, mimeType: "application/pdf" },
+    return created.data.id ?? null;
+  } catch (error) {
+    console.warn(`convertPptxToGoogleSlides failed for ${fileId}:`, error);
+    return null;
+  }
+}
+
+export async function deleteTempPresentation(
+  drive: drive_v3.Drive,
+  presentationId: string
+): Promise<void> {
+  await drive.files.delete({ fileId: presentationId, supportsAllDrives: true }).catch(() => {
+    // Best-effort cleanup - an orphaned temp file is a minor annoyance.
+  });
+}
+
+export async function exportPresentationAsPdf(
+  drive: drive_v3.Drive,
+  presentationId: string,
+  storageFileId: string,
+  title: string
+): Promise<string | null> {
+  try {
+    const { data: pdfBytes } = await withDriveRetry(`export temp slides ${presentationId}`, () =>
+      drive.files.export(
+        { fileId: presentationId, mimeType: "application/pdf" },
         { responseType: "arraybuffer" }
       )
     );
 
     const uploaded = await uploadDriveFile(
-      fileId,
+      storageFileId,
       Buffer.from(pdfBytes as ArrayBuffer),
       "application/pdf",
       `${title}.pdf`
     );
     return uploaded?.url ?? null;
   } catch (error) {
-    console.warn(`convertAndRenderPptxSlides failed for ${fileId}, falling back to text+image cards:`, error);
+    console.warn(`exportPresentationAsPdf failed for ${presentationId}:`, error);
     return null;
+  }
+}
+
+/**
+ * Legacy PDF-export path for PPTX when thumbnail rendering isn't available.
+ * Prefer renderGoogleSlidesThumbnails after convertPptxToGoogleSlides instead.
+ */
+export async function convertAndRenderPptxSlides(
+  clients: { drive: drive_v3.Drive; slides: slides_v1.Slides },
+  fileId: string,
+  resourceKeyHeader: string | undefined,
+  title: string
+): Promise<string | null> {
+  const tempPresentationId = await convertPptxToGoogleSlides(
+    clients.drive,
+    fileId,
+    resourceKeyHeader,
+    title
+  );
+  if (!tempPresentationId) return null;
+
+  try {
+    return await exportPresentationAsPdf(clients.drive, tempPresentationId, fileId, title);
   } finally {
-    if (tempPresentationId) {
-      await clients.drive.files.delete({ fileId: tempPresentationId, supportsAllDrives: true }).catch(() => {
-        // Best-effort cleanup - an orphaned temp file in the instructor's
-        // Drive is a minor annoyance, not worth failing the import over.
-      });
-    }
+    await deleteTempPresentation(clients.drive, tempPresentationId);
   }
 }

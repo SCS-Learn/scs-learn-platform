@@ -1,5 +1,5 @@
 import InstructorHeader from "@/components/instructor/InstructorHeader";
-import CourseCard from "@/components/instructor/CourseCard";
+import CourseListSection from "@/components/instructor/CourseListSection";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import CalendarPanel from "@/components/instructor/CalendarPanel";
 import { getVisibleCalendarEvents } from "@/lib/instructor/data/calendar-events";
@@ -30,12 +30,7 @@ export default async function InstructorDashboardPage() {
             {courses.length === 1 ? "" : "s"} this term.
           </p>
 
-          <h2 className="text-sm font-bold mb-3">Your courses</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {courses.map((course) => (
-              <CourseCard key={course.code} course={course} />
-            ))}
-          </div>
+          <CourseListSection courses={courses} />
         </div>
 
         <div className="flex flex-col gap-4">

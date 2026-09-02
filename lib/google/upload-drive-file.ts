@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "lesson-media";
 
@@ -15,7 +16,7 @@ export async function uploadDriveFile(
   contentType: string,
   filename: string
 ): Promise<{ url: string; storagePath: string } | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient() ?? (await createClient());
   const slug = filename.replace(/[^a-zA-Z0-9.]+/g, "-").replace(/^-+|-+$/g, "") || "file";
   const path = `drive-import/${driveFileId}/${slug}`;
 

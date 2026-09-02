@@ -1,23 +1,56 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { X, FileText, Upload } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Eye, FileText, Save, Send, Upload, X } from "lucide-react";
 import { lessonTypeOptions, type Attachment } from "@/lib/instructor/mock-data";
 import { uploadLessonFile } from "@/lib/instructor/upload";
 import { addAttachment, deleteAttachment } from "@/lib/instructor/data/attachments";
 
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">
+      {children}
+    </p>
+  );
+}
+
+function SectionBlock({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section>
+      <SectionLabel>{label}</SectionLabel>
+      <div className="text-sm leading-relaxed text-gray-800">{children}</div>
+    </section>
+  );
+}
+
 export default function LessonSettingsSidebar({
   lessonId,
   attachments,
+  unitLabel,
+  lessonLabel,
   currentModule,
   selectedType,
   onTypeChange,
+  wordCount,
+  isPublished,
+  savedLabel,
+  onPreview,
+  onSaveDraft,
+  onPublish,
 }: {
   lessonId: string;
   attachments: Attachment[];
+  unitLabel: string;
+  lessonLabel: string;
   currentModule: string;
   selectedType: string;
   onTypeChange: (value: string) => void;
+  wordCount: number;
+  isPublished: boolean;
+  savedLabel: string;
+  onPreview: () => void;
+  onSaveDraft: () => void;
+  onPublish: () => void;
 }) {
   const [localAttachments, setLocalAttachments] = useState<Attachment[]>(attachments);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,83 +75,151 @@ export default function LessonSettingsSidebar({
   };
 
   return (
-    <div className="w-64 shrink-0 border border-gray-200 rounded-md bg-white p-4 flex flex-col gap-6">
-      <div>
-        <h3 className="text-sm font-bold mb-3">Lesson settings</h3>
+    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border border-gray-300">
+      <div className="px-4 py-5 border-b border-gray-100">
+        <h2 className="text-lg font-bold mb-5">Lesson settings</h2>
 
-        <label className="block text-xs text-gray-500 mb-1">Module</label>
-        <p className="w-full text-sm border border-gray-100 rounded px-2 py-1.5 mb-3 bg-gray-50 text-gray-600 truncate">
-          {currentModule}
-        </p>
+        {lessonLabel ? (
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <p className="text-base font-bold leading-snug">{lessonLabel}</p>
+              {unitLabel && (
+                <p className="text-sm text-gray-600 leading-relaxed">{unitLabel}</p>
+              )}
+            </div>
 
-        <label className="block text-xs text-gray-500 mb-1">Type</label>
-        <select
-          value={selectedType}
-          onChange={(e) => onTypeChange(e.target.value)}
-          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
-        >
-          {lessonTypeOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <p className="text-[10px] text-gray-400 mt-1">
-          A module holds content or a quiz, never both.
-        </p>
+            <div className="pt-4 border-t border-gray-100 space-y-3">
+              <span
+                className={`inline-block px-2 py-1 text-[11px] font-bold tracking-wide ${
+                  isPublished ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {isPublished ? "PUBLISHED" : "DRAFT"}
+              </span>
+
+              {savedLabel && (
+                <p className="text-sm text-gray-500 leading-relaxed">{savedLabel}</p>
+              )}
+
+              <p className="text-sm text-gray-500 leading-relaxed">
+                {wordCount.toLocaleString()} words
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 leading-relaxed">
+            Select a lesson to edit settings.
+          </p>
+        )}
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold">Attachments</h3>
-          <span className="text-xs text-gray-400">{localAttachments.length}</span>
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+        <SectionBlock label="Module">
+          <p className="leading-relaxed break-words">{currentModule || "—"}</p>
+        </SectionBlock>
 
-        <div className="flex flex-col gap-1 mb-3">
-          {localAttachments.map((attachment) => (
-            <div
-              key={attachment.id}
-              className="group flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-gray-50"
-            >
-              <FileText size={14} className="text-gray-400 shrink-0" />
-              <a
-                href={attachment.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 min-w-0 truncate text-gray-700 hover:text-primary hover:underline"
-              >
-                {attachment.name}
-              </a>
-              <button
-                type="button"
-                aria-label="Remove attachment"
-                className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
-                onClick={() => removeAttachment(attachment.id)}
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
+        <SectionBlock label="Type">
+          <select
+            value={selectedType}
+            onChange={(e) => onTypeChange(e.target.value)}
+            disabled={!lessonId}
+            className="w-full text-sm border border-gray-200 rounded px-3 py-2.5 bg-white disabled:opacity-50"
+          >
+            {lessonTypeOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <p className="mt-3 text-sm text-gray-500 leading-relaxed">
+            A module holds content or a quiz, never both.
+          </p>
+        </SectionBlock>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (file) handleFile(file);
-          }}
-        />
+        <section>
+          <div className="flex items-baseline justify-between gap-2 mb-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+              Attachments
+            </p>
+            <span className="text-sm text-gray-400">{localAttachments.length}</span>
+          </div>
+
+          <div className="flex flex-col gap-1 mb-4">
+            {localAttachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="group flex items-center gap-2 px-2 py-2.5 hover:bg-gray-50 rounded"
+              >
+                <FileText size={14} className="text-gray-400 shrink-0" />
+                <a
+                  href={attachment.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 min-w-0 truncate text-sm text-gray-700 hover:text-primary hover:underline text-left"
+                >
+                  {attachment.name}
+                </a>
+                <button
+                  type="button"
+                  aria-label="Remove attachment"
+                  className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                  onClick={() => removeAttachment(attachment.id)}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) handleFile(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!lessonId || isUploading}
+            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-primary border border-primary px-4 py-2.5 hover:bg-primary/5 disabled:opacity-50"
+          >
+            <Upload size={15} />
+            {isUploading ? "Uploading…" : "Upload a file"}
+          </button>
+        </section>
+      </div>
+
+      <div className="p-4 border-t border-gray-100 flex flex-col gap-2">
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 border border-dashed border-gray-300 rounded py-2 hover:border-gray-400 hover:text-gray-600 disabled:opacity-50"
+          onClick={onPublish}
+          disabled={!lessonId}
+          className="w-full inline-flex items-center justify-center gap-1.5 text-base font-bold bg-primary text-white px-4 py-3 hover:opacity-90 disabled:opacity-40"
         >
-          <Upload size={13} />
-          {isUploading ? "Uploading…" : "Upload a file"}
+          <Send size={16} />
+          Publish
+        </button>
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={!lessonId}
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-primary border border-primary px-4 py-2.5 hover:bg-primary/5 disabled:opacity-40"
+        >
+          <Save size={15} />
+          Save draft
+        </button>
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={!lessonId}
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-primary border border-primary px-4 py-2.5 hover:bg-primary/5 disabled:opacity-40"
+        >
+          <Eye size={15} />
+          Preview
         </button>
       </div>
     </div>

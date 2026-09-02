@@ -28,18 +28,22 @@ export function renderPptxSlideCards(
   imageUrlBySourcePath: Map<string, string>
 ): string {
   return slides
-    .map((slide) => {
+    .map((slide, slideIndex) => {
       const textHtml = slide.texts.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n");
       const imageHtml = slide.imagePaths
         .map((path) => imageUrlBySourcePath.get(path))
         .filter((url): url is string => Boolean(url))
-        .map((url) => `<img src="${escapeHtml(url)}" alt="Slide ${slide.index} image">`)
+        .map(
+          (url) =>
+            `<img class="slide-image" src="${escapeHtml(url)}" alt="Slide ${slide.index} image">`
+        )
         .join("\n");
 
-      return `<section class="slide-card" data-slide-index="${slide.index}">
+      const card = `<section class="slide-card" data-slide-index="${slide.index}">
 ${textHtml}
 ${imageHtml}
 </section>`;
+      return slideIndex < slides.length - 1 ? `${card}\n<hr class="slide-divider">` : card;
     })
     .join("\n");
 }

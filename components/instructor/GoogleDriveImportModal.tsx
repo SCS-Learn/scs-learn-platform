@@ -73,15 +73,14 @@ export default function GoogleDriveImportModal({
         {(status === "input" || status === "scanning") && (
           <div className="py-4">
             <p className="text-sm text-gray-500 mb-4">
-              Paste a link to the Drive folder for this course. Each subfolder becomes a unit and each
-              file inside it becomes a lesson - or, if the folder just has files with no subfolders,
-              they all become lessons in one unit. Claude will classify each one as a lecture or a quiz.
+              Paste a link to the Drive folder for this course. Each subfolder becomes a unit.
+              Files within a unit are grouped into topic lessons (video, slides, and notes together).
             </p>
             {googleConnected === false && (
               <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-4 flex items-center justify-between gap-3">
                 <p className="text-xs text-blue-700">
-                  Connect your Google account to import a folder you haven&rsquo;t shared anywhere, and get
-                  true per-slide rendering for PowerPoint files.
+                  Connect your Google account to import private folders and render PowerPoint files
+                  exactly as Google Slides sees them (backgrounds, layout, and all).
                 </p>
                 <a
                   href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
@@ -93,7 +92,7 @@ export default function GoogleDriveImportModal({
             )}
             {googleConnected === true && (
               <p className="text-xs text-green-700 mb-4 flex items-center justify-between gap-3">
-                <span>Google Drive connected - private folders and true slide rendering are available.</span>
+                <span>Google Drive connected — private folders and pixel-accurate slide rendering are available.</span>
                 <a
                   href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
                   className="shrink-0 underline hover:no-underline"
@@ -152,17 +151,16 @@ export default function GoogleDriveImportModal({
               {preview.isFlat ? (
                 <>
                   Found <span className="font-bold">{preview.lessonCount}</span> file
-                  {preview.lessonCount === 1 ? "" : "s"} with no folder structure. Claude will group them
-                  into units, classify each as a lecture or a quiz, and add them to this course - you can
-                  review and edit everything afterward.
+                  {preview.lessonCount === 1 ? "" : "s"}. They&rsquo;ll be grouped into topic lessons
+                  in one unit — each lesson combines video, slides, and notes for one topic.
                 </>
               ) : (
                 <>
                   Found <span className="font-bold">{preview.unitCount}</span> unit
                   {preview.unitCount === 1 ? "" : "s"} and{" "}
-                  <span className="font-bold">{preview.lessonCount}</span> lesson
-                  {preview.lessonCount === 1 ? "" : "s"}. Claude will classify each file as a lecture or a
-                  quiz and add them to this course - you can review and edit everything afterward.
+                  <span className="font-bold">{preview.lessonCount}</span> file
+                  {preview.lessonCount === 1 ? "" : "s"}. Files will be grouped into topic lessons
+                  per unit — video at the top, toggleable slides, and course notes below.
                 </>
               )}
             </p>
@@ -189,7 +187,7 @@ export default function GoogleDriveImportModal({
         {status === "importing" && (
           <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10">
             <Loader2 size={20} className="animate-spin" />
-            Reading each file and porting its slides, videos, and questions - this can take a bit for larger folders...
+            Rendering slides from Google Slides — this can take a bit for larger folders...
           </div>
         )}
 

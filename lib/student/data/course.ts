@@ -40,7 +40,7 @@ type AutolabLinkRow = {
 
 type LessonBlockRow = {
   id: string;
-  kind: "slide_file" | "video" | "question_group";
+  kind: "slide_file" | "video" | "question_group" | "course_notes";
   position: number;
   title: string | null;
   render_mode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
@@ -52,7 +52,9 @@ type LessonBlockRow = {
 
 type AttachmentRow = {
   url: string | null;
+  name: string;
   lesson_block_id: string | null;
+  storage_path: string | null;
 };
 
 type LessonRow = {
@@ -91,7 +93,7 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, attachments(url, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type)))))";
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type)))))";
 
 function toQuestion(row: QuestionRow): StudentQuestion {
   return {
@@ -145,11 +147,25 @@ async function fetchAutolabStatusByLessonId(
   }
 }
 
-function toLesson(row: LessonRow, autolab: AutolabStatus | null): StudentLesson {
-  const pdfUrlByBlockId = new Map(
-    row.attachments.filter((a) => a.lesson_block_id).map((a) => [a.lesson_block_id as string, a.url ?? ""])
-  );
+function isHostedPdfAttachment(attachment: AttachmentRow): boolean {
+  if (!attachment.url || !attachment.storage_path) return false;
+  if (attachment.url.includes("drive.google.com") || attachment.url.includes("docs.google.com")) {
+    return false;
+  }
+  return attachment.name.toLowerCase().endsWith(".pdf");
+}
 
+function pdfUrlForBlock(block: LessonBlockRow, attachments: AttachmentRow[]): string | null {
+  const linked = attachments.find((a) => a.lesson_block_id === block.id && isHostedPdfAttachment(a));
+  if (linked?.url) return linked.url;
+
+  if (block.render_mode !== "pdf_embed") return null;
+
+  const lessonPdf = attachments.find((a) => !a.lesson_block_id && isHostedPdfAttachment(a));
+  return lessonPdf?.url ?? null;
+}
+
+function toLesson(row: LessonRow, autolab: AutolabStatus | null): StudentLesson {
   const blocks: StudentLessonBlock[] = [...row.lesson_blocks]
     .sort((a, b) => a.position - b.position)
     .map((block) => ({
@@ -159,7 +175,7 @@ function toLesson(row: LessonRow, autolab: AutolabStatus | null): StudentLesson 
       renderMode: block.render_mode,
       bodyHtml: block.body_html,
       renderedImageUrls: block.rendered_image_urls,
-      pdfUrl: pdfUrlByBlockId.get(block.id) ?? null,
+      pdfUrl: pdfUrlForBlock(block, row.attachments),
       videoUrl: block.video_url,
       questions: block.question_groups
         ? [...block.question_groups.questions].sort((a, b) => a.position - b.position).map(toQuestion)

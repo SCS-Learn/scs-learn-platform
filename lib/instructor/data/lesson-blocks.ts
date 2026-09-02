@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-export type LessonBlockKind = "slide_file" | "video" | "question_group";
+export type LessonBlockKind = "slide_file" | "video" | "question_group" | "course_notes";
 export type SlideFileRenderMode = "pdf_embed" | "slide_card_images" | "slide_rendered_images";
 
 export type LessonBlockPatch =
@@ -29,6 +29,13 @@ export type LessonBlockPatch =
       title: string | null;
       sourceDriveFileId: string | null;
       questionGroupId: string;
+    }
+  | {
+      kind: "course_notes";
+      position: number;
+      title: string | null;
+      sourceDriveFileId: string | null;
+      bodyHtml: string;
     };
 
 export type LessonBlock = {
@@ -86,7 +93,12 @@ export async function addLessonBlock(lessonId: string, patch: LessonBlockPatch):
     title: patch.title,
     source_drive_file_id: patch.sourceDriveFileId,
     render_mode: patch.kind === "slide_file" ? patch.renderMode : null,
-    body_html: patch.kind === "slide_file" ? patch.bodyHtml : null,
+    body_html:
+      patch.kind === "slide_file"
+        ? patch.bodyHtml
+        : patch.kind === "course_notes"
+          ? patch.bodyHtml
+          : null,
     rendered_image_urls: patch.kind === "slide_file" ? patch.renderedImageUrls ?? null : null,
     video_url: patch.kind === "video" ? patch.videoUrl : null,
     question_group_id: patch.kind === "question_group" ? patch.questionGroupId : null,
