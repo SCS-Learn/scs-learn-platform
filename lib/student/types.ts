@@ -1,12 +1,14 @@
 export type LessonType = "lesson" | "quiz";
 
+import type { QuestionType } from "@/lib/quiz/types";
+
 export type StudentQuestion = {
   id: string;
   promptText: string;
   choices: string[] | null;
-  /** Included so the demo/practice quiz can self-check instantly — see QuizBlock. Never shown until the learner submits. */
+  /** Used client-side for instant grading — never shown until the learner submits. */
   answerKey: string | null;
-  questionType: "multiple_choice" | "short_answer" | "free_response" | "unknown";
+  questionType: QuestionType;
 };
 
 export type StudentLessonBlock = {
@@ -33,6 +35,15 @@ export type AutolabStatus = {
   syncedAt: string | null;
 };
 
+/** Saved in-app quiz attempt for the current learner. */
+export type QuizSubmissionStatus = {
+  submittedAt: string;
+  correctCount: number;
+  gradableCount: number;
+  scorePercent: number;
+  responses: Record<string, string>;
+};
+
 export type StudentLesson = {
   id: string;
   code: string;
@@ -42,6 +53,9 @@ export type StudentLesson = {
   contentSource: "html" | "blocks";
   blocks: StudentLessonBlock[];
   autolab: AutolabStatus | null;
+  quizSubmission: QuizSubmissionStatus | null;
+  /** ISO timestamp when the learner marked this lesson complete; null if not complete. */
+  completedAt: string | null;
 };
 
 export type StudentUnit = {
@@ -64,4 +78,15 @@ export type StudentCourseSummary = {
   title: string;
   department: string;
   track: string;
+  unitCount: number;
+  contentLessonCount: number;
+  quizLessonCount: number;
+  completedLessonCount: number;
+  totalLessonCount: number;
+  percentComplete: number;
+  /** First incomplete published lesson in course order; null if none. */
+  resumeLessonId: string | null;
+  resumeLessonCode: string | null;
+  resumeLessonTitle: string | null;
 };
+

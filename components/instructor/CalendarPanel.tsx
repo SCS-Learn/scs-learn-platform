@@ -35,8 +35,8 @@ export default function CalendarPanel({
     .slice(0, 4);
 
   return (
-    <div className="border border-gray-200 rounded-md bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-sm font-bold flex items-center gap-1.5">
           <CalendarDays size={14} className="text-primary" />
           Upcoming
@@ -50,7 +50,7 @@ export default function CalendarPanel({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-4">
+      <div className="grid grid-cols-7 gap-1 mb-4 shrink-0">
         {weekStrip.map((cell) => (
           <div
             key={cell.iso}
@@ -69,7 +69,7 @@ export default function CalendarPanel({
         ))}
       </div>
 
-      <div className="flex flex-col divide-y divide-gray-100">
+      <div className="flex flex-col divide-y divide-gray-100 flex-1 min-h-0 overflow-y-auto">
         {upcomingEvents.map((event) => {
           const date = parseISODate(event.date);
           return (
@@ -103,7 +103,7 @@ export default function CalendarPanel({
       <button
         type="button"
         onClick={() => window.alert("This would give you an iCal subscription link.")}
-        className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-bold text-gray-500 border border-gray-200 rounded py-1.5 hover:bg-gray-50"
+        className="mt-3 w-full shrink-0 flex items-center justify-center gap-1.5 text-xs font-bold text-gray-500 border border-gray-200 rounded py-1.5 hover:bg-gray-50"
       >
         <CalendarPlus size={13} />
         Subscribe to this calendar

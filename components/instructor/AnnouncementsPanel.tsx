@@ -32,12 +32,12 @@ export default function AnnouncementsPanel({
   };
 
   return (
-    <div className="border border-gray-200 rounded-md bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-sm font-bold">Announcements</h3>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <select
           value={targetCourseCode}
           onChange={(e) => setTargetCourseCode(e.target.value)}
@@ -67,7 +67,7 @@ export default function AnnouncementsPanel({
         </button>
       </div>
 
-      <div className={`flex flex-col gap-3 ${isPending ? "opacity-60" : ""}`}>
+      <div className={`flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto ${isPending ? "opacity-60" : ""}`}>
         {announcements.map((announcement) => (
           <div key={announcement.id} className="group flex gap-2.5">
             <div className="w-7 h-7 rounded-full bg-gray-100 text-[10px] font-bold text-gray-500 flex items-center justify-center shrink-0">

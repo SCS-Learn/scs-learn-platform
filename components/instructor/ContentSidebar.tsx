@@ -8,21 +8,10 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  X,
-  FileText,
-  CircleHelp,
   FolderInput,
 } from "lucide-react";
-import { type Unit, type LessonItem } from "@/lib/instructor/mock-data";
+import { type Unit } from "@/lib/instructor/mock-data";
 import GoogleDriveImportModal from "@/components/instructor/GoogleDriveImportModal";
-
-function LessonIcon({ type }: { type: LessonItem["type"] }) {
-  return type === "quiz" ? (
-    <CircleHelp size={14} className="text-gray-400 shrink-0" />
-  ) : (
-    <FileText size={14} className="text-gray-400 shrink-0" />
-  );
-}
 
 function AddUnitModal({
   onCreate,
@@ -93,6 +82,7 @@ export default function ContentSidebar({
   onReorderLessons,
   onAddUnit,
   onReorderUnits,
+  onDeleteCourse,
 }: {
   courseCode: string;
   courseTitle: string;
@@ -105,6 +95,7 @@ export default function ContentSidebar({
   onReorderLessons: (unitId: string, draggedLessonId: string, targetLessonId: string) => void;
   onAddUnit: (title: string) => Promise<string>;
   onReorderUnits: (draggedUnitId: string, targetUnitId: string) => void;
+  onDeleteCourse: () => void;
 }) {
   const lessonCount = units.reduce((sum, u) => sum + u.lessons.length, 0);
 
@@ -178,13 +169,24 @@ export default function ContentSidebar({
           <ArrowLeft size={16} />
           Dashboard
         </Link>
-        <div className="mt-6 w-full min-w-0 pl-1.5">
-          <p className="text-lg font-bold truncate">{courseTitle}</p>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {courseCode}
-            <span className="mx-1.5 text-gray-300">·</span>
-            {lessonCount} lessons
-          </p>
+        <div className="mt-6 w-full min-w-0 pl-1.5 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-lg font-bold truncate">{courseTitle}</p>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {courseCode}
+              <span className="mx-1.5 text-gray-300">·</span>
+              {lessonCount} lessons
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Delete course"
+            title="Delete course"
+            className="shrink-0 text-gray-300 hover:text-red-500 mt-0.5"
+            onClick={onDeleteCourse}
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
       </div>
 
@@ -196,6 +198,7 @@ export default function ContentSidebar({
             <div key={unit.id} className="mb-1">
               <div
                 draggable
+                onClick={() => toggleUnit(unit.id)}
                 onDragStart={(e) => handleUnitDragStart(e, unit.id)}
                 onDragOver={(e) => handleUnitDragOver(e, unit.id)}
                 onDragLeave={() =>
@@ -203,18 +206,13 @@ export default function ContentSidebar({
                 }
                 onDrop={(e) => handleUnitDrop(e, unit.id)}
                 onDragEnd={handleUnitDragEnd}
-                className={`group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-50 border-t-2 ${
+                className={`group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-50 border-t-2 cursor-pointer ${
                   isUnitDragOver ? "border-primary" : "border-transparent"
                 } ${draggingUnitId === unit.id ? "opacity-40" : ""}`}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleUnit(unit.id)}
-                  className="shrink-0 text-gray-400"
-                  aria-label={isOpen ? "Collapse unit" : "Expand unit"}
-                >
+                <span className="shrink-0 text-gray-400" aria-hidden="true">
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+                </span>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-bold leading-tight truncate">
                     {unit.code} — {unit.title}
@@ -224,7 +222,8 @@ export default function ContentSidebar({
                   type="button"
                   aria-label="Add lesson"
                   className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-gray-500"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setExpanded((prev) => ({ ...prev, [unit.id]: true }));
                     onAddLesson(unit.id);
                   }}
@@ -235,7 +234,10 @@ export default function ContentSidebar({
                   type="button"
                   aria-label="Delete unit"
                   className="shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
-                  onClick={() => onDeleteUnit(unit.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteUnit(unit.id);
+                  }}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -260,14 +262,13 @@ export default function ContentSidebar({
                           setDraggingLessonId(null);
                           setDragOverLessonId(null);
                         }}
-                        className={`group flex items-center gap-1.5 px-3 py-2.5 cursor-pointer border-t-2 ${
+                        className={`group flex items-center gap-1.5 pl-8 pr-3 py-2.5 cursor-pointer border-t-2 ${
                           isDragOver ? "border-primary" : "border-transparent"
                         } ${
                           isSelected ? "bg-primary/10" : "hover:bg-gray-50"
                         } ${draggingLessonId === lesson.id ? "opacity-40" : ""}`}
                         onClick={() => onSelectLesson(lesson.id)}
                       >
-                        <LessonIcon type={lesson.type} />
                         <p
                           className={`text-sm flex-1 min-w-0 truncate text-left ${
                             isSelected ? "text-primary font-bold" : "text-gray-700"
@@ -284,7 +285,7 @@ export default function ContentSidebar({
                             onDeleteLesson(unit.id, lesson.id);
                           }}
                         >
-                          <X size={13} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     );

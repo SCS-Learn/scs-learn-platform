@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
+import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-progress";
+import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
 import type {
   StudentCourse,
   StudentCourseSummary,
@@ -8,6 +10,7 @@ import type {
   StudentLessonBlock,
   StudentQuestion,
   AutolabStatus,
+  QuizSubmissionStatus,
   LessonType,
 } from "@/lib/student/types";
 
@@ -165,7 +168,12 @@ function pdfUrlForBlock(block: LessonBlockRow, attachments: AttachmentRow[]): st
   return lessonPdf?.url ?? null;
 }
 
-function toLesson(row: LessonRow, autolab: AutolabStatus | null): StudentLesson {
+function toLesson(
+  row: LessonRow,
+  autolab: AutolabStatus | null,
+  quizSubmission: QuizSubmissionStatus | null,
+  completedAt: string | null
+): StudentLesson {
   const blocks: StudentLessonBlock[] = [...row.lesson_blocks]
     .sort((a, b) => a.position - b.position)
     .map((block) => ({
@@ -191,34 +199,125 @@ function toLesson(row: LessonRow, autolab: AutolabStatus | null): StudentLesson 
     contentSource: row.content_source as StudentLesson["contentSource"],
     blocks,
     autolab,
+    quizSubmission,
+    completedAt,
   };
 }
 
-function toUnit(row: UnitRow, autolabByLessonId: Map<string, AutolabStatus>): StudentUnit | null {
+function toUnit(
+  row: UnitRow,
+  autolabByLessonId: Map<string, AutolabStatus>,
+  quizByLessonId: Map<string, QuizSubmissionStatus>,
+  completedByLessonId: Map<string, string>
+): StudentUnit | null {
   const publishedLessons = [...row.lessons]
     .filter((l) => l.is_published)
     .sort((a, b) => a.position - b.position)
-    .map((l) => toLesson(l, autolabByLessonId.get(l.id) ?? null));
+    .map((l) =>
+      toLesson(
+        l,
+        autolabByLessonId.get(l.id) ?? null,
+        quizByLessonId.get(l.id) ?? null,
+        completedByLessonId.get(l.id) ?? null
+      )
+    );
   if (publishedLessons.length === 0) return null;
   return { id: row.id, code: row.code, title: row.title, lessons: publishedLessons };
 }
 
-function toCourse(row: CourseRow, autolabByLessonId: Map<string, AutolabStatus>): StudentCourse {
+function toCourse(
+  row: CourseRow,
+  autolabByLessonId: Map<string, AutolabStatus>,
+  quizByLessonId: Map<string, QuizSubmissionStatus>,
+  completedByLessonId: Map<string, string>
+): StudentCourse {
   const units = [...row.units]
     .sort((a, b) => a.position - b.position)
-    .map((u) => toUnit(u, autolabByLessonId))
+    .map((u) => toUnit(u, autolabByLessonId, quizByLessonId, completedByLessonId))
     .filter((u): u is StudentUnit => u !== null);
   return { code: row.code, title: row.title, department: row.department, track: row.track, units };
 }
 
 export async function listStudentCourses(): Promise<StudentCourseSummary[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("courses")
-    .select("code, title, department, track")
-    .order("code");
+  const [{ data, error }, learner] = await Promise.all([
+    supabase
+      .from("courses")
+      .select(
+        "code, title, department, track, units(id, position, lessons(id, code, title, type, position, is_published))"
+      )
+      .order("code"),
+    getLaunchingUser(),
+  ]);
   if (error) throw new Error(error.message);
-  return data ?? [];
+
+  type SummaryLessonRow = {
+    id: string;
+    code: string;
+    title: string;
+    type: string;
+    position: number;
+    is_published: boolean;
+  };
+  type SummaryUnitRow = {
+    id: string;
+    position: number;
+    lessons: SummaryLessonRow[];
+  };
+  type SummaryCourseRow = {
+    code: string;
+    title: string;
+    department: string;
+    track: string;
+    units: SummaryUnitRow[];
+  };
+
+  const courses = (data ?? []) as unknown as SummaryCourseRow[];
+  const allLessonIds = courses.flatMap((course) =>
+    course.units.flatMap((unit) =>
+      unit.lessons.filter((lesson) => lesson.is_published).map((lesson) => lesson.id)
+    )
+  );
+  const completedByLessonId = await fetchLessonCompletionsForLessons(allLessonIds, learner.id);
+
+  return courses.map((course) => {
+    const unitsWithPublished = [...course.units]
+      .sort((a, b) => a.position - b.position)
+      .map((unit) => ({
+        ...unit,
+        lessons: [...unit.lessons]
+          .filter((lesson) => lesson.is_published)
+          .sort((a, b) => a.position - b.position),
+      }))
+      .filter((unit) => unit.lessons.length > 0);
+
+    const lessons = unitsWithPublished.flatMap((unit) => unit.lessons);
+    const contentLessonCount = lessons.filter((lesson) => lesson.type !== "quiz").length;
+    const quizLessonCount = lessons.filter((lesson) => lesson.type === "quiz").length;
+    const completedLessonCount = lessons.filter((lesson) => completedByLessonId.has(lesson.id)).length;
+    const totalLessonCount = lessons.length;
+    const percentComplete =
+      totalLessonCount === 0 ? 0 : Math.round((completedLessonCount / totalLessonCount) * 100);
+
+    const resumeLesson =
+      lessons.find((lesson) => !completedByLessonId.has(lesson.id)) ?? lessons[0] ?? null;
+
+    return {
+      code: course.code,
+      title: course.title,
+      department: course.department,
+      track: course.track,
+      unitCount: unitsWithPublished.length,
+      contentLessonCount,
+      quizLessonCount,
+      completedLessonCount,
+      totalLessonCount,
+      percentComplete,
+      resumeLessonId: resumeLesson?.id ?? null,
+      resumeLessonCode: resumeLesson?.code ?? null,
+      resumeLessonTitle: resumeLesson?.title ?? null,
+    };
+  });
 }
 
 export async function getStudentCourse(courseCode: string): Promise<StudentCourse | null> {
@@ -232,7 +331,11 @@ export async function getStudentCourse(courseCode: string): Promise<StudentCours
 
   const course = data as unknown as CourseRow;
   const lessonIds = course.units.flatMap((u) => u.lessons.map((l) => l.id));
-  const autolabByLessonId = await fetchAutolabStatusByLessonId(lessonIds, learner.id);
+  const [autolabByLessonId, quizByLessonId, completedByLessonId] = await Promise.all([
+    fetchAutolabStatusByLessonId(lessonIds, learner.id),
+    fetchQuizSubmissionsForLessons(lessonIds, learner.id),
+    fetchLessonCompletionsForLessons(lessonIds, learner.id),
+  ]);
 
-  return toCourse(course, autolabByLessonId);
+  return toCourse(course, autolabByLessonId, quizByLessonId, completedByLessonId);
 }

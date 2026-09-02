@@ -281,7 +281,7 @@ create table public.questions (
   choices jsonb,
   answer_key text,
   question_type text not null default 'unknown'
-    check (question_type in ('multiple_choice', 'short_answer', 'free_response', 'unknown')),
+    check (question_type in ('multiple_choice', 'short_answer', 'true_false', 'multiple_select', 'free_response', 'unknown')),
   source_slide_or_page_index integer,
   needs_review boolean not null default false,
   created_at timestamptz not null default now()
@@ -300,6 +300,50 @@ alter table public.questions enable row level security;
 create policy "stub_auth_allow_all" on public.lesson_blocks for all using (true) with check (true);
 create policy "stub_auth_allow_all" on public.question_groups for all using (true) with check (true);
 create policy "stub_auth_allow_all" on public.questions for all using (true) with check (true);
+
+-- In-app quiz submission tracking (see supabase/migrations/add-quiz-progress.sql)
+create table if not exists public.quiz_submissions (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.lessons (id) on delete cascade,
+  platform_user_id text not null,
+  correct_count integer not null default 0,
+  gradable_count integer not null default 0,
+  score_percent integer not null default 0,
+  submitted_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (lesson_id, platform_user_id)
+);
+
+create table if not exists public.quiz_responses (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.quiz_submissions (id) on delete cascade,
+  question_id uuid not null references public.questions (id) on delete cascade,
+  response_text text not null default '',
+  is_correct boolean,
+  created_at timestamptz not null default now(),
+  unique (submission_id, question_id)
+);
+
+alter table public.quiz_submissions enable row level security;
+alter table public.quiz_responses enable row level security;
+create policy "stub_auth_allow_all" on public.quiz_submissions for all using (true) with check (true);
+create policy "stub_auth_allow_all" on public.quiz_responses for all using (true) with check (true);
+
+-- Per-learner lesson completion (see supabase/migrations/add-lesson-completions.sql)
+create table if not exists public.lesson_completions (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.lessons (id) on delete cascade,
+  platform_user_id text not null,
+  completed_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (lesson_id, platform_user_id)
+);
+
+alter table public.lesson_completions enable row level security;
+create policy "stub_auth_allow_all" on public.lesson_completions for all using (true) with check (true);
+
+create index if not exists lesson_completions_lesson_user_idx
+  on public.lesson_completions (lesson_id, platform_user_id);
 
 -- Google OAuth Drive access ---------------------------------------------------
 -- Holds the single stub instructor's Google OAuth refresh token, so the app

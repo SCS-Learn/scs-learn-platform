@@ -36,7 +36,9 @@ export async function addQuestionGroup(
   };
 }
 
-export type QuestionType = "multiple_choice" | "short_answer" | "free_response" | "unknown";
+import type { QuestionType } from "@/lib/quiz/types";
+
+export type { QuestionType } from "@/lib/quiz/types";
 export type PromptSource = "verbatim_extracted" | "llm_transcribed";
 
 export type Question = {

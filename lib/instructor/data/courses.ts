@@ -198,17 +198,13 @@ export async function getCourseWithContent(courseCode: string): Promise<Instruct
 export type CreateCourseInput = {
   code: string;
   title: string;
-  department: string;
-  track: string;
 };
 
 export async function createCourse(input: CreateCourseInput): Promise<{ code: string }> {
   const code = input.code.trim();
   const title = input.title.trim();
-  const department = input.department.trim();
-  const track = input.track.trim();
 
-  if (!code || !title || !department || !track) {
+  if (!code || !title) {
     throw new Error("All fields are required.");
   }
 
@@ -224,8 +220,8 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
   const { error } = await supabase.from("courses").insert({
     code,
     title,
-    department,
-    track,
+    department: "",
+    track: "",
     instructor_id: CURRENT_INSTRUCTOR_ID,
     student_count: 0,
   });
@@ -233,4 +229,16 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
 
   revalidatePath("/instructor");
   return { code };
+}
+
+export async function deleteCourse(courseCode: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("courses")
+    .delete()
+    .eq("code", courseCode)
+    .eq("instructor_id", CURRENT_INSTRUCTOR_ID);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/instructor");
 }

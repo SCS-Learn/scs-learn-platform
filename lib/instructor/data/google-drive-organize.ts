@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, parseDriveFolderUrl } from "@/lib/google/drive-client";
 import { buildDriveImportTree, type DriveEntry } from "@/lib/google/drive-traversal";
 import { classifyUnitIntoTopics, detectDuplicatesFromUnits } from "@/lib/google/classify-drive-topics";
-import { classifyFileRole } from "@/lib/google/file-role";
+import { classifyFileRole, isQuizFilename } from "@/lib/google/file-role";
 import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/export-drive-notes-html";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
@@ -14,6 +14,7 @@ import { detectVideoLink } from "@/lib/google/detect-video-link";
 import { detectVideoUrlInDocument } from "@/lib/google/extract-document-text";
 import { renderPptxSlideCards } from "@/lib/google/render-pptx-slide-cards";
 import { extractSlideTextFromZip, type SlideText } from "@/lib/google/extract-slide-text";
+import { extractDocParagraphsFromZip } from "@/lib/google/extract-doc-text";
 import { extractImagesFromZipByPaths } from "@/lib/google/extract-drive-images";
 import { loadOoxmlZip } from "@/lib/google/load-ooxml-zip";
 import { uploadDriveImage } from "@/lib/google/upload-drive-image";
@@ -28,9 +29,11 @@ import {
   exportPresentationAsPdf,
 } from "@/lib/google/render-pptx-slide-images";
 import { mapWithConcurrencyLimit } from "@/lib/google/with-concurrency-limit";
+import { extractQuestionsFromDriveFile } from "@/lib/google/extract-questions-from-file";
 import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { addLessonBlock } from "@/lib/instructor/data/lesson-blocks";
+import { addQuestionGroup, addQuestion } from "@/lib/instructor/data/questions";
 
 function cleanFilenameTitle(name: string): string {
   return name.replace(/\.[a-zA-Z0-9]+$/, "").replace(/[_-]+/g, " ").trim();
@@ -66,6 +69,11 @@ type ResolvedFile =
       routing: "slide_cards";
       slides: SlideText[];
       zip: NonNullable<Awaited<ReturnType<typeof loadOoxmlZip>>>;
+    }
+  | {
+      /** Uploaded .docx (or Doc with no PDF export) — paragraph text read from OOXML. */
+      routing: "document_text";
+      pages: { index: number; texts: string[] }[];
     }
   | { routing: "unsupported" };
 
@@ -133,6 +141,23 @@ async function resolveFile(
       resolved: { routing: "slide_cards", slides, zip },
     };
   }
+
+  // Uploaded .docx files aren't PDF-exportable via Drive (only Google-native
+  // Docs are) but their OOXML zip is downloadable — without this branch they
+  // land as "unsupported" and get dropped from import entirely.
+  if (zip && (file.mimeType === GOOGLE_DOC_MIME || file.mimeType === DOCX_MIME)) {
+    const paragraphs = await extractDocParagraphsFromZip(zip).catch(() => []);
+    if (paragraphs.length > 0) {
+      return {
+        analysis: analysisFromFilename(file.name, true),
+        resolved: {
+          routing: "document_text",
+          pages: paragraphs.map((text, index) => ({ index: index + 1, texts: [text] })),
+        },
+      };
+    }
+  }
+
   return {
     analysis: analysisFromFilename(file.name, isForm, isForm ? "" : unreadableReason),
     resolved: { routing: "unsupported" },
@@ -365,6 +390,70 @@ async function addDriveLinkAttachments(
   }
 }
 
+async function populateQuizLesson(
+  lessonId: string,
+  quiz: { title: string; file: DriveEntry },
+  resolved: ResolvedFile,
+  course: { title: string; department: string },
+  drive: Awaited<ReturnType<typeof getDriveClient>>,
+  driveFilesById: Map<string, DriveEntry>,
+  duplicatesBySurvivorId: Map<string, string[]>,
+  resourceKeyHeader: string | undefined
+): Promise<void> {
+  const extracted = await extractQuestionsFromDriveFile(
+    course,
+    drive,
+    quiz.file,
+    resolved,
+    resourceKeyHeader
+  ).catch((error) => {
+    console.error(
+      `populateQuizLesson: question extraction failed for "${quiz.file.name}":`,
+      error instanceof Error ? error.message : error
+    );
+    return [];
+  });
+
+  const group = await addQuestionGroup(lessonId, {
+    sourceDriveFileId: quiz.file.id,
+    title: quiz.title,
+    position: 1,
+  });
+
+  for (const question of extracted) {
+    await addQuestion(group.id, {
+      position: question.position,
+      promptText: question.promptText,
+      promptSource: question.promptSource,
+      choices: question.choices,
+      answerKey: question.answerKey,
+      questionType: question.questionType,
+      sourceSlideOrPageIndex: question.sourceSlideOrPageIndex,
+      needsReview: question.needsReview,
+    });
+  }
+
+  await addLessonBlock(lessonId, {
+    kind: "question_group",
+    position: 1,
+    title: quiz.title,
+    sourceDriveFileId: quiz.file.id,
+    questionGroupId: group.id,
+  });
+
+  await addDriveLinkAttachments(
+    lessonId,
+    [quiz.file.id, ...(duplicatesBySurvivorId.get(quiz.file.id) ?? [])],
+    driveFilesById
+  );
+
+  if (extracted.length === 0) {
+    console.warn(
+      `populateQuizLesson: no questions extracted from "${quiz.file.name}" - lesson will show an empty quiz state`
+    );
+  }
+}
+
 async function populateTopicLesson(
   lessonId: string,
   topic: {
@@ -451,8 +540,12 @@ export async function runDriveImportOrganize(
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
   const supabase = await createClient();
-  const { error: courseError } = await supabase.from("courses").select("code").eq("code", courseCode).single();
-  if (courseError) throw new Error("Unknown course code");
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("code, title, department")
+    .eq("code", courseCode)
+    .single();
+  if (courseError || !course) throw new Error("Unknown course code");
 
   const drive = await getDriveClient();
   const tree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
@@ -481,8 +574,20 @@ export async function runDriveImportOrganize(
   const excludedFileIds = new Set<string>();
   for (const [fileId, analysis] of analysisByFileId) {
     if (analysis.isCourseContent === false) {
-      excludedFileIds.add(fileId);
       const file = driveFilesById.get(fileId);
+      // Quiz/assignment files must never vanish silently — keep them even when
+      // Drive can't export to PDF (common for uploaded .docx).
+      if (file && isQuizFilename(file.name)) {
+        analysisByFileId.set(fileId, {
+          ...analysis,
+          isCourseContent: true,
+          notCourseContentReason: "",
+          type: "quiz",
+          category: "homework",
+        });
+        continue;
+      }
+      excludedFileIds.add(fileId);
       console.log(
         `runDriveImportOrganize: excluding "${file?.name ?? fileId}" - not course content (${analysis.notCourseContentReason || "no reason given"})`
       );
@@ -510,10 +615,9 @@ export async function runDriveImportOrganize(
     if (excludedFileIds.has(fileId)) continue;
     const file = driveFilesById.get(fileId);
     if (!file) continue;
-    roleByFileId.set(
-      fileId,
-      classifyFileRole(file, resolved.routing, analysis.isCourseContent !== false)
-    );
+    let role = classifyFileRole(file, resolved.routing, analysis.isCourseContent !== false);
+    if (role === "skip" && isQuizFilename(file.name)) role = "quiz";
+    roleByFileId.set(fileId, role);
   }
 
   const unitIds: string[] = [];
@@ -572,22 +676,16 @@ export async function runDriveImportOrganize(
       });
       lessonIds.push(newLesson.id);
 
-      await addDriveLinkAttachments(
+      await populateQuizLesson(
         newLesson.id,
-        [quiz.file.id, ...(duplicatesBySurvivorId.get(quiz.file.id) ?? [])],
-        driveFilesById
+        quiz,
+        entry.resolved,
+        { title: course.title, department: course.department },
+        drive,
+        driveFilesById,
+        duplicatesBySurvivorId,
+        resourceKeyHeader
       );
-
-      if (entry.resolved.routing !== "unsupported") {
-        await addSlideFileBlock(
-          newLesson.id,
-          quiz.file,
-          entry.resolved,
-          entry.analysis,
-          resourceKeyHeader,
-          1
-        );
-      }
     }
   }
 

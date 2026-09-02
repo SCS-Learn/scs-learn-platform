@@ -1,15 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import StudentHeader from "@/components/student/StudentHeader";
+import { useMemo, useState } from "react";
 import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentLessonViewer from "@/components/student/StudentLessonViewer";
-import type { StudentCourse } from "@/lib/student/types";
+import type { StudentCourse, QuizSubmissionStatus } from "@/lib/student/types";
 
 function moduleLabel(units: StudentCourse["units"], lessonId: string) {
   const unit = units.find((u) => u.lessons.some((l) => l.id === lessonId));
   return unit ? `${unit.code} — ${unit.title}` : "";
+}
+
+function initialQuizStatusByLessonId(course: StudentCourse): Record<string, QuizSubmissionStatus> {
+  const map: Record<string, QuizSubmissionStatus> = {};
+  for (const unit of course.units) {
+    for (const lesson of unit.lessons) {
+      if (lesson.quizSubmission) map[lesson.id] = lesson.quizSubmission;
+    }
+  }
+  return map;
+}
+
+function initialCompletedByLessonId(course: StudentCourse): Record<string, string | null> {
+  const map: Record<string, string | null> = {};
+  for (const unit of course.units) {
+    for (const lesson of unit.lessons) {
+      if (lesson.completedAt) map[lesson.id] = lesson.completedAt;
+    }
+  }
+  return map;
 }
 
 export default function StudentCourseClient({
@@ -21,41 +39,62 @@ export default function StudentCourseClient({
 }) {
   const firstLessonId = course.units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
   const [selectedLessonId, setSelectedLessonId] = useState(initialLessonId || firstLessonId);
+  const [quizStatusByLessonId, setQuizStatusByLessonId] = useState(initialQuizStatusByLessonId(course));
+  const [completedByLessonId, setCompletedByLessonId] = useState(initialCompletedByLessonId(course));
 
-  const selectedLesson = course.units
-    .flatMap((u) => u.lessons)
-    .find((l) => l.id === selectedLessonId);
+  const unitsWithProgress = useMemo(
+    () =>
+      course.units.map((unit) => ({
+        ...unit,
+        lessons: unit.lessons.map((lesson) => ({
+          ...lesson,
+          quizSubmission: quizStatusByLessonId[lesson.id] ?? lesson.quizSubmission,
+          completedAt:
+            lesson.id in completedByLessonId ? completedByLessonId[lesson.id] : lesson.completedAt,
+        })),
+      })),
+    [course.units, quizStatusByLessonId, completedByLessonId]
+  );
+
+  const selectedLesson = unitsWithProgress.flatMap((u) => u.lessons).find((l) => l.id === selectedLessonId);
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black flex flex-col">
-      <StudentHeader backHref="/student" backLabel="My courses" />
+    <main className="h-screen bg-gray-50 text-black flex overflow-hidden">
+      <StudentSidebar
+        courseCode={course.code}
+        courseTitle={course.title}
+        units={unitsWithProgress}
+        selectedLessonId={selectedLessonId}
+        moduleLabel={moduleLabel(unitsWithProgress, selectedLessonId)}
+        lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
+        onSelectLesson={setSelectedLessonId}
+      />
 
-      <div className="flex-1 px-6 py-6">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
-          <span>{course.code}</span>
-          <ChevronRight size={12} />
-          <span className="truncate">{moduleLabel(course.units, selectedLessonId)}</span>
-          <ChevronRight size={12} />
-          <span className="text-gray-700">{selectedLesson ? `Lesson ${selectedLesson.code}` : ""}</span>
-        </div>
-
-        <div className="flex gap-4 items-start">
-          <StudentSidebar
+      <div className="flex-1 min-w-0 min-h-0 h-full overflow-hidden">
+        {selectedLesson ? (
+          <StudentLessonViewer
+            key={selectedLesson.id}
             courseCode={course.code}
-            courseTitle={course.title}
-            units={course.units}
-            selectedLessonId={selectedLessonId}
-            onSelectLesson={setSelectedLessonId}
+            lesson={selectedLesson}
+            onQuizSubmitted={(lessonId, status) =>
+              setQuizStatusByLessonId((prev) => ({ ...prev, [lessonId]: status }))
+            }
+            onQuizReset={(lessonId) =>
+              setQuizStatusByLessonId((prev) => {
+                const next = { ...prev };
+                delete next[lessonId];
+                return next;
+              })
+            }
+            onCompletionChange={(lessonId, completedAt) =>
+              setCompletedByLessonId((prev) => ({ ...prev, [lessonId]: completedAt }))
+            }
           />
-
-          {selectedLesson ? (
-            <StudentLessonViewer key={selectedLesson.id} lesson={selectedLesson} />
-          ) : (
-            <div className="flex-[3] min-w-0 border border-gray-200 rounded-md bg-white flex items-center justify-center min-h-[400px] text-sm text-gray-400">
-              This course has no published lessons yet.
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="h-full bg-white flex items-center justify-center text-sm text-gray-400">
+            This course has no published lessons yet.
+          </div>
+        )}
       </div>
     </main>
   );

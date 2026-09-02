@@ -81,9 +81,6 @@ export async function exportDriveFileAsNotesHtml(
 
 export function mergeNotesSections(sections: { title: string; html: string }[]): string {
   return sections
-    .map(
-      (section) =>
-        `<section class="course-notes-section"><h3 class="course-notes-source-title">${escapeHtml(section.title)}</h3>${section.html}</section>`
-    )
+    .map((section) => `<section class="course-notes-section">${section.html}</section>`)
     .join('<hr class="course-notes-divider">');
 }

@@ -16,11 +16,20 @@ export default async function InstructorDashboardPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black">
+    <main className="min-h-screen bg-gray-50 text-black flex flex-col lg:h-screen lg:overflow-hidden">
       <InstructorHeader />
 
-      <div className="px-6 py-8 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
-        <div>
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+        <aside className="lg:w-1/4 flex flex-col min-h-0 shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 bg-white">
+          <div className="flex flex-col p-4 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+            <AnnouncementsPanel courses={courses} announcements={announcements} />
+          </div>
+          <div className="flex flex-col p-4 border-t border-gray-200 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+            <CalendarPanel events={calendarEvents} courses={courses} />
+          </div>
+        </aside>
+
+        <div className="lg:w-3/4 flex-1 px-6 py-8 min-w-0 min-h-0 overflow-y-auto">
           <p className="text-xs font-bold text-primary tracking-wide mb-1">
             INSTRUCTOR DASHBOARD
           </p>
@@ -31,11 +40,6 @@ export default async function InstructorDashboardPage() {
           </p>
 
           <CourseListSection courses={courses} />
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <AnnouncementsPanel courses={courses} announcements={announcements} />
-          <CalendarPanel events={calendarEvents} courses={courses} />
         </div>
       </div>
     </main>

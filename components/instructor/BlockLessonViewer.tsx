@@ -2,31 +2,19 @@
 
 import { CircleHelp } from "lucide-react";
 import TopicLessonViewer, { type TopicLessonBlock } from "@/components/lesson/TopicLessonViewer";
+import QuizBlock from "@/components/student/QuizBlock";
 import type { LessonBlockView, LessonType } from "@/lib/instructor/mock-data";
+import type { StudentQuestion } from "@/lib/student/types";
 
-function QuestionGroupBlock({ block }: { block: LessonBlockView }) {
-  return (
-    <div className="px-8 py-6">
-      {block.title && <h3 className="text-lg font-bold mb-3">{block.title}</h3>}
-      <div className="flex flex-col gap-6">
-        {(block.questions ?? []).map((question, index) => (
-          <div key={question.id} className="border border-gray-200 rounded-md p-4">
-            <p className="text-xs text-gray-400 mb-1">Question {index + 1}</p>
-            <p className="text-sm whitespace-pre-wrap mb-2">{question.promptText}</p>
-            {question.choices && (
-              <ul className="text-sm text-gray-600 list-disc pl-5">
-                {question.choices.map((choice, choiceIndex) => (
-                  <li key={choiceIndex}>{choice}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-        {(block.questions ?? []).length === 0 && (
-          <p className="text-sm text-gray-400">No questions could be extracted from this file.</p>
-        )}
-      </div>
-    </div>
+function toStudentQuestions(blocks: LessonBlockView[]): StudentQuestion[] {
+  return blocks.flatMap((block) =>
+    (block.questions ?? []).map((question) => ({
+      id: question.id,
+      promptText: question.promptText,
+      choices: question.choices,
+      answerKey: question.answerKey,
+      questionType: question.questionType as StudentQuestion["questionType"],
+    }))
   );
 }
 
@@ -55,6 +43,7 @@ export default function BlockLessonViewer({
   lessonTitle: string;
 }) {
   const questionBlocks = blocks.filter((b) => b.kind === "question_group");
+  const questions = toStudentQuestions(questionBlocks);
 
   if (blocks.length === 0) {
     return (
@@ -72,15 +61,14 @@ export default function BlockLessonViewer({
           Quiz / Homework
         </div>
         <h1 className="topic-lesson-title">{lessonTitle}</h1>
-        {blocks.map((block) => {
-          if (block.kind === "question_group") return <QuestionGroupBlock key={block.id} block={block} />;
-          return <SlideFileFallback key={block.id} block={block} />;
-        })}
+        <QuizBlock questions={questions} initialSubmission={null} previewMode />
+        {lessonType !== "quiz" &&
+          blocks
+            .filter((b) => b.kind !== "question_group")
+            .map((block) => <SlideFileFallback key={block.id} block={block} />)}
       </div>
     );
   }
 
-  return (
-    <TopicLessonViewer blocks={blocks as TopicLessonBlock[]} lessonTitle={lessonTitle} />
-  );
+  return <TopicLessonViewer blocks={blocks as TopicLessonBlock[]} lessonTitle={lessonTitle} />;
 }

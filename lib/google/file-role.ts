@@ -2,9 +2,10 @@ import type { DriveEntry } from "@/lib/google/drive-traversal";
 
 export type FileRole = "video" | "slides" | "notes" | "quiz" | "skip";
 
-type ResolvedRouting = "video" | "google_slides" | "slide_pdf" | "slide_cards" | "unsupported";
+type ResolvedRouting = "video" | "google_slides" | "slide_pdf" | "slide_cards" | "document_text" | "unsupported";
 
-const QUIZ_PATTERN = /\b(hw|homework|quiz|exam|pset|assignment|assessment|problem\s*set)\b/i;
+const QUIZ_PATTERN =
+  /\b(hw|homework|quiz|exam|pset|assignment|assessment|problem\s*set|questions?|problems?)\b/i;
 const NOTES_PATTERN = /\b(notes?|reading|handout|worksheet|summary|transcript)\b/i;
 const SLIDES_PATTERN = /\b(slides?|deck|lecture|lec|presentation|ppt)\b/i;
 /** Docs/files whose primary purpose is pointing at a lecture recording. */
@@ -21,7 +22,10 @@ const SLIDE_MIMES = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
 
-/** Classifies a Drive file's role within a topic lesson — no LLM. */
+export function isQuizFilename(name: string): boolean {
+  return QUIZ_PATTERN.test(name.toLowerCase());
+}
+
 export function classifyFileRole(
   file: DriveEntry,
   routing: ResolvedRouting,

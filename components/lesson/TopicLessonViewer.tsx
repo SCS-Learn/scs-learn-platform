@@ -14,7 +14,7 @@ export type TopicLessonBlock = {
   videoUrl: string | null;
 };
 
-type LessonTab = "video" | "files" | "content";
+type LessonTab = "video" | "files";
 
 function youtubeEmbedUrl(url: string): string | null {
   const watch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
@@ -133,21 +133,20 @@ function LessonContentPanel({ block }: { block: TopicLessonBlock }) {
 
   return (
     <div
-      className="lesson-content-body lesson-content-editor prose prose-sm max-w-none"
+      className="course-notes-content lesson-content-editor"
       dangerouslySetInnerHTML={{ __html: block.bodyHtml }}
     />
   );
 }
 
 const TAB_LABELS: Record<LessonTab, string> = {
-  video: "Lesson Video",
+  video: "Lesson Content",
   files: "Lesson Files",
-  content: "Lesson Content",
 };
 
 /**
- * Topic lesson with a tab bar to switch between video, lesson files, and
- * lesson content — only tabs with material are shown.
+ * Topic lesson with a tab bar to switch between video and lesson files.
+ * Lesson content (course notes) appears below the video when a video is present.
  */
 export default function TopicLessonViewer({
   blocks,
@@ -164,9 +163,8 @@ export default function TopicLessonViewer({
     const tabs: LessonTab[] = [];
     if (videoBlock) tabs.push("video");
     if (slideBlocks.some(slideBlockHasContent)) tabs.push("files");
-    if (notesBlock?.bodyHtml) tabs.push("content");
     return tabs;
-  }, [videoBlock, slideBlocks, notesBlock]);
+  }, [videoBlock, slideBlocks]);
 
   const [activeTab, setActiveTab] = useState<LessonTab>(() => availableTabs[0] ?? "video");
 
@@ -176,10 +174,14 @@ export default function TopicLessonViewer({
     }
   }, [activeTab, availableTabs]);
 
-  if (availableTabs.length === 0) {
+  const hasNotes = Boolean(notesBlock?.bodyHtml);
+
+  if (availableTabs.length === 0 && !hasNotes) {
     return (
       <article className="topic-lesson min-h-full flex flex-col w-full">
-        <h1 className="topic-lesson-title">{lessonTitle}</h1>
+        <div className="topic-lesson-header">
+          <h1 className="topic-lesson-title">{lessonTitle}</h1>
+        </div>
         <p className="px-8 py-6 text-sm text-gray-400">
           No content loaded for this lesson. Re-import the course folder.
         </p>
@@ -189,30 +191,48 @@ export default function TopicLessonViewer({
 
   return (
     <article className="topic-lesson min-h-full flex flex-col w-full">
-      <h1 className="topic-lesson-title">{lessonTitle}</h1>
+      <div className="topic-lesson-header">
+        <h1 className="topic-lesson-title">{lessonTitle}</h1>
 
-      {availableTabs.length > 1 && (
-        <div className="lesson-tab-bar" role="tablist" aria-label="Lesson sections">
-          {availableTabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              className={`lesson-tab${activeTab === tab ? " is-active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {TAB_LABELS[tab]}
-            </button>
-          ))}
+        {availableTabs.length >= 1 && (
+          <div className="lesson-tab-bar" role="tablist" aria-label="Lesson sections">
+            {availableTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                className={`lesson-tab${activeTab === tab ? " is-active" : ""}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!videoBlock && hasNotes && notesBlock && (
+        <div className="lesson-tab-panel" role="region" aria-label="Lesson content">
+          <LessonContentPanel block={notesBlock} />
         </div>
       )}
 
-      <div className="lesson-tab-panel" role="tabpanel">
-        {activeTab === "video" && videoBlock && <LessonVideoPanel block={videoBlock} />}
-        {activeTab === "files" && <SupportingFilesPanel blocks={slideBlocks} />}
-        {activeTab === "content" && notesBlock && <LessonContentPanel block={notesBlock} />}
-      </div>
+      {availableTabs.length > 0 && (
+        <div className="lesson-tab-panel" role="tabpanel">
+          {activeTab === "video" && videoBlock && (
+            <>
+              <LessonVideoPanel block={videoBlock} />
+              {hasNotes && notesBlock && (
+                <div className="lesson-content-below-video">
+                  <LessonContentPanel block={notesBlock} />
+                </div>
+              )}
+            </>
+          )}
+          {activeTab === "files" && <SupportingFilesPanel blocks={slideBlocks} />}
+        </div>
+      )}
     </article>
   );
 }

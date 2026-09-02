@@ -1,6 +1,7 @@
 import type { DriveFileAnalysis, DriveFileCategory } from "@/lib/google/analyze-drive-file";
 
-const QUIZ_PATTERN = /\b(hw|homework|quiz|exam|problem|pset|assignment|assessment)\b/i;
+const QUIZ_PATTERN =
+  /\b(hw|homework|quiz|exam|problem|pset|assignment|assessment|questions?|problems?)\b/i;
 
 function cleanFilenameTitle(name: string): string {
   return name.replace(/\.[a-zA-Z0-9]+$/, "").replace(/[_-]+/g, " ").trim();

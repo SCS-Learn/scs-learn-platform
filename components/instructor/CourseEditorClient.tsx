@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import ContentSidebar from "@/components/instructor/ContentSidebar";
 import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
@@ -17,6 +18,7 @@ import {
   updateLessonContent,
   publishLesson as publishLessonAction,
 } from "@/lib/instructor/data/lessons";
+import { deleteCourse as deleteCourseAction } from "@/lib/instructor/data/courses";
 
 function wordCountOf(html: string) {
   const text = html.replace(/<[^>]*>/g, " ").trim();
@@ -31,6 +33,7 @@ function moduleLabel(unit: Unit | undefined) {
 const AUTOSAVE_DELAY_MS = 800;
 
 export default function CourseEditorClient({ course }: { course: InstructorCourse }) {
+  const router = useRouter();
   const [units, setUnits] = useState<Unit[]>(course.units);
 
   const firstLessonId = units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
@@ -225,6 +228,21 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     }
   };
 
+  const deleteCourse = () => {
+    const lessonCount = units.reduce((sum, u) => sum + u.lessons.length, 0);
+    const message =
+      lessonCount > 0
+        ? `Delete "${course.title}" (${course.code}) and all ${lessonCount} lessons? This cannot be undone.`
+        : `Delete "${course.title}" (${course.code})? This cannot be undone.`;
+    if (!window.confirm(message)) return;
+
+    flushPendingSave();
+    startTransition(async () => {
+      await deleteCourseAction(course.code);
+      router.push("/instructor");
+    });
+  };
+
   const publish = () => {
     if (!selectedLessonId) return;
     flushPendingSave();
@@ -256,6 +274,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         onReorderLessons={reorderLessons}
         onAddUnit={addUnit}
         onReorderUnits={reorderUnits}
+        onDeleteCourse={deleteCourse}
       />
 
       <div className="min-h-0 h-full overflow-y-auto bg-white border-x border-gray-300">
