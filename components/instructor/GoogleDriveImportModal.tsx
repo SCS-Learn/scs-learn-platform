@@ -20,9 +20,12 @@ export default function GoogleDriveImportModal({
   const [status, setStatus] = useState<Status>("input");
   const [folderUrl, setFolderUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [preview, setPreview] = useState<{ unitCount: number; lessonCount: number; isFlat: boolean } | null>(
-    null
-  );
+  const [preview, setPreview] = useState<{
+    unitCount: number;
+    lessonCount: number;
+    isFlat: boolean;
+    fileCount: number;
+  } | null>(null);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
@@ -73,8 +76,9 @@ export default function GoogleDriveImportModal({
         {(status === "input" || status === "scanning") && (
           <div className="py-4">
             <p className="text-sm text-gray-500 mb-4">
-              Paste a link to the Drive folder for this course. Each subfolder becomes a unit.
-              Files within a unit are grouped into topic lessons (video, slides, and notes together).
+              Paste a link to the Drive folder for this course. All files are collected regardless of
+              folder layout — AI reads each file and builds units, content lessons (Lesson Content +
+              Lesson Files), and quizzes automatically.
             </p>
             {googleConnected === false && (
               <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-4 flex items-center justify-between gap-3">
@@ -148,21 +152,11 @@ export default function GoogleDriveImportModal({
         {status === "confirm" && preview && (
           <div className="py-6">
             <p className="text-sm text-gray-600 mb-4">
-              {preview.isFlat ? (
-                <>
-                  Found <span className="font-bold">{preview.lessonCount}</span> file
-                  {preview.lessonCount === 1 ? "" : "s"}. They&rsquo;ll be grouped into topic lessons
-                  in one unit — each lesson combines video, slides, and notes for one topic.
-                </>
-              ) : (
-                <>
-                  Found <span className="font-bold">{preview.unitCount}</span> unit
-                  {preview.unitCount === 1 ? "" : "s"} and{" "}
-                  <span className="font-bold">{preview.lessonCount}</span> file
-                  {preview.lessonCount === 1 ? "" : "s"}. Files will be grouped into topic lessons
-                  per unit — video at the top, toggleable slides, and course notes below.
-                </>
-              )}
+              Found <span className="font-bold">{preview.fileCount ?? preview.lessonCount}</span> file
+              {(preview.fileCount ?? preview.lessonCount) === 1 ? "" : "s"}. On import, AI will
+              structure them into units and lessons — content lessons get a Lesson Content tab
+              (video/notes) and a Lesson Files tab (slides), plus separate quiz lessons for
+              homework and assessments.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -175,7 +169,7 @@ export default function GoogleDriveImportModal({
               <button
                 type="button"
                 onClick={confirmImport}
-                disabled={preview.lessonCount === 0}
+                disabled={(preview.fileCount ?? preview.lessonCount) === 0}
                 className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-40"
               >
                 Import
@@ -187,7 +181,7 @@ export default function GoogleDriveImportModal({
         {status === "importing" && (
           <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10">
             <Loader2 size={20} className="animate-spin" />
-            Rendering slides from Google Slides — this can take a bit for larger folders...
+            Rendering slides and structuring the course with AI — this can take a bit for larger folders...
           </div>
         )}
 

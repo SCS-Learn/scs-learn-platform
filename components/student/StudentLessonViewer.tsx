@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, CircleHelp, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import TopicLessonViewer, { type TopicLessonBlock } from "@/components/lesson/TopicLessonViewer";
 import type { StudentLesson, QuizSubmissionStatus } from "@/lib/student/types";
 import { markLessonComplete, unmarkLessonComplete } from "@/lib/student/data/lesson-progress";
@@ -61,13 +61,6 @@ export default function StudentLessonViewer({
 
   return (
     <div className="h-full min-h-0 min-w-0 overflow-hidden bg-white flex flex-col">
-      {isAssessment && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wide">
-          <CircleHelp size={14} />
-          Quiz / Homework
-        </div>
-      )}
-
       <div className="flex-1 min-h-0 overflow-y-auto">
         {lesson.autolab && (
           <AutogradedAssignmentCard lessonId={lesson.id} autolab={lesson.autolab} />
@@ -77,14 +70,19 @@ export default function StudentLessonViewer({
           lesson.blocks.length === 0 ? (
             <p className="px-8 py-6 text-sm text-gray-400">This lesson has no content yet.</p>
           ) : isAssessment ? (
-            <QuizBlock
-              courseCode={courseCode}
-              lessonId={lesson.id}
-              questions={questions}
-              initialSubmission={lesson.quizSubmission}
-              onSubmitted={(status) => onQuizSubmitted?.(lesson.id, status)}
-              onReset={() => onQuizReset?.(lesson.id)}
-            />
+            <>
+              <div className="px-8 pt-6 pb-2">
+                <h1 className="topic-lesson-title">{lesson.title}</h1>
+              </div>
+              <QuizBlock
+                courseCode={courseCode}
+                lessonId={lesson.id}
+                questions={questions}
+                initialSubmission={lesson.quizSubmission}
+                onSubmitted={(status) => onQuizSubmitted?.(lesson.id, status)}
+                onReset={() => onQuizReset?.(lesson.id)}
+              />
+            </>
           ) : (
             <TopicLessonViewer blocks={lesson.blocks as TopicLessonBlock[]} lessonTitle={lesson.title} />
           )

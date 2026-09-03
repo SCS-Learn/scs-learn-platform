@@ -4,6 +4,18 @@ export function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Short answers: at most two lowercase words (spaces allowed between them). */
+export function normalizeShortAnswer(value: string): string {
+  return normalize(value);
+}
+
+export function isValidShortAnswer(value: string): boolean {
+  const normalized = normalizeShortAnswer(value);
+  if (!normalized) return false;
+  const words = normalized.split(" ").filter(Boolean);
+  return words.length >= 1 && words.length <= 2;
+}
+
 export function isGradable(question: QuizQuestionFields): boolean {
   return question.answerKey !== null && isAutogradableQuestionType(question.questionType);
 }
@@ -31,6 +43,10 @@ export function isCorrect(question: QuizQuestionFields, response: string): boole
     const actual = parseJsonStringArray(response);
     if (!expected || !actual) return false;
     return arraysEqual(expected, actual);
+  }
+
+  if (question.questionType === "short_answer") {
+    return normalizeShortAnswer(response) === normalizeShortAnswer(question.answerKey);
   }
 
   return normalize(response) === normalize(question.answerKey);

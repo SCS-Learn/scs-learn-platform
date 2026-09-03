@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export type QuestionGroup = {
@@ -86,6 +87,50 @@ export async function addQuestion(
     )
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to create question");
+
+  return {
+    id: data.id,
+    questionGroupId: data.question_group_id,
+    position: data.position,
+    promptText: data.prompt_text,
+    promptSource: data.prompt_source,
+    choices: data.choices,
+    answerKey: data.answer_key,
+    questionType: data.question_type,
+    sourceSlideOrPageIndex: data.source_slide_or_page_index,
+    needsReview: data.needs_review,
+  };
+}
+
+export async function updateQuestion(
+  courseCode: string,
+  questionId: string,
+  patch: {
+    promptText: string;
+    choices: string[] | null;
+    answerKey: string | null;
+    questionType: QuestionType;
+    needsReview?: boolean;
+  }
+): Promise<Question> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("questions")
+    .update({
+      prompt_text: patch.promptText,
+      choices: patch.choices,
+      answer_key: patch.answerKey,
+      question_type: patch.questionType,
+      needs_review: patch.needsReview ?? false,
+    })
+    .eq("id", questionId)
+    .select(
+      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, source_slide_or_page_index, needs_review"
+    )
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to update question");
+
+  revalidatePath(`/instructor/${courseCode}`);
 
   return {
     id: data.id,

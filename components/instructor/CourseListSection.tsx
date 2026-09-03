@@ -127,7 +127,8 @@ function CreateCourseModal({
                   className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:opacity-60"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Paste a link to import units and lessons when the course is created. Each subfolder becomes a unit.
+                  Paste a link to import units and lessons when the course is created. Folder layout
+                  is ignored — AI reads the files and builds the course structure.
                 </p>
               </label>
             </div>

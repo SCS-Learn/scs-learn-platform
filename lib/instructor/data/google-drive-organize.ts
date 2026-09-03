@@ -3,18 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, parseDriveFolderUrl } from "@/lib/google/drive-client";
-import { buildDriveImportTree, type DriveEntry } from "@/lib/google/drive-traversal";
-import { classifyUnitIntoTopics, detectDuplicatesFromUnits } from "@/lib/google/classify-drive-topics";
-import { classifyFileRole, isQuizFilename } from "@/lib/google/file-role";
+import {
+  buildDriveImportTree,
+  flattenDriveImportTree,
+  type DriveEntry,
+} from "@/lib/google/drive-traversal";
+import { detectDuplicatesFromUnits } from "@/lib/google/classify-drive-topics";
+import {
+  classifyOrganizeImport,
+  organizeClassificationToPersistable,
+} from "@/lib/google/classify-drive-organize";
+import { isQuizFilename } from "@/lib/google/file-role";
 import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/export-drive-notes-html";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
-import type { DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
+import { analyzeDriveFileContent, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
+import type { FileContentSource } from "@/lib/google/file-content-source";
 import { detectVideoLink } from "@/lib/google/detect-video-link";
 import { detectVideoUrlInDocument } from "@/lib/google/extract-document-text";
 import { renderPptxSlideCards } from "@/lib/google/render-pptx-slide-cards";
 import { extractSlideTextFromZip, type SlideText } from "@/lib/google/extract-slide-text";
-import { extractDocParagraphsFromZip } from "@/lib/google/extract-doc-text";
+import { extractDocParagraphsFromZip, paragraphsToNotesHtml } from "@/lib/google/extract-doc-text";
 import { extractImagesFromZipByPaths } from "@/lib/google/extract-drive-images";
 import { loadOoxmlZip } from "@/lib/google/load-ooxml-zip";
 import { uploadDriveImage } from "@/lib/google/upload-drive-image";
@@ -53,6 +62,9 @@ const MAX_IMAGES_PER_FILE = 36;
 // thousands of files (a "Recitations" or "Code Repository" subfolder, say) -
 // this caps how many files.get/export calls run at once during resolution.
 const DRIVE_IMPORT_CONCURRENCY = 8;
+
+/** Cap concurrent Claude reads so a large folder doesn't trip API rate limits. */
+const ANALYSIS_CONCURRENCY = 4;
 
 /**
  * What one file resolved to, before any DB writes happen - kept separate from
@@ -162,6 +174,61 @@ async function resolveFile(
     analysis: analysisFromFilename(file.name, isForm, isForm ? "" : unreadableReason),
     resolved: { routing: "unsupported" },
   };
+}
+
+function contentSourceFromResolved(resolved: ResolvedFile): FileContentSource | null {
+  if (resolved.routing === "slide_pdf") return { kind: "pdf", pdfBase64: resolved.pdfBase64 };
+  if (resolved.routing === "slide_cards") return { kind: "slideText", slides: resolved.slides };
+  if (resolved.routing === "document_text") {
+    return {
+      kind: "plainText",
+      text: resolved.pages
+        .map((page) => `Page ${page.index}:\n${page.texts.join("\n") || "(empty)"}`)
+        .join("\n\n"),
+    };
+  }
+  return null;
+}
+
+/**
+ * Content-derived analysis for AI structuring. Falls back to filename metadata
+ * when the file can't be read (native video, unsupported mime, API failure).
+ */
+async function analyzeResolvedForOrganize(
+  course: { title: string; department: string },
+  drive: Awaited<ReturnType<typeof getDriveClient>>,
+  file: DriveEntry,
+  resolved: ResolvedFile,
+  resourceKeyHeader: string | undefined
+): Promise<DriveFileAnalysis> {
+  let source = contentSourceFromResolved(resolved);
+
+  if (!source && resolved.routing === "google_slides") {
+    const pdfBase64 = await downloadDriveFileAsPdfBase64(drive, file, resourceKeyHeader).catch(() => null);
+    if (pdfBase64) source = { kind: "pdf", pdfBase64 };
+  }
+
+  if (source) {
+    const analysis = await analyzeDriveFileContent(course, source).catch(() => null);
+    if (analysis) return analysis;
+  }
+
+  if (resolved.routing === "video") {
+    return analysisFromFilename(file.name, true);
+  }
+
+  if (resolved.routing === "unsupported") {
+    const isForm = file.mimeType === "application/vnd.google-apps.form";
+    return analysisFromFilename(
+      file.name,
+      isForm || isQuizFilename(file.name),
+      isForm || isQuizFilename(file.name)
+        ? ""
+        : "Could not read this file type for content analysis."
+    );
+  }
+
+  return analysisFromFilename(file.name, true);
 }
 
 /** Adds a slide deck rendered as Google Slides thumbnails — pixel-accurate backgrounds and layout. */
@@ -344,6 +411,20 @@ async function addSlideFileBlock(
       renderMode: "slide_card_images",
       bodyHtml,
     });
+    return;
+  }
+
+  if (resolved.routing === "document_text") {
+    const paragraphs = resolved.pages.flatMap((page) => page.texts);
+    const bodyHtml = paragraphsToNotesHtml(paragraphs);
+    if (!bodyHtml) return;
+    await addLessonBlock(lessonId, {
+      kind: "course_notes",
+      position,
+      title: analysis.title || cleanFilenameTitle(file.name),
+      sourceDriveFileId: file.id,
+      bodyHtml,
+    });
   }
 }
 
@@ -393,13 +474,15 @@ async function addDriveLinkAttachments(
 async function populateQuizLesson(
   lessonId: string,
   quiz: { title: string; file: DriveEntry },
-  resolved: ResolvedFile,
+  entry: { analysis: DriveFileAnalysis; resolved: ResolvedFile },
   course: { title: string; department: string },
   drive: Awaited<ReturnType<typeof getDriveClient>>,
   driveFilesById: Map<string, DriveEntry>,
   duplicatesBySurvivorId: Map<string, string[]>,
   resourceKeyHeader: string | undefined
 ): Promise<void> {
+  const { resolved } = entry;
+
   const extracted = await extractQuestionsFromDriveFile(
     course,
     drive,
@@ -441,6 +524,8 @@ async function populateQuizLesson(
     questionGroupId: group.id,
   });
 
+  // Source file stays as a Drive link attachment (sidebar) — quiz lessons
+  // only surface structured questions in the main pane.
   await addDriveLinkAttachments(
     lessonId,
     [quiz.file.id, ...(duplicatesBySurvivorId.get(quiz.file.id) ?? [])],
@@ -449,7 +534,7 @@ async function populateQuizLesson(
 
   if (extracted.length === 0) {
     console.warn(
-      `populateQuizLesson: no questions extracted from "${quiz.file.name}" - lesson will show an empty quiz state`
+      `populateQuizLesson: no auto-gradable questions found in "${quiz.file.name}"`
     );
   }
 }
@@ -548,9 +633,13 @@ export async function runDriveImportOrganize(
   if (courseError || !course) throw new Error("Unknown course code");
 
   const drive = await getDriveClient();
-  const tree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
+  const nestedTree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
     throw new Error(driveErrorMessage(error));
   });
+
+  // Folder layout is not a contract — flatten everything and let the model
+  // decide units / multi-file content lessons / quizzes from file content.
+  const tree = flattenDriveImportTree(nestedTree, folderId);
 
   const driveFilesById = new Map(tree.units.flatMap((u) => u.files).map((f) => [f.id, f]));
 
@@ -562,21 +651,34 @@ export async function runDriveImportOrganize(
     )
   );
 
+  // Replace filename-only placeholders with real content analysis for structuring.
+  await mapWithConcurrencyLimit(
+    Array.from(resolvedByFileId.entries()),
+    ANALYSIS_CONCURRENCY,
+    async ([fileId, entry]) => {
+      const file = driveFilesById.get(fileId);
+      if (!file) return;
+      const analysis = await analyzeResolvedForOrganize(
+        course,
+        drive,
+        file,
+        entry.resolved,
+        resourceKeyHeader
+      );
+      resolvedByFileId.set(fileId, { ...entry, analysis });
+    }
+  );
+
   const analysisByFileId = new Map(
     Array.from(resolvedByFileId.entries()).map(([id, { analysis }]) => [id, analysis])
   );
 
-  // Junk (garbled exports, random/placeholder data, unrelated administrative
-  // documents) never reaches the classifier at all, let alone becomes a
-  // lesson - it can only ever end up in "unclassified"/a real lesson if the
-  // classifier itself sees it. There's no lesson for it to attach to, so it's
-  // just logged for visibility rather than silently vanishing.
+  // Junk never reaches the classifier — quiz/assignment filenames are kept
+  // even when Drive can't export them (common for uploaded .docx).
   const excludedFileIds = new Set<string>();
   for (const [fileId, analysis] of analysisByFileId) {
     if (analysis.isCourseContent === false) {
       const file = driveFilesById.get(fileId);
-      // Quiz/assignment files must never vanish silently — keep them even when
-      // Drive can't export to PDF (common for uploaded .docx).
       if (file && isQuizFilename(file.name)) {
         analysisByFileId.set(fileId, {
           ...analysis,
@@ -585,6 +687,8 @@ export async function runDriveImportOrganize(
           type: "quiz",
           category: "homework",
         });
+        const entry = resolvedByFileId.get(fileId);
+        if (entry) resolvedByFileId.set(fileId, { ...entry, analysis: analysisByFileId.get(fileId)! });
         continue;
       }
       excludedFileIds.add(fileId);
@@ -602,41 +706,57 @@ export async function runDriveImportOrganize(
     })),
   };
 
-  const { duplicates, duplicateFileIds } = detectDuplicatesFromUnits(filteredTree.units);
+  const filteredAnalysis = new Map(
+    Array.from(analysisByFileId.entries()).filter(([id]) => !excludedFileIds.has(id))
+  );
+
+  const classifiableCount = filteredTree.units.reduce((sum, unit) => sum + unit.files.length, 0);
+  if (classifiableCount === 0) {
+    revalidatePath(`/instructor/${courseCode}`);
+    return { unitIds: [], lessonIds: [] };
+  }
+
+  const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
+  const classification = await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
+
+  // Prefer model duplicates; fold in basename-detected pairs the model missed.
+  const duplicates = [...classification.duplicates];
+  const seenDupIds = new Set(duplicates.map((d) => d.driveFileId));
+  for (const dup of basenameDupes.duplicates) {
+    if (seenDupIds.has(dup.driveFileId)) continue;
+    duplicates.push(dup);
+    seenDupIds.add(dup.driveFileId);
+  }
+
+  const { units: plannedUnits, extraDuplicates } = organizeClassificationToPersistable(
+    { ...classification, duplicates },
+    driveFilesById,
+    folderId
+  );
+
   const duplicatesBySurvivorId = new Map<string, string[]>();
-  for (const duplicate of duplicates) {
+  for (const duplicate of [...duplicates, ...extraDuplicates]) {
     const list = duplicatesBySurvivorId.get(duplicate.duplicateOfDriveFileId) ?? [];
     list.push(duplicate.driveFileId);
     duplicatesBySurvivorId.set(duplicate.duplicateOfDriveFileId, list);
   }
 
-  const roleByFileId = new Map<string, ReturnType<typeof classifyFileRole>>();
-  for (const [fileId, { analysis, resolved }] of resolvedByFileId) {
-    if (excludedFileIds.has(fileId)) continue;
-    const file = driveFilesById.get(fileId);
-    if (!file) continue;
-    let role = classifyFileRole(file, resolved.routing, analysis.isCourseContent !== false);
-    if (role === "skip" && isQuizFilename(file.name)) role = "quiz";
-    roleByFileId.set(fileId, role);
+  for (const item of classification.unclassified) {
+    console.log(
+      `runDriveImportOrganize: unclassified "${item.name}" (${item.driveFileId}): ${item.reason}`
+    );
   }
 
   const unitIds: string[] = [];
   const lessonIds: string[] = [];
 
-  for (const unit of filteredTree.units) {
-    const { topics, quizzes } = classifyUnitIntoTopics(unit, roleByFileId, duplicateFileIds);
-    if (topics.length === 0 && quizzes.length === 0) continue;
-
-    const newUnit = await addUnitFromImport(
-      courseCode,
-      unit.folderName,
-      unit.folderId
-    );
+  for (const unit of plannedUnits) {
+    const newUnit = await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
     unitIds.push(newUnit.id);
 
     let lessonPosition = 0;
 
-    for (const topic of topics) {
+    for (const topic of unit.topics) {
       lessonPosition += 1;
       const primaryFile =
         topic.videoFiles[0] ?? topic.slideFiles[0] ?? topic.notesFiles[0];
@@ -662,7 +782,7 @@ export async function runDriveImportOrganize(
       );
     }
 
-    for (const quiz of quizzes) {
+    for (const quiz of unit.quizzes) {
       const entry = resolvedByFileId.get(quiz.file.id);
       if (!entry) continue;
 
@@ -679,7 +799,7 @@ export async function runDriveImportOrganize(
       await populateQuizLesson(
         newLesson.id,
         quiz,
-        entry.resolved,
+        entry,
         { title: course.title, department: course.department },
         drive,
         driveFilesById,

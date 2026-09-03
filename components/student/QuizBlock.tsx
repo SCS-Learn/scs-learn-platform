@@ -99,14 +99,19 @@ function QuestionInput({
   }
 
   return (
-    <textarea
-      value={response}
-      disabled={submitted}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Type your answer..."
-      rows={type === "short_answer" ? 2 : 3}
-      className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:bg-white disabled:text-gray-700"
-    />
+    <div className="flex flex-col gap-1">
+      <input
+        type="text"
+        value={response}
+        disabled={submitted}
+        onChange={(e) => onChange(e.target.value.toLowerCase())}
+        placeholder={type === "short_answer" ? "one or two words" : "Type your answer..."}
+        className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:bg-white disabled:text-gray-700"
+      />
+      {type === "short_answer" && !submitted && (
+        <p className="text-xs text-gray-400">One or two words max, lowercase.</p>
+      )}
+    </div>
   );
 }
 
@@ -193,7 +198,7 @@ export default function QuizBlock({
     return (
       <div className="px-8 py-6">
         <p className="text-sm text-gray-500">
-          No auto-gradable questions could be built from this assignment. Re-import the file or edit questions manually.
+          No auto-gradable questions were found in this assignment.
         </p>
       </div>
     );

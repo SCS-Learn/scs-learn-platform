@@ -281,9 +281,34 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
           <BlockLessonViewer
             key={`blocks-${selectedLessonId}`}
+            courseCode={course.code}
             blocks={selectedLesson.blocks}
             lessonType={selectedLesson.type}
             lessonTitle={selectedLesson.title}
+            onQuestionSaved={(updated) => {
+              setUnits((prev) =>
+                prev.map((unit) => ({
+                  ...unit,
+                  lessons: unit.lessons.map((lesson) =>
+                    lesson.id !== selectedLessonId
+                      ? lesson
+                      : {
+                          ...lesson,
+                          blocks: lesson.blocks.map((block) =>
+                            block.kind !== "question_group" || !block.questions
+                              ? block
+                              : {
+                                  ...block,
+                                  questions: block.questions.map((q) =>
+                                    q.id === updated.id ? updated : q
+                                  ),
+                                }
+                          ),
+                        }
+                  ),
+                }))
+              );
+            }}
           />
         ) : selectedLessonId && selectedLesson ? (
           <LessonEditor

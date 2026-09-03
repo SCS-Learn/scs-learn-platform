@@ -1,7 +1,10 @@
 import type { SlideText } from "@/lib/google/extract-slide-text";
 
-/** What analyzeDriveFileContent/extractFileAtoms read a file from - a real PDF, or (when no PDF could be produced) text pulled straight from a slide deck's own XML. */
-export type FileContentSource = { kind: "pdf"; pdfBase64: string } | { kind: "slideText"; slides: SlideText[] };
+/** What analyzeDriveFileContent/extractFileAtoms read a file from - a real PDF, slide XML text, or plain exported document text. */
+export type FileContentSource =
+  | { kind: "pdf"; pdfBase64: string }
+  | { kind: "slideText"; slides: SlideText[] }
+  | { kind: "plainText"; text: string };
 
 export function buildSourceContentBlock(
   source: FileContentSource
@@ -12,6 +15,13 @@ export function buildSourceContentBlock(
     return {
       type: "document",
       source: { type: "base64", media_type: "application/pdf", data: source.pdfBase64 },
+    };
+  }
+
+  if (source.kind === "plainText") {
+    return {
+      type: "text",
+      text: `This file couldn't be converted to a PDF, so here is the extractable text from the document:\n\n${source.text}`,
     };
   }
 

@@ -191,17 +191,19 @@ function driveErrorMessage(error: unknown): string {
 
 export async function getDriveImportPreview(
   folderUrl: string
-): Promise<{ unitCount: number; lessonCount: number; isFlat: boolean }> {
+): Promise<{ unitCount: number; lessonCount: number; isFlat: boolean; fileCount: number }> {
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const drive = await getDriveClient();
   try {
     const tree = await buildDriveImportTree(drive, folderId, resourceKey);
+    const fileCount = tree.units.reduce((sum, unit) => sum + unit.files.length, 0);
     return {
-      // In a flat folder this is just 1 (the whole thing, pre-split) - Claude
-      // only decides the real unit count once the import actually runs.
-      unitCount: tree.units.length,
-      lessonCount: tree.units.reduce((sum, unit) => sum + unit.files.length, 0),
-      isFlat: tree.isFlat,
+      // Units/lessons are decided by AI at import time — preview only reports
+      // how many files were found under the folder.
+      unitCount: 0,
+      lessonCount: fileCount,
+      fileCount,
+      isFlat: true,
     };
   } catch (error) {
     throw new Error(driveErrorMessage(error));

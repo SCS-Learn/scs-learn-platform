@@ -57,8 +57,9 @@ const ANALYSIS_SCHEMA = {
  * derived from content, not the filename, plus a topic summary used
  * downstream to group files into units by what they're actually about. This
  * is metadata only, never transcription: the organize path embeds the whole
- * original file as-is, and the atomizer path's own fine-grained atoms come
- * from extractFileAtoms instead.
+ * original file as-is after using these summaries for AI course structuring,
+ * and the atomizer path's own fine-grained atoms come from extractFileAtoms
+ * instead.
  */
 export async function analyzeDriveFileContent(
   course: { title: string; department: string },

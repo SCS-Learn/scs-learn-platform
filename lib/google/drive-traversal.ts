@@ -154,3 +154,33 @@ export async function buildDriveImportTree(
   }
   return { units, isFlat: false };
 }
+
+/**
+ * Collapses a Drive import tree into one bag of files so downstream AI
+ * classification can ignore folder boundaries. Folder names are preserved on
+ * each file's folderPath (unit name + nested path) as a weak cohesion hint
+ * only — never as a hard unit/lesson boundary.
+ */
+export function flattenDriveImportTree(
+  tree: DriveImportTree,
+  rootFolderId: string,
+  rootFolderName = "Course Materials"
+): DriveImportTree {
+  const files = tree.units.flatMap((unit) =>
+    unit.files.map((file) => ({
+      ...file,
+      folderPath: tree.isFlat ? file.folderPath : [unit.folderName, ...file.folderPath],
+    }))
+  );
+
+  return {
+    isFlat: true,
+    units: [
+      {
+        folderId: rootFolderId,
+        folderName: rootFolderName,
+        files,
+      },
+    ],
+  };
+}
