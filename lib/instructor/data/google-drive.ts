@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, getServiceAccountEmail, parseDriveFolderUrl } from "@/lib/google/drive-client";
 import { buildDriveImportTree } from "@/lib/google/drive-traversal";
+import { parseCourseFolderName } from "@/lib/google/parse-course-folder-name";
 import { classifyDriveImport } from "@/lib/google/classify-drive-content";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analyzeDriveFileContent, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
@@ -206,6 +207,41 @@ export async function getDriveImportPreview(
       isFlat: true,
     };
   } catch (error) {
+    throw new Error(driveErrorMessage(error));
+  }
+}
+
+export async function getDriveFolderCoursePreview(folderUrl: string): Promise<{
+  code: string;
+  title: string;
+  folderName: string;
+  fileCount: number;
+}> {
+  const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
+  const drive = await getDriveClient();
+  const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
+  const requestOptions = resourceKeyHeader
+    ? { headers: { "X-Goog-Drive-Resource-Keys": resourceKeyHeader } }
+    : undefined;
+
+  try {
+    const [{ data: folder }, tree] = await Promise.all([
+      drive.files.get(
+        { fileId: folderId, fields: "name", supportsAllDrives: true },
+        requestOptions
+      ),
+      buildDriveImportTree(drive, folderId, resourceKey),
+    ]);
+
+    const folderName = folder.name?.trim() ?? "";
+    const { code, title } = parseCourseFolderName(folderName);
+    const fileCount = tree.units.reduce((sum, unit) => sum + unit.files.length, 0);
+
+    return { code, title, folderName, fileCount };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("course code")) {
+      throw error;
+    }
     throw new Error(driveErrorMessage(error));
   }
 }

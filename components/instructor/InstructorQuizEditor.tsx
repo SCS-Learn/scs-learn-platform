@@ -7,7 +7,6 @@ import {
   decodeMultipleSelectResponse,
   encodeMultipleSelectResponse,
   isValidShortAnswer,
-  normalizeShortAnswer,
 } from "@/lib/quiz/grading";
 import { AUTOGRADABLE_QUESTION_TYPES, type AutogradableQuestionType } from "@/lib/quiz/types";
 import type { QuestionView } from "@/lib/instructor/mock-data";
@@ -105,9 +104,9 @@ function QuestionEditorCard({
         return;
       }
     } else {
-      nextAnswer = normalizeShortAnswer(answerKey);
+      nextAnswer = answerKey.trim();
       if (!isValidShortAnswer(nextAnswer)) {
-        setError("Short answers must be one or two lowercase words (space allowed).");
+        setError("Enter a valid answer pattern (plain text like ATGGCC, or regex like overlap|overlapping).");
         return;
       }
     }
@@ -256,11 +255,13 @@ function QuestionEditorCard({
           <input
             type="text"
             value={answerKey}
-            onChange={(e) => setAnswerKey(e.target.value.toLowerCase())}
+            onChange={(e) => setAnswerKey(e.target.value)}
             className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 outline-none focus:border-iron-gray"
-            placeholder="one or two words"
+            placeholder="ATGGCC or overlap|overlapping"
           />
-          <p className="text-xs text-gray-400">One or two words max, lowercase (space allowed).</p>
+          <p className="text-xs text-gray-400">
+            Matched case-insensitively via regex. Plain text matches exactly; use | for alternates.
+          </p>
         </div>
       )}
 

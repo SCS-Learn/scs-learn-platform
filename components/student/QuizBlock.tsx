@@ -104,12 +104,12 @@ function QuestionInput({
         type="text"
         value={response}
         disabled={submitted}
-        onChange={(e) => onChange(e.target.value.toLowerCase())}
-        placeholder={type === "short_answer" ? "one or two words" : "Type your answer..."}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Type your answer..."
         className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:bg-white disabled:text-gray-700"
       />
       {type === "short_answer" && !submitted && (
-        <p className="text-xs text-gray-400">One or two words max, lowercase.</p>
+        <p className="text-xs text-gray-400">Short answer — capitalization does not matter.</p>
       )}
     </div>
   );

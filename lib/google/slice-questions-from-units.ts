@@ -1,4 +1,5 @@
 import type { PageUnit } from "@/lib/google/classify-content-units";
+import { isValidShortAnswer, normalizeShortAnswer } from "@/lib/quiz/grading";
 import type { QuestionType } from "@/lib/instructor/data/questions";
 
 export type SlicedQuestion = {
@@ -138,14 +139,22 @@ export function sliceQuestionsFromUnits(
     promptText = stripChoicesFromPrompt(promptText, choices);
 
     const rawAnswerKey = joinPageTexts(pageTexts, answerPages);
-    const answerKey = rawAnswerKey ? normalizeAnswerKey(rawAnswerKey, choices) : null;
+    const rawKey = rawAnswerKey ? normalizeAnswerKey(rawAnswerKey, choices) : null;
+    const questionType = inferQuestionType(choices, rawKey, promptText);
+    const answerKey =
+      rawKey && questionType === "short_answer"
+        ? isValidShortAnswer(rawKey)
+          ? normalizeShortAnswer(rawKey)
+          : null
+        : rawKey;
 
     const sourceIndex = promptIndices[0] ?? null;
     const sourcePage = sourceIndex !== null ? pageTexts.find((p) => p.index === sourceIndex) : null;
     const needsReview =
       sourcePage?.hasTextLayer === false ||
       promptText.length < 8 ||
-      (choices !== null && choices.length < 2);
+      (choices !== null && choices.length < 2) ||
+      (questionType === "short_answer" && rawKey !== null && answerKey === null);
 
     position += 1;
     questions.push({
@@ -154,7 +163,7 @@ export function sliceQuestionsFromUnits(
       promptSource: sourcePage?.hasTextLayer === false ? "llm_transcribed" : "verbatim_extracted",
       choices,
       answerKey,
-      questionType: inferQuestionType(choices, answerKey, promptText),
+      questionType,
       sourceSlideOrPageIndex: sourceIndex,
       needsReview,
     });

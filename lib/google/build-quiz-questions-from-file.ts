@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { isValidShortAnswer, normalizeShortAnswer } from "@/lib/quiz/grading";
 import { AUTOGRADABLE_QUESTION_TYPES, type AutogradableQuestionType } from "@/lib/quiz/types";
 
 export type BuiltQuizQuestion = {
@@ -95,10 +96,9 @@ function normalizeBuiltQuestion(raw: BuiltQuizQuestion): BuiltQuizQuestion | nul
 
   if (questionType === "short_answer") {
     choices = null;
-    const normalized = key.trim().toLowerCase().replace(/\s+/g, " ");
-    const words = normalized.split(" ").filter(Boolean);
-    if (words.length < 1 || words.length > 2) return null;
-    key = normalized;
+    const trimmed = normalizeShortAnswer(key);
+    if (!isValidShortAnswer(trimmed)) return null;
+    key = trimmed;
   }
 
   return {
@@ -140,7 +140,7 @@ export async function buildQuizQuestionsFromContent(
 
 ONLY these questionType values are allowed:
 - "multiple_choice": exactly one correct option. "choices" = option texts without letter prefixes. "answerKey" = exact correct choice text.
-- "short_answer": exactly one or two words only, all lowercase, space allowed between words (e.g. "overlap" or "de bruijn"). "choices" = null. "answerKey" = that 1–2 word answer. Omit the question if the answer would need more than two words.
+- "short_answer": a brief factual answer (a word, short phrase, or sequence such as ATGGCC). "choices" = null. "answerKey" = a regex pattern for case-insensitive whole-answer matching: use plain text for one exact answer (e.g. "overlap", "ATGGCC", "de bruijn"); use "|" for multiple acceptable answers (e.g. "overlap|overlapping"). Special regex characters (+, ., ?, etc.) are auto-escaped unless you intentionally write regex syntax. Omit if the answer is open-ended or needs more than a short phrase.
 - "true_false": "choices" = ["True","False"]. "answerKey" = "True" or "False".
 - "multiple_select": two or more correct options. "choices" = all options. "answerKey" = JSON array string of the correct choice texts.
 

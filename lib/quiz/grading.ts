@@ -4,16 +4,59 @@ export function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Short answers: at most two lowercase words (spaces allowed between them). */
+/** Trim and collapse whitespace before regex matching. Case is handled by the pattern. */
 export function normalizeShortAnswer(value: string): string {
-  return normalize(value);
+  return value.trim().replace(/\s+/g, " ");
 }
 
-export function isValidShortAnswer(value: string): boolean {
-  const normalized = normalizeShortAnswer(value);
+export function escapeRegexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** True when the stored value likely uses intentional regex syntax. */
+function looksLikeRegexPattern(value: string): boolean {
+  if (value.includes("|")) return true;
+  if (value.startsWith("^") || value.endsWith("$")) return true;
+  if (value.includes("(?")) return true;
+  if (/\\[dwsWDS]/.test(value)) return true;
+  return false;
+}
+
+function buildShortAnswerRegex(resolvedPattern: string): RegExp | null {
+  const trimmed = resolvedPattern.trim();
+  if (!trimmed) return null;
+
+  const anchored =
+    trimmed.startsWith("^") || trimmed.endsWith("$") ? trimmed : `^(?:${trimmed})$`;
+
+  try {
+    return new RegExp(anchored, "i");
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve stored answer text into a regex source string (escaped literal or intentional pattern). */
+function resolveShortAnswerRegexSource(raw: string): string | null {
+  const trimmed = normalizeShortAnswer(raw);
+  if (!trimmed) return null;
+
+  const resolved = looksLikeRegexPattern(trimmed) ? trimmed : escapeRegexLiteral(trimmed);
+  return buildShortAnswerRegex(resolved) !== null ? resolved : null;
+}
+
+export function isValidShortAnswer(raw: string): boolean {
+  return resolveShortAnswerRegexSource(raw) !== null;
+}
+
+export function matchesShortAnswer(response: string, storedPattern: string): boolean {
+  const resolved = resolveShortAnswerRegexSource(storedPattern);
+  if (!resolved) return false;
+  const regex = buildShortAnswerRegex(resolved);
+  if (!regex) return false;
+  const normalized = normalizeShortAnswer(response);
   if (!normalized) return false;
-  const words = normalized.split(" ").filter(Boolean);
-  return words.length >= 1 && words.length <= 2;
+  return regex.test(normalized);
 }
 
 export function isGradable(question: QuizQuestionFields): boolean {
@@ -46,7 +89,7 @@ export function isCorrect(question: QuizQuestionFields, response: string): boole
   }
 
   if (question.questionType === "short_answer") {
-    return normalizeShortAnswer(response) === normalizeShortAnswer(question.answerKey);
+    return matchesShortAnswer(response, question.answerKey);
   }
 
   return normalize(response) === normalize(question.answerKey);

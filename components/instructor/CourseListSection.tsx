@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Loader2, Plus } from "lucide-react";
 import CourseCard from "@/components/instructor/CourseCard";
 import { createCourse, deleteCourse } from "@/lib/instructor/data/courses";
-import { getDriveShareEmail } from "@/lib/instructor/data/google-drive";
+import { getDriveFolderCoursePreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
 import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
 import type { InstructorCourse } from "@/lib/instructor/mock-data";
 
-type CreateStatus = "idle" | "creating" | "importing";
+type CreateStatus = "input" | "scanning" | "confirm" | "creating" | "importing";
 
 function CreateCourseModal({
   onClose,
@@ -19,11 +19,15 @@ function CreateCourseModal({
   onClose: () => void;
   onCreated: (code: string, importResult?: { unitIds: string[]; lessonIds: string[] }) => void;
 }) {
-  const [code, setCode] = useState("");
-  const [title, setTitle] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
   const [error, setError] = useState("");
-  const [status, setStatus] = useState<CreateStatus>("idle");
+  const [status, setStatus] = useState<CreateStatus>("input");
+  const [preview, setPreview] = useState<{
+    code: string;
+    title: string;
+    folderName: string;
+    fileCount: number;
+  } | null>(null);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [, startTransition] = useTransition();
@@ -33,36 +37,46 @@ function CreateCourseModal({
     void getGoogleOAuthConnectionStatus().then(setGoogleConnected);
   }, []);
 
-  const isPending = status !== "idle";
+  const isPending = status === "creating" || status === "importing";
+
+  const scanFolder = () => {
+    setError("");
+    startTransition(async () => {
+      setStatus("scanning");
+      try {
+        const result = await getDriveFolderCoursePreview(folderUrl.trim());
+        setPreview(result);
+        setStatus("confirm");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't scan that folder.");
+        setStatus("input");
+      }
+    });
+  };
 
   const submit = () => {
+    if (!preview) return;
     setError("");
     startTransition(async () => {
       try {
         setStatus("creating");
-        const result = await createCourse({ code, title });
+        const result = await createCourse({ code: preview.code, title: preview.title });
 
-        const trimmedFolderUrl = folderUrl.trim();
-        if (trimmedFolderUrl) {
-          setStatus("importing");
-          try {
-            const importResult = await runDriveImportOrganize(result.code, trimmedFolderUrl);
-            onCreated(result.code, importResult);
-          } catch (importErr) {
-            const message =
-              importErr instanceof Error ? importErr.message : "Drive import failed.";
-            window.alert(
-              `Course "${result.code}" was created, but the Drive import failed: ${message}. You can retry from the course editor.`
-            );
-            onCreated(result.code);
-          }
-          return;
+        setStatus("importing");
+        try {
+          const importResult = await runDriveImportOrganize(result.code, folderUrl.trim());
+          onCreated(result.code, importResult);
+        } catch (importErr) {
+          const message =
+            importErr instanceof Error ? importErr.message : "Drive import failed.";
+          window.alert(
+            `Course "${result.code}" was created, but the Drive import failed: ${message}. You can retry from the course editor.`
+          );
+          onCreated(result.code);
         }
-
-        onCreated(result.code);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to create course.");
-        setStatus("idle");
+        setStatus("confirm");
       }
     });
   };
@@ -88,56 +102,78 @@ function CreateCourseModal({
             <Loader2 size={20} className="animate-spin" />
             Importing from Google Drive — this can take a bit for larger folders...
           </div>
+        ) : status === "creating" ? (
+          <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10">
+            <Loader2 size={20} className="animate-spin" />
+            Creating course...
+          </div>
+        ) : status === "confirm" && preview ? (
+          <>
+            <p className="text-sm text-gray-600 mb-4">
+              Course code and title are read from the Drive folder name.
+            </p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm mb-4">
+              <dt className="font-bold text-gray-500">Folder</dt>
+              <dd>{preview.folderName}</dd>
+              <dt className="font-bold text-gray-500">Course code</dt>
+              <dd className="font-mono">{preview.code}</dd>
+              <dt className="font-bold text-gray-500">Title</dt>
+              <dd>{preview.title}</dd>
+              <dt className="font-bold text-gray-500">Files found</dt>
+              <dd>{preview.fileCount}</dd>
+            </dl>
+            {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreview(null);
+                  setStatus("input");
+                  setError("");
+                }}
+                className="text-sm font-bold text-gray-500 px-4 py-2 hover:bg-gray-50 rounded"
+              >
+                <ArrowLeft size={14} className="inline mr-1" />
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={preview.fileCount === 0}
+                className="text-sm font-bold bg-black text-white px-4 py-2 rounded hover:bg-iron-gray disabled:opacity-40"
+              >
+                Create & import
+              </button>
+            </div>
+          </>
         ) : (
           <>
+            <p className="text-sm text-gray-500 mb-4">
+              Paste a link to your course&apos;s Google Drive folder. The course code and title are
+              taken from the folder name (for example, &ldquo;02-251 Introduction to
+              Bioinformatics&rdquo;).
+            </p>
+
             <div className="flex flex-col gap-3 mb-4">
               <label className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-gray-600">Course code</span>
+                <span className="text-xs font-bold text-gray-600">Google Drive folder</span>
                 <input
                   autoFocus
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="e.g. 02-251"
-                  disabled={isPending}
-                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-gray-600">Title</span>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Introduction to Bioinformatics"
-                  disabled={isPending}
-                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-gray-600">
-                  Google Drive folder <span className="font-normal text-gray-400">(optional)</span>
-                </span>
-                <input
                   type="url"
                   value={folderUrl}
                   onChange={(e) => setFolderUrl(e.target.value)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  disabled={isPending}
+                  disabled={status === "scanning"}
                   className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  Paste a link to import units and lessons when the course is created. Folder layout
-                  is ignored — AI reads the files and builds the course structure.
-                </p>
               </label>
             </div>
 
             {googleConnected === false && (
               <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-4 flex items-center justify-between gap-3">
                 <p className="text-xs text-blue-700">
-                  Connect your Google account to import private folders and render PowerPoint files exactly as Google
-                  Slides sees them.
+                  Connect your Google account to import private folders and render PowerPoint files
+                  exactly as Google Slides sees them.
                 </p>
                 <a
                   href={`/api/google/oauth/start?return_to=${encodeURIComponent("/instructor")}`}
@@ -171,23 +207,19 @@ function CreateCourseModal({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={isPending}
+                disabled={status === "scanning"}
                 className="text-sm font-bold text-gray-500 px-4 py-2 hover:bg-gray-50 rounded disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={submit}
-                disabled={isPending || !code.trim() || !title.trim()}
+                onClick={scanFolder}
+                disabled={!folderUrl.trim() || status === "scanning"}
                 className="text-sm font-bold bg-black text-white px-4 py-2 rounded hover:bg-iron-gray disabled:opacity-40 inline-flex items-center gap-2"
               >
-                {status === "creating" && <Loader2 size={14} className="animate-spin" />}
-                {status === "creating"
-                  ? "Creating…"
-                  : folderUrl.trim()
-                    ? "Create & import"
-                    : "Create course"}
+                {status === "scanning" && <Loader2 size={14} className="animate-spin" />}
+                Scan folder
               </button>
             </div>
           </>
@@ -252,7 +284,9 @@ export default function CourseListSection({ courses: initialCourses }: { courses
         >
           <Plus size={24} className="mx-auto mb-2 text-gray-400" />
           <p className="text-sm font-bold mb-1">Create your first course</p>
-          <p className="text-xs text-gray-500">Add a course code and title, or paste a Google Drive folder link to import content.</p>
+          <p className="text-xs text-gray-500">
+            Paste a Google Drive folder link — the course code and title come from the folder name.
+          </p>
         </button>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
