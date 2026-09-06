@@ -5,8 +5,10 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #000000;
   --color-primary: #c41230;
+  --color-iron-gray: #6d6e71;
+  --color-steel-gray: #e0e0e0;
 }
 
 @theme inline {
@@ -16,6 +18,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--color-primary);
+  --color-iron-gray: var(--color-iron-gray);
+  --color-steel-gray: var(--color-steel-gray);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -94,6 +98,9 @@ body {
   padding: 0;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lesson-tab-bar {
@@ -109,20 +116,20 @@ body {
   font-weight: 600;
   padding: 0.625rem 1.25rem;
   border-radius: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-steel-gray);
   background: white;
-  color: #4b5563;
+  color: var(--color-iron-gray);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .lesson-tab:hover {
-  background: #f3f4f6;
+  background: var(--color-steel-gray);
 }
 
 .lesson-tab.is-active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: #000000;
+  border-color: #000000;
   color: white;
 }
 
@@ -237,7 +244,7 @@ body {
 }
 
 .course-notes-content a {
-  color: var(--color-primary);
+  color: #000000;
   text-decoration: underline;
   text-underline-offset: 2px;
 }

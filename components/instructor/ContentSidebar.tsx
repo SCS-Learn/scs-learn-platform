@@ -47,7 +47,7 @@ function AddUnitModal({
             if (e.key === "Escape") onClose();
           }}
           placeholder="Untitled unit"
-          className="w-full text-sm border border-gray-200 rounded px-3 py-2 mb-4 outline-none focus:border-primary/50"
+          className="w-full text-sm border border-steel-gray rounded px-3 py-2 mb-4 outline-none focus:border-iron-gray"
         />
         <div className="flex justify-end gap-2">
           <button
@@ -60,7 +60,7 @@ function AddUnitModal({
           <button
             type="button"
             onClick={submit}
-            className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90"
+            className="text-sm font-bold text-black border border-black px-4 py-2 rounded hover:bg-gray-50"
           >
             Create unit
           </button>
@@ -164,7 +164,7 @@ export default function ContentSidebar({
       <div className="px-3 py-4 border-b border-gray-100 flex flex-col text-left">
         <Link
           href="/instructor"
-          className="inline-flex items-center justify-center gap-1.5 w-full text-base font-bold bg-white text-primary border border-primary px-4 py-3 hover:bg-primary/5"
+          className="inline-flex items-center justify-center gap-1.5 w-full text-base font-bold bg-white text-black border border-black px-4 py-3 hover:bg-gray-50"
         >
           <ArrowLeft size={16} />
           Dashboard
@@ -207,7 +207,7 @@ export default function ContentSidebar({
                 onDrop={(e) => handleUnitDrop(e, unit.id)}
                 onDragEnd={handleUnitDragEnd}
                 className={`group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-50 border-t-2 cursor-pointer ${
-                  isUnitDragOver ? "border-primary" : "border-transparent"
+                  isUnitDragOver ? "border-black" : "border-transparent"
                 } ${draggingUnitId === unit.id ? "opacity-40" : ""}`}
               >
                 <span className="shrink-0 text-gray-400" aria-hidden="true">
@@ -263,15 +263,15 @@ export default function ContentSidebar({
                           setDragOverLessonId(null);
                         }}
                         className={`group flex items-center gap-1.5 pl-8 pr-3 py-2.5 cursor-pointer border-t-2 ${
-                          isDragOver ? "border-primary" : "border-transparent"
+                          isDragOver ? "border-black" : "border-transparent"
                         } ${
-                          isSelected ? "bg-primary/10" : "hover:bg-gray-50"
+                          isSelected ? "bg-steel-gray" : "hover:bg-gray-50"
                         } ${draggingLessonId === lesson.id ? "opacity-40" : ""}`}
                         onClick={() => onSelectLesson(lesson.id)}
                       >
                         <p
                           className={`text-sm flex-1 min-w-0 truncate text-left ${
-                            isSelected ? "text-primary font-bold" : "text-gray-700"
+                            isSelected ? "text-black font-bold" : "text-gray-700"
                           }`}
                         >
                           {lesson.title}
@@ -301,14 +301,14 @@ export default function ContentSidebar({
         <button
           type="button"
           onClick={() => setIsAddUnitOpen(true)}
-          className="w-full text-center text-base font-bold bg-primary text-white px-4 py-3 hover:opacity-90"
+          className="w-full text-center text-base font-bold text-black border border-black px-4 py-3 hover:bg-gray-50"
         >
           + Add unit
         </button>
         <button
           type="button"
           onClick={() => setIsDriveImportOpen(true)}
-          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-primary border border-primary px-4 py-2.5 hover:bg-primary/5"
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50"
         >
           <FolderInput size={15} />
           Import from Google Drive

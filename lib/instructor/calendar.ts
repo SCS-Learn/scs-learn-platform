@@ -61,7 +61,7 @@ export const TYPE_LABEL: Record<CalendarEventType, string> = {
 };
 
 export const TYPE_STYLE: Record<CalendarEventType, string> = {
-  "live-talk": "bg-red-100 text-red-700",
+  "live-talk": "bg-steel-gray text-iron-gray",
   "office-hours": "bg-gray-100 text-gray-600",
   "new-unit": "bg-blue-100 text-blue-700",
   "cohort-launch": "bg-purple-100 text-purple-700",

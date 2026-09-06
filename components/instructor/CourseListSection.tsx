@@ -99,7 +99,7 @@ function CreateCourseModal({
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="e.g. 02-251"
                   disabled={isPending}
-                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:opacity-60"
+                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
                 />
               </label>
 
@@ -110,7 +110,7 @@ function CreateCourseModal({
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Introduction to Bioinformatics"
                   disabled={isPending}
-                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:opacity-60"
+                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
                 />
               </label>
 
@@ -124,7 +124,7 @@ function CreateCourseModal({
                   onChange={(e) => setFolderUrl(e.target.value)}
                   placeholder="https://drive.google.com/drive/folders/..."
                   disabled={isPending}
-                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:opacity-60"
+                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Paste a link to import units and lessons when the course is created. Folder layout
@@ -141,7 +141,7 @@ function CreateCourseModal({
                 </p>
                 <a
                   href={`/api/google/oauth/start?return_to=${encodeURIComponent("/instructor")}`}
-                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-1.5 rounded hover:opacity-90"
+                  className="shrink-0 text-xs font-bold text-black border border-black px-3 py-1.5 rounded hover:bg-gray-50"
                 >
                   Connect Google Drive
                 </a>
@@ -180,7 +180,7 @@ function CreateCourseModal({
                 type="button"
                 onClick={submit}
                 disabled={isPending || !code.trim() || !title.trim()}
-                className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-40 inline-flex items-center gap-2"
+                className="text-sm font-bold bg-black text-white px-4 py-2 rounded hover:bg-iron-gray disabled:opacity-40 inline-flex items-center gap-2"
               >
                 {status === "creating" && <Loader2 size={14} className="animate-spin" />}
                 {status === "creating"
@@ -237,7 +237,7 @@ export default function CourseListSection({ courses: initialCourses }: { courses
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center justify-center gap-2 text-sm font-bold bg-primary text-white px-5 py-2.5 hover:bg-primary/90 transition shrink-0"
+          className="inline-flex items-center justify-center gap-2 text-sm font-bold bg-primary text-white px-5 py-2.5 hover:opacity-90 transition shrink-0"
         >
           <Plus size={16} />
           New course
@@ -248,7 +248,7 @@ export default function CourseListSection({ courses: initialCourses }: { courses
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="w-full border-2 border-dashed border-gray-200 rounded-md p-10 text-center hover:border-primary/40 hover:bg-white transition"
+          className="w-full border-2 border-dashed border-steel-gray rounded-md p-10 text-center hover:border-iron-gray hover:bg-white transition"
         >
           <Plus size={24} className="mx-auto mb-2 text-gray-400" />
           <p className="text-sm font-bold mb-1">Create your first course</p>

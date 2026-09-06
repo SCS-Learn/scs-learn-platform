@@ -11,8 +11,8 @@ export default function InstructorHeader({
   return (
     <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
       <div className="flex items-center gap-3">
-        <Link href="/instructor" className="text-lg font-serif font-bold">
-          SCS <span className="text-primary">Learn</span>
+        <Link href="/instructor" className="text-lg font-serif font-bold text-black">
+          SCS Learn
         </Link>
         <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 rounded px-2 py-1">
           <GraduationCap size={12} />

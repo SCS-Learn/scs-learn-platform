@@ -47,7 +47,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
       <InstructorHeader backHref={`/instructor/${course.code}`} backLabel="Back to editor" />
 
       <div className="w-[70%] mx-auto px-6 py-10">
-        <p className="text-xs font-bold text-primary tracking-wide mb-1">
+        <p className="text-xs font-bold text-iron-gray tracking-wide mb-1">
           {course.code} · ANALYTICS
         </p>
         <h1 className="text-3xl font-serif font-bold mb-1">{course.title}</h1>
@@ -92,7 +92,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
                       >
                         {unit.completionPercent !== null && (
                           <div
-                            className="h-full bg-primary"
+                            className="h-full bg-iron-gray"
                             style={{ width: `${unit.completionPercent}%` }}
                           />
                         )}
@@ -113,7 +113,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
                     >
                       <span className="text-xs text-gray-500 tabular-nums mb-1">{bucket.count}</span>
                       <div
-                        className="w-full bg-primary/80 hover:bg-primary transition-colors"
+                        className="w-full bg-iron-gray/80 hover:bg-iron-gray transition-colors"
                         style={{ height: `${(bucket.count / maxQuizCount) * 100}%` }}
                       />
                       <span className="text-[11px] text-gray-400 mt-2">{bucket.range}</span>
@@ -158,7 +158,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
                           <div className="flex items-center gap-2">
                             <div className="w-20 h-1.5 bg-gray-100">
                               <div
-                                className="h-full bg-primary"
+                                className="h-full bg-iron-gray"
                                 style={{ width: `${student.progressPercent}%` }}
                               />
                             </div>

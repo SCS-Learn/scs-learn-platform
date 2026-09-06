@@ -120,7 +120,7 @@ export default function CalendarView({
   return (
     <div className={isPending ? "opacity-60 transition-opacity" : "transition-opacity"}>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-bold text-primary tracking-wide">CALENDAR</p>
+        <p className="text-xs font-bold text-iron-gray tracking-wide">CALENDAR</p>
         <button
           type="button"
           aria-label="Close calendar"
@@ -136,7 +136,7 @@ export default function CalendarView({
           type="button"
           onClick={() => goToMonth(-1)}
           aria-label="Previous month"
-          className="text-primary border border-primary/30 rounded p-1.5 hover:bg-primary/10"
+          className="text-black border border-black rounded p-1.5 hover:bg-gray-50"
         >
           <ChevronLeft size={16} />
         </button>
@@ -147,7 +147,7 @@ export default function CalendarView({
           type="button"
           onClick={() => goToMonth(1)}
           aria-label="Next month"
-          className="text-primary border border-primary/30 rounded p-1.5 hover:bg-primary/10"
+          className="text-black border border-black rounded p-1.5 hover:bg-gray-50"
         >
           <ChevronRight size={16} />
         </button>
@@ -156,7 +156,7 @@ export default function CalendarView({
         <button
           type="button"
           onClick={goToday}
-          className="text-xs font-bold text-primary hover:underline"
+          className="text-xs font-bold text-iron-gray hover:underline"
         >
           Jump to today
         </button>
@@ -205,7 +205,7 @@ export default function CalendarView({
                   className={`flex flex-col items-center gap-1 rounded py-2 text-xs transition ${
                     !cell.inCurrentMonth ? "text-gray-300" : "text-gray-700"
                   } ${isToday ? "bg-black text-white" : "hover:bg-gray-50"} ${
-                    isSelected && !isToday ? "ring-2 ring-primary" : ""
+                    isSelected && !isToday ? "ring-2 ring-iron-gray" : ""
                   }`}
                 >
                   <span className="font-bold">{cell.day}</span>
@@ -214,7 +214,7 @@ export default function CalendarView({
                       <span
                         key={event.id}
                         className={`w-1 h-1 rounded-full ${
-                          isToday ? "bg-white" : "bg-primary"
+                          isToday ? "bg-white" : "bg-iron-gray"
                         }`}
                       />
                     ))}
@@ -240,7 +240,7 @@ export default function CalendarView({
               <button
                 type="button"
                 onClick={openAddForm}
-                className="shrink-0 flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                className="shrink-0 flex items-center gap-1 text-xs font-bold text-iron-gray hover:underline"
               >
                 <Plus size={13} />
                 Add event
@@ -310,7 +310,7 @@ export default function CalendarView({
                 value={form.title}
                 onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                 placeholder="Event title"
-                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-primary/50"
+                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-iron-gray"
               />
 
               <input
@@ -318,7 +318,7 @@ export default function CalendarView({
                 required
                 value={form.date}
                 onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 bg-white focus:outline-none focus:border-primary/50"
+                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 bg-white focus:outline-none focus:border-iron-gray"
               />
 
               <select
@@ -339,7 +339,7 @@ export default function CalendarView({
                 value={form.time}
                 onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
                 placeholder="Time (optional), e.g. 5:00–6:00pm ET"
-                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-primary/50"
+                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-iron-gray"
               />
 
               <textarea
@@ -349,7 +349,7 @@ export default function CalendarView({
                 }
                 placeholder="Description (optional)"
                 rows={2}
-                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 resize-none focus:outline-none focus:border-primary/50"
+                className="w-full text-sm border border-gray-200 rounded px-2.5 py-1.5 resize-none focus:outline-none focus:border-iron-gray"
               />
 
               <select
@@ -367,7 +367,7 @@ export default function CalendarView({
 
               <button
                 type="submit"
-                className="mt-1 w-full text-xs font-bold bg-primary text-white rounded py-1.5"
+                className="mt-1 w-full text-xs font-bold text-black border border-black rounded py-1.5 hover:bg-gray-50"
               >
                 Save event
               </button>

@@ -1,15 +1,12 @@
 import InstructorHeader from "@/components/instructor/InstructorHeader";
 import CourseListSection from "@/components/instructor/CourseListSection";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
-import CalendarPanel from "@/components/instructor/CalendarPanel";
-import { getVisibleCalendarEvents } from "@/lib/instructor/data/calendar-events";
 import { getAnnouncements } from "@/lib/instructor/data/announcements";
 import { getInstructorCourseList } from "@/lib/instructor/data/courses";
 import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 
 export default async function InstructorDashboardPage() {
-  const [calendarEvents, announcements, courses, instructor] = await Promise.all([
-    getVisibleCalendarEvents(),
+  const [announcements, courses, instructor] = await Promise.all([
     getAnnouncements(),
     getInstructorCourseList(),
     getCurrentInstructor(),
@@ -20,17 +17,12 @@ export default async function InstructorDashboardPage() {
       <InstructorHeader />
 
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-        <aside className="lg:w-1/4 flex flex-col min-h-0 shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 bg-white">
-          <div className="flex flex-col p-4 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-            <AnnouncementsPanel courses={courses} announcements={announcements} />
-          </div>
-          <div className="flex flex-col p-4 border-t border-gray-200 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-            <CalendarPanel events={calendarEvents} courses={courses} />
-          </div>
+        <aside className="lg:w-1/4 flex flex-col min-h-0 shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 bg-white p-6 lg:overflow-hidden">
+          <AnnouncementsPanel courses={courses} announcements={announcements} />
         </aside>
 
         <div className="lg:w-3/4 flex-1 px-6 py-8 min-w-0 min-h-0 overflow-y-auto">
-          <p className="text-xs font-bold text-primary tracking-wide mb-1">
+          <p className="text-xs font-bold text-iron-gray tracking-wide mb-1">
             INSTRUCTOR DASHBOARD
           </p>
           <h1 className="text-3xl font-serif font-bold mb-1">Good morning, {instructor.name.split(" ")[0]}.</h1>

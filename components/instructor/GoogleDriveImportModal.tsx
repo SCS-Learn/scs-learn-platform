@@ -88,7 +88,7 @@ export default function GoogleDriveImportModal({
                 </p>
                 <a
                   href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
-                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-1.5 rounded hover:opacity-90"
+                  className="shrink-0 text-xs font-bold text-black border border-black px-3 py-1.5 rounded hover:bg-gray-50"
                 >
                   Connect Google Drive
                 </a>
@@ -140,7 +140,7 @@ export default function GoogleDriveImportModal({
                 type="button"
                 onClick={scanFolder}
                 disabled={!folderUrl.trim() || status === "scanning"}
-                className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-40 inline-flex items-center gap-2"
+                className="text-sm font-bold text-black border border-black px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-40 inline-flex items-center gap-2"
               >
                 {status === "scanning" && <Loader2 size={14} className="animate-spin" />}
                 Scan folder
@@ -170,7 +170,7 @@ export default function GoogleDriveImportModal({
                 type="button"
                 onClick={confirmImport}
                 disabled={(preview.fileCount ?? preview.lessonCount) === 0}
-                className="text-sm font-bold bg-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-40"
+                className="text-sm font-bold text-black border border-black px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-40"
               >
                 Import
               </button>

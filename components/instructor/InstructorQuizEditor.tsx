@@ -162,7 +162,7 @@ function QuestionEditorCard({
         value={promptText}
         onChange={(e) => setPromptText(e.target.value)}
         rows={3}
-        className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50"
+        className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray"
         placeholder="Question text"
       />
 
@@ -211,7 +211,7 @@ function QuestionEditorCard({
                     setAnswerKey(encodeMultipleSelectResponse(selected.filter(Boolean)));
                   }
                 }}
-                className="flex-1 text-sm border border-gray-200 rounded px-3 py-1.5 outline-none focus:border-primary/50 disabled:bg-gray-50"
+                className="flex-1 text-sm border border-gray-200 rounded px-3 py-1.5 outline-none focus:border-iron-gray disabled:bg-gray-50"
                 placeholder={`Option ${choiceIndex + 1}`}
               />
               {questionType !== "true_false" && (
@@ -241,7 +241,7 @@ function QuestionEditorCard({
             <button
               type="button"
               onClick={() => setChoices((prev) => [...prev, ""])}
-              className="self-start text-xs font-semibold text-primary inline-flex items-center gap-1 hover:underline"
+              className="self-start text-xs font-semibold text-iron-gray inline-flex items-center gap-1 hover:underline"
             >
               <Plus size={12} />
               Add option
@@ -257,7 +257,7 @@ function QuestionEditorCard({
             type="text"
             value={answerKey}
             onChange={(e) => setAnswerKey(e.target.value.toLowerCase())}
-            className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 outline-none focus:border-primary/50"
+            className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 outline-none focus:border-iron-gray"
             placeholder="one or two words"
           />
           <p className="text-xs text-gray-400">One or two words max, lowercase (space allowed).</p>
@@ -269,7 +269,7 @@ function QuestionEditorCard({
           type="button"
           onClick={save}
           disabled={isPending}
-          className="text-sm font-bold bg-primary text-white rounded px-3 py-1.5 hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2"
+          className="text-sm font-bold text-black border border-black rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-60 inline-flex items-center gap-2"
         >
           {isPending && <Loader2 size={14} className="animate-spin" />}
           Save question

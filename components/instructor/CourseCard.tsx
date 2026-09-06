@@ -14,7 +14,7 @@ export default function CourseCard({
   const lessonCount = course.units.reduce((sum, u) => sum + u.lessons.length, 0);
 
   return (
-    <div className="group relative border border-gray-200 bg-white p-6 hover:border-primary/40 hover:shadow-sm transition flex flex-col cursor-pointer">
+    <div className="group relative border border-gray-200 bg-white p-6 hover:border-iron-gray hover:shadow-sm transition flex flex-col cursor-pointer">
       <Link
         href={`/instructor/${course.code}`}
         className="absolute inset-0 z-0"
@@ -37,7 +37,7 @@ export default function CourseCard({
       )}
 
       <div className="relative z-10 pointer-events-none flex flex-col flex-1">
-        <p className="text-sm font-bold text-primary tracking-wide mb-2">
+        <p className="text-sm font-bold text-iron-gray tracking-wide mb-2">
           {course.code}
         </p>
 
@@ -57,14 +57,14 @@ export default function CourseCard({
         <div className="mt-auto flex gap-2 pointer-events-auto">
         <Link
           href={`/instructor/${course.code}`}
-          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold bg-primary text-white py-2.5 hover:bg-primary/90 transition"
+          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black py-2.5 hover:bg-gray-50 transition"
         >
           <Pencil size={14} />
           Editor
         </Link>
         <Link
           href={`/instructor/${course.code}/analytics`}
-          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold border border-gray-200 text-gray-700 py-2.5 hover:border-primary/40 hover:text-primary transition"
+          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold border border-black text-black py-2.5 hover:bg-gray-50 transition"
         >
           <BarChart3 size={14} />
           Analytics

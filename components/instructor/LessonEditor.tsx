@@ -22,7 +22,7 @@ export default function LessonEditor({
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="Lesson title"
-          className="w-full text-3xl font-serif font-bold outline-none placeholder:text-gray-300"
+          className="w-full text-3xl font-serif font-bold outline-none placeholder:text-gray-300 truncate"
         />
       </div>
 

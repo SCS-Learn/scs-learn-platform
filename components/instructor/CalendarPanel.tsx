@@ -38,13 +38,13 @@ export default function CalendarPanel({
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-sm font-bold flex items-center gap-1.5">
-          <CalendarDays size={14} className="text-primary" />
+          <CalendarDays size={14} className="text-iron-gray" />
           Upcoming
         </h3>
         <button
           type="button"
           onClick={() => setShowCalendar(true)}
-          className="text-xs font-bold text-primary hover:underline"
+          className="text-xs font-bold text-iron-gray hover:underline"
         >
           View full calendar
         </button>
@@ -62,7 +62,7 @@ export default function CalendarPanel({
             <span className="text-xs font-bold">{cell.day}</span>
             <span
               className={`w-1 h-1 rounded-full ${
-                cell.hasEvent ? "bg-primary" : "bg-transparent"
+                cell.hasEvent ? "bg-iron-gray" : "bg-transparent"
               }`}
             />
           </div>
