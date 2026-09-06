@@ -30,6 +30,8 @@ export type LessonItem = {
   code: string;
   title: string;
   type: LessonType;
+  /** Set only for type "quiz" - which of the two graded-work labels this is. Null for content lessons. */
+  category: "assignment" | "homework" | null;
   contentHtml: string;
   contentSource: LessonContentSource;
   blocks: LessonBlockView[];

@@ -4,6 +4,7 @@ import { buildSourceContentBlock, type FileContentSource } from "@/lib/google/fi
 export type DriveFileCategory =
   | "lecture"
   | "slides"
+  | "assignment"
   | "homework"
   | "practice_problems"
   | "reading"
@@ -15,6 +16,7 @@ export type DriveFileCategory =
 const CATEGORY_TO_TYPE: Record<DriveFileCategory, "lesson" | "quiz"> = {
   lecture: "lesson",
   slides: "lesson",
+  assignment: "quiz",
   homework: "quiz",
   practice_problems: "quiz",
   reading: "lesson",
@@ -22,6 +24,18 @@ const CATEGORY_TO_TYPE: Record<DriveFileCategory, "lesson" | "quiz"> = {
   administrative: "lesson",
   other: "lesson",
 };
+
+/**
+ * Collapses the graded-work categories down to the two labels the product
+ * surfaces on a quiz lesson - "practice_problems" (ungraded) reads to an
+ * instructor as recurring practice, so it's grouped with "homework" rather
+ * than getting its own lesson-level label. Null for every non-graded category.
+ */
+export function quizLessonCategory(category: DriveFileCategory): "assignment" | "homework" | null {
+  if (category === "assignment") return "assignment";
+  if (category === "homework" || category === "practice_problems") return "homework";
+  return null;
+}
 
 export type DriveFileAnalysis = {
   title: string;
@@ -41,7 +55,7 @@ const ANALYSIS_SCHEMA = {
     title: { type: "string" },
     category: {
       type: "string",
-      enum: ["lecture", "slides", "homework", "practice_problems", "reading", "reference", "administrative", "other"],
+      enum: ["lecture", "slides", "assignment", "homework", "practice_problems", "reading", "reference", "administrative", "other"],
     },
     topicSummary: { type: "string" },
     isCourseContent: { type: "boolean" },
@@ -81,7 +95,7 @@ export async function analyzeDriveFileContent(
             text: `This is one file from the Drive folder for the course "${course.title}" (${course.department}). Read it and report on what it actually is:
 
 - "title": a short, specific, descriptive title for this as a course lesson or quiz - based on what it actually covers, not the filename.
-- "category": categorize what this file actually IS, by reading its real content - not the filename. Pick exactly one: "lecture" (a lecture's own slide deck or narrated content), "slides" (a slide deck that supplements a lecture rather than being the lecture itself), "homework" (a graded assignment/problem set), "practice_problems" (ungraded practice questions/exercises), "reading" (a reading/text document), "reference" (reference material - cheat sheets, primers, background notes), "administrative" (syllabus, schedule, roster, grading policy - not instructional content), or "other" (anything else).
+- "category": categorize what this file actually IS, by reading its real content - not the filename. Pick exactly one: "lecture" (a lecture's own slide deck or narrated content), "slides" (a slide deck that supplements a lecture rather than being the lecture itself), "assignment" (a larger, standalone graded deliverable - a project, essay, lab report, or a multi-topic/multi-week assignment - not a routine problem set tied to one specific lecture), "homework" (a routine graded problem set tied directly to a specific lecture/topic, e.g. a weekly homework or problem set due shortly after that lecture), "practice_problems" (ungraded practice questions/exercises), "reading" (a reading/text document), "reference" (reference material - cheat sheets, primers, background notes), "administrative" (syllabus, schedule, roster, grading policy - not instructional content), or "other" (anything else). When a graded deliverable could plausibly be either, prefer "homework" unless it is clearly a bigger, standalone project-style deliverable - don't force "assignment" just because a file is graded.
 - "topicSummary": one concrete sentence naming the specific topic(s) it covers - this gets used afterward to group it with other files on the same topic, so be specific (e.g. "Needleman-Wunsch global alignment and traceback", not "alignment basics").
 - "isCourseContent": critically judge whether this is genuine instructional or assessment content for this course - a real lecture, reading, slide deck, quiz, or practice-problem set. Set this to false (and explain why in "notCourseContentReason") for anything that isn't: a garbled or corrupted export that reads as gibberish, a file that's mostly random/placeholder/lorem-ipsum-style data rather than real subject matter, an administrative document unrelated to course material (e.g. a syllabus, a grading rubric, a roster), or anything else you would not want a student to be shown as if it were real lesson content. Default to true when the file is genuinely real content, even if it's rough, incomplete, or oddly formatted - only mark it false when you're confident it isn't real course material at all.
 - "notCourseContentReason": a short, concrete reason when "isCourseContent" is false (e.g. "This file is a blank grading rubric template, not lecture or assessment content"). Empty string when "isCourseContent" is true.`,

@@ -49,6 +49,7 @@ type LessonRow = {
   code: string;
   title: string;
   type: string;
+  category: string | null;
   position: number;
   content_html: string;
   content_source: string;
@@ -137,6 +138,7 @@ function toLessonItem(row: LessonRow): LessonItem {
     code: row.code,
     title: row.title,
     type: row.type as LessonType,
+    category: row.category as "assignment" | "homework" | null,
     contentHtml: row.content_html,
     contentSource: row.content_source as LessonContentSource,
     blocks,
@@ -167,7 +169,7 @@ function toInstructorCourse(row: CourseRow): InstructorCourse {
 }
 
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
+  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
   const supabase = await createClient();

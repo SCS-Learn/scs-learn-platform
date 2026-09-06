@@ -10,7 +10,12 @@ function cleanFilenameTitle(name: string): string {
 function categoryFromFilename(name: string): DriveFileCategory {
   const lower = name.toLowerCase();
   if (QUIZ_PATTERN.test(lower)) {
-    return /\b(practice|problem)\b/i.test(lower) ? "practice_problems" : "homework";
+    if (/\b(practice|problem)\b/i.test(lower)) return "practice_problems";
+    // Filenames rarely spell out "assignment" for a routine problem set, so
+    // this only fires on an explicit signal - everything else in
+    // QUIZ_PATTERN (hw, homework, pset, quiz, questions...) stays "homework".
+    if (/\b(assignment|project)\b/i.test(lower)) return "assignment";
+    return "homework";
   }
   if (/\b(slide|deck|lecture|lec)\b/i.test(lower)) return "slides";
   if (/\b(reading|paper|article)\b/i.test(lower)) return "reading";
@@ -24,7 +29,10 @@ export function analysisFromFilename(
   notCourseContentReason = ""
 ): DriveFileAnalysis {
   const category = categoryFromFilename(fileName);
-  const type = category === "homework" || category === "practice_problems" ? "quiz" : "lesson";
+  const type =
+    category === "assignment" || category === "homework" || category === "practice_problems"
+      ? "quiz"
+      : "lesson";
   return {
     title: cleanFilenameTitle(fileName),
     type,
