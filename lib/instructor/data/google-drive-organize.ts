@@ -17,7 +17,7 @@ import { isQuizFilename } from "@/lib/google/file-role";
 import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/export-drive-notes-html";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
-import { analyzeDriveFileContent, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
+import { analyzeDriveFileContent, quizLessonCategory, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
 import type { FileContentSource } from "@/lib/google/file-content-source";
 import { detectVideoLink } from "@/lib/google/detect-video-link";
 import { detectVideoUrlInDocument } from "@/lib/google/extract-document-text";
@@ -39,7 +39,7 @@ import {
 } from "@/lib/google/render-pptx-slide-images";
 import { mapWithConcurrencyLimit } from "@/lib/google/with-concurrency-limit";
 import { extractQuestionsFromDriveFile } from "@/lib/google/extract-questions-from-file";
-import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
+import { addUnitFromImport, addLessonFromImport, deleteLesson, deleteUnit } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { addLessonBlock } from "@/lib/instructor/data/lesson-blocks";
 import { addQuestionGroup, addQuestion } from "@/lib/instructor/data/questions";
@@ -257,10 +257,11 @@ async function tryRenderSlidesAsThumbnails(
 ): Promise<string[] | null> {
   const clients = await getSlidesClients();
   if (!clients) return null;
-  return renderGoogleSlidesThumbnails(clients, presentationId, file.id, title);
+  const urls = await renderGoogleSlidesThumbnails(clients, presentationId, file.id, title);
+  return urls && urls.length > 0 ? urls : null;
 }
 
-/** Uploads a PDF durably, creates the lesson block, then links the attachment to it. */
+/** Uploads a PDF durably, creates the lesson block, then links the attachment to it. Returns false (no block created) when there was no PDF to embed. */
 async function addPdfEmbedBlock(
   lessonId: string,
   file: DriveEntry,
@@ -268,12 +269,12 @@ async function addPdfEmbedBlock(
   pdfUrl: string | null,
   pdfBytes: Buffer | null,
   position: number
-): Promise<void> {
+): Promise<boolean> {
   const uploaded = pdfBytes
     ? await uploadDriveFile(file.id, pdfBytes, "application/pdf", `${cleanFilenameTitle(file.name)}.pdf`)
     : null;
   const url = uploaded?.url ?? pdfUrl;
-  if (!url) return;
+  if (!url) return false;
 
   const block = await addLessonBlock(lessonId, {
     kind: "slide_file",
@@ -292,10 +293,14 @@ async function addPdfEmbedBlock(
     sizeBytes: pdfBytes?.length ?? 0,
     lessonBlockId: block.id,
   });
+  return true;
 }
 
 /**
- * Adds one slide/video file as a lesson block at the given position.
+ * Adds one slide/video file as a lesson block at the given position. Returns
+ * whether a block actually got created - a failed render/download/extraction
+ * anywhere along the way means no block, and the caller needs to know that so
+ * it never leaves a lesson looking populated when it's actually empty.
  */
 async function addSlideFileBlock(
   lessonId: string,
@@ -304,8 +309,9 @@ async function addSlideFileBlock(
   analysis: DriveFileAnalysis,
   resourceKeyHeader: string | undefined,
   position: number
-): Promise<void> {
+): Promise<boolean> {
   if (resolved.routing === "video") {
+    if (!resolved.videoUrl) return false;
     await addLessonBlock(lessonId, {
       kind: "video",
       position,
@@ -313,7 +319,7 @@ async function addSlideFileBlock(
       sourceDriveFileId: file.id,
       videoUrl: resolved.videoUrl,
     });
-    return;
+    return true;
   }
 
   const title = analysis.title || cleanFilenameTitle(file.name);
@@ -322,19 +328,19 @@ async function addSlideFileBlock(
     const thumbnailUrls = await tryRenderSlidesAsThumbnails(file.id, file, title);
     if (thumbnailUrls) {
       await addRenderedSlidesBlock(lessonId, file, analysis, thumbnailUrls, position);
-      return;
+      return true;
     }
 
     const drive = await getDriveClient();
     const pdfBase64 = await downloadDriveFileAsPdfBase64(drive, file, resourceKeyHeader);
     if (pdfBase64) {
-      await addPdfEmbedBlock(lessonId, file, analysis, null, Buffer.from(pdfBase64, "base64"), position);
+      return addPdfEmbedBlock(lessonId, file, analysis, null, Buffer.from(pdfBase64, "base64"), position);
     }
-    return;
+    return false;
   }
 
   if (resolved.routing === "slide_pdf") {
-    await addPdfEmbedBlock(
+    return addPdfEmbedBlock(
       lessonId,
       file,
       analysis,
@@ -342,7 +348,6 @@ async function addSlideFileBlock(
       Buffer.from(resolved.pdfBase64, "base64"),
       position
     );
-    return;
   }
 
   if (resolved.routing === "slide_cards") {
@@ -365,7 +370,7 @@ async function addSlideFileBlock(
           );
           if (thumbnailUrls) {
             await addRenderedSlidesBlock(lessonId, file, analysis, thumbnailUrls, position);
-            return;
+            return true;
           }
 
           const renderedPdfUrl = await exportPresentationAsPdf(
@@ -375,8 +380,7 @@ async function addSlideFileBlock(
             title
           );
           if (renderedPdfUrl) {
-            await addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
-            return;
+            return addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
           }
         } finally {
           await deleteTempPresentation(oauthClients.drive, tempPresentationId);
@@ -390,8 +394,7 @@ async function addSlideFileBlock(
         title
       );
       if (renderedPdfUrl) {
-        await addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
-        return;
+        return addPdfEmbedBlock(lessonId, file, analysis, renderedPdfUrl, null, position);
       }
     }
 
@@ -403,6 +406,7 @@ async function addSlideFileBlock(
       if (uploaded) imageUrlBySourcePath.set(image.sourcePath, uploaded.url);
     }
     const bodyHtml = renderPptxSlideCards(resolved.slides, imageUrlBySourcePath);
+    if (!bodyHtml.trim()) return false;
     await addLessonBlock(lessonId, {
       kind: "slide_file",
       position,
@@ -411,13 +415,13 @@ async function addSlideFileBlock(
       renderMode: "slide_card_images",
       bodyHtml,
     });
-    return;
+    return true;
   }
 
   if (resolved.routing === "document_text") {
     const paragraphs = resolved.pages.flatMap((page) => page.texts);
     const bodyHtml = paragraphsToNotesHtml(paragraphs);
-    if (!bodyHtml) return;
+    if (!bodyHtml) return false;
     await addLessonBlock(lessonId, {
       kind: "course_notes",
       position,
@@ -425,7 +429,10 @@ async function addSlideFileBlock(
       sourceDriveFileId: file.id,
       bodyHtml,
     });
+    return true;
   }
+
+  return false;
 }
 
 async function buildNotesHtmlForFiles(
@@ -480,7 +487,7 @@ async function populateQuizLesson(
   driveFilesById: Map<string, DriveEntry>,
   duplicatesBySurvivorId: Map<string, string[]>,
   resourceKeyHeader: string | undefined
-): Promise<void> {
+): Promise<boolean> {
   const { resolved } = entry;
 
   const extracted = await extractQuestionsFromDriveFile(
@@ -496,6 +503,16 @@ async function populateQuizLesson(
     );
     return [];
   });
+
+  if (extracted.length === 0) {
+    // Nothing auto-gradable came out of this file - a question_group/lesson
+    // block with zero questions is a dead end for a student, so don't create
+    // them at all. The caller drops the whole (now genuinely empty) lesson.
+    console.warn(
+      `populateQuizLesson: no auto-gradable questions found in "${quiz.file.name}"`
+    );
+    return false;
+  }
 
   const group = await addQuestionGroup(lessonId, {
     sourceDriveFileId: quiz.file.id,
@@ -532,13 +549,15 @@ async function populateQuizLesson(
     driveFilesById
   );
 
-  if (extracted.length === 0) {
-    console.warn(
-      `populateQuizLesson: no auto-gradable questions found in "${quiz.file.name}"`
-    );
-  }
+  return true;
 }
 
+/**
+ * Populates one topic lesson's blocks. Returns how many blocks actually got
+ * created - a topic whose files all failed to render (broken download, no
+ * OAuth fallback, empty notes export, etc.) returns 0 so the caller can drop
+ * the lesson entirely instead of leaving a title with nothing under it.
+ */
 async function populateTopicLesson(
   lessonId: string,
   topic: {
@@ -551,8 +570,9 @@ async function populateTopicLesson(
   duplicatesBySurvivorId: Map<string, string[]>,
   resourceKeyHeader: string | undefined,
   drive: Awaited<ReturnType<typeof getDriveClient>>
-): Promise<void> {
+): Promise<number> {
   let blockPosition = 0;
+  let blocksAdded = 0;
   const allFileIds = new Set<string>();
 
   // 1. Video at top (first video only)
@@ -560,15 +580,18 @@ async function populateTopicLesson(
   if (videoFile) {
     const entry = resolvedByFileId.get(videoFile.id);
     if (entry) {
-      blockPosition += 1;
-      await addSlideFileBlock(
+      const added = await addSlideFileBlock(
         lessonId,
         videoFile,
         entry.resolved,
         entry.analysis,
         resourceKeyHeader,
-        blockPosition
+        blockPosition + 1
       );
+      if (added) {
+        blockPosition += 1;
+        blocksAdded += 1;
+      }
       allFileIds.add(videoFile.id);
     }
   }
@@ -577,15 +600,18 @@ async function populateTopicLesson(
   for (const file of topic.slideFiles) {
     const entry = resolvedByFileId.get(file.id);
     if (!entry || entry.resolved.routing === "unsupported") continue;
-    blockPosition += 1;
-    await addSlideFileBlock(
+    const added = await addSlideFileBlock(
       lessonId,
       file,
       entry.resolved,
       entry.analysis,
       resourceKeyHeader,
-      blockPosition
+      blockPosition + 1
     );
+    if (added) {
+      blockPosition += 1;
+      blocksAdded += 1;
+    }
     allFileIds.add(file.id);
   }
 
@@ -599,6 +625,7 @@ async function populateTopicLesson(
     );
     if (notesHtml) {
       blockPosition += 1;
+      blocksAdded += 1;
       await addLessonBlock(lessonId, {
         kind: "course_notes",
         position: blockPosition,
@@ -615,6 +642,8 @@ async function populateTopicLesson(
     const dupes = duplicatesBySurvivorId.get(fileId) ?? [];
     await addDriveLinkAttachments(lessonId, [fileId, ...dupes], driveFilesById);
   }
+
+  return blocksAdded;
 }
 
 export async function runDriveImportOrganize(
@@ -752,16 +781,15 @@ export async function runDriveImportOrganize(
 
   for (const unit of plannedUnits) {
     const newUnit = await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
-    unitIds.push(newUnit.id);
-
+    let unitLessonCount = 0;
     let lessonPosition = 0;
 
     for (const topic of unit.topics) {
-      lessonPosition += 1;
       const primaryFile =
         topic.videoFiles[0] ?? topic.slideFiles[0] ?? topic.notesFiles[0];
       if (!primaryFile) continue;
 
+      lessonPosition += 1;
       const newLesson = await addLessonFromImport(newUnit.id, {
         title: topic.title,
         type: "lesson",
@@ -769,9 +797,8 @@ export async function runDriveImportOrganize(
         sourceDriveFileId: primaryFile.id,
         contentSource: "blocks",
       });
-      lessonIds.push(newLesson.id);
 
-      await populateTopicLesson(
+      const blocksAdded = await populateTopicLesson(
         newLesson.id,
         topic,
         resolvedByFileId,
@@ -780,6 +807,20 @@ export async function runDriveImportOrganize(
         resourceKeyHeader,
         drive
       );
+
+      if (blocksAdded === 0) {
+        // Every file this topic pointed at failed to render into anything -
+        // don't leave an empty page in the sidebar.
+        console.warn(
+          `runDriveImportOrganize: dropping empty topic lesson "${topic.title}" - no content block could be built from its file(s)`
+        );
+        await deleteLesson(courseCode, newLesson.id);
+        lessonPosition -= 1;
+        continue;
+      }
+
+      lessonIds.push(newLesson.id);
+      unitLessonCount += 1;
     }
 
     for (const quiz of unit.quizzes) {
@@ -793,10 +834,10 @@ export async function runDriveImportOrganize(
         position: lessonPosition,
         sourceDriveFileId: quiz.file.id,
         contentSource: "blocks",
+        category: quizLessonCategory(entry.analysis.category),
       });
-      lessonIds.push(newLesson.id);
 
-      await populateQuizLesson(
+      const hasQuestions = await populateQuizLesson(
         newLesson.id,
         quiz,
         entry,
@@ -806,7 +847,29 @@ export async function runDriveImportOrganize(
         duplicatesBySurvivorId,
         resourceKeyHeader
       );
+
+      if (!hasQuestions) {
+        console.warn(
+          `runDriveImportOrganize: dropping empty quiz lesson "${quiz.title}" - no auto-gradable questions could be extracted`
+        );
+        await deleteLesson(courseCode, newLesson.id);
+        lessonPosition -= 1;
+        continue;
+      }
+
+      lessonIds.push(newLesson.id);
+      unitLessonCount += 1;
     }
+
+    if (unitLessonCount === 0) {
+      // Every topic/quiz in this unit turned out empty - don't leave a unit
+      // with a title and nothing underneath it.
+      console.warn(`runDriveImportOrganize: dropping empty unit "${unit.title}" - no lesson survived content resolution`);
+      await deleteUnit(courseCode, newUnit.id);
+      continue;
+    }
+
+    unitIds.push(newUnit.id);
   }
 
   revalidatePath(`/instructor/${courseCode}`);

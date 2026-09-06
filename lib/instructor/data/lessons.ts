@@ -143,6 +143,7 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     code: newLesson.code,
     title: newLesson.title,
     type: newLesson.type as LessonType,
+    category: null,
     contentHtml: newLesson.content_html,
     contentSource: "html",
     blocks: [],
@@ -162,6 +163,8 @@ export async function addLessonFromImport(
     contentHtml?: string;
     /** 'blocks' for organize-mode lessons (composed of lesson_blocks, no content_html); defaults to 'html' for the atomizer path. */
     contentSource?: "html" | "blocks";
+    /** Set only for type "quiz" - which of the two graded-work labels this is (see quizLessonCategory). */
+    category?: "assignment" | "homework" | null;
   }
 ): Promise<LessonItem> {
   const supabase = await createClient();
@@ -186,9 +189,10 @@ export async function addLessonFromImport(
       position: patch.position,
       source_drive_file_id: patch.sourceDriveFileId,
       content_source: patch.contentSource ?? "html",
+      category: patch.category ?? null,
       ...(patch.contentHtml ? { content_html: patch.contentHtml } : {}),
     })
-    .select("id, code, title, type, content_html, is_published, updated_at")
+    .select("id, code, title, type, content_html, is_published, updated_at, category")
     .single();
   if (error || !newLesson) throw new Error(error?.message ?? "Failed to create lesson");
 
@@ -197,6 +201,7 @@ export async function addLessonFromImport(
     code: newLesson.code,
     title: newLesson.title,
     type: newLesson.type as LessonType,
+    category: (newLesson.category as "assignment" | "homework" | null) ?? null,
     contentHtml: newLesson.content_html,
     contentSource: patch.contentSource ?? "html",
     blocks: [],

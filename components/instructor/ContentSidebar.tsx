@@ -276,6 +276,11 @@ export default function ContentSidebar({
                         >
                           {lesson.title}
                         </p>
+                        {lesson.category && (
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            {lesson.category === "assignment" ? "Assignment" : "Homework"}
+                          </span>
+                        )}
                         <button
                           type="button"
                           aria-label="Delete lesson"

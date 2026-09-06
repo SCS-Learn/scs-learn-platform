@@ -290,6 +290,12 @@ create table public.questions (
 alter table public.lessons
   add column content_source text not null default 'html' check (content_source in ('html', 'blocks'));
 
+-- Set only for quiz lessons - which of the two graded-work labels an
+-- instructor sees on the lesson (see quizLessonCategory in analyze-drive-file.ts).
+-- Null for content lessons and for a quiz lesson imported before this existed.
+alter table public.lessons
+  add column category text check (category in ('assignment', 'homework'));
+
 alter table public.attachments
   add column lesson_block_id uuid references public.lesson_blocks (id) on delete cascade,
   add column position integer;
