@@ -34,6 +34,9 @@ export default function LessonSettingsSidebar({
   wordCount,
   isPublished,
   savedLabel,
+  showQuizCompletionThreshold,
+  quizCompletionThreshold,
+  onQuizCompletionThresholdChange,
   onPreview,
   onSaveDraft,
   onPublish,
@@ -48,6 +51,9 @@ export default function LessonSettingsSidebar({
   wordCount: number;
   isPublished: boolean;
   savedLabel: string;
+  showQuizCompletionThreshold: boolean;
+  quizCompletionThreshold: number;
+  onQuizCompletionThresholdChange: (value: number) => void;
   onPreview: () => void;
   onSaveDraft: () => void;
   onPublish: () => void;
@@ -135,6 +141,30 @@ export default function LessonSettingsSidebar({
             A module holds content or a quiz, never both.
           </p>
         </SectionBlock>
+
+        {showQuizCompletionThreshold && (
+          <SectionBlock label="Completion threshold">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={quizCompletionThreshold}
+                disabled={!lessonId}
+                onChange={(e) => {
+                  const parsed = Number.parseInt(e.target.value, 10);
+                  if (!Number.isNaN(parsed)) onQuizCompletionThresholdChange(parsed);
+                }}
+                className="w-20 text-sm border border-gray-200 rounded px-3 py-2.5 bg-white disabled:opacity-50"
+              />
+              <span className="text-sm text-gray-600">%</span>
+            </div>
+            <p className="mt-3 text-sm text-gray-500 leading-relaxed">
+              Minimum quiz score required before students can mark this lesson complete.
+            </p>
+          </SectionBlock>
+        )}
 
         <section>
           <div className="flex items-baseline justify-between gap-2 mb-2">

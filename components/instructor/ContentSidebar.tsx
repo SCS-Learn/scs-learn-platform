@@ -276,9 +276,9 @@ export default function ContentSidebar({
                         >
                           {lesson.title}
                         </p>
-                        {lesson.category && (
+                        {lesson.type === "quiz" && (
                           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                            {lesson.category === "assignment" ? "Assignment" : "Homework"}
+                            Quiz
                           </span>
                         )}
                         <button

@@ -5,11 +5,6 @@ import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentLessonViewer from "@/components/student/StudentLessonViewer";
 import type { StudentCourse, QuizSubmissionStatus } from "@/lib/student/types";
 
-function moduleLabel(units: StudentCourse["units"], lessonId: string) {
-  const unit = units.find((u) => u.lessons.some((l) => l.id === lessonId));
-  return unit ? `${unit.code} — ${unit.title}` : "";
-}
-
 function initialQuizStatusByLessonId(course: StudentCourse): Record<string, QuizSubmissionStatus> {
   const map: Record<string, QuizSubmissionStatus> = {};
   for (const unit of course.units) {
@@ -65,8 +60,6 @@ export default function StudentCourseClient({
         courseTitle={course.title}
         units={unitsWithProgress}
         selectedLessonId={selectedLessonId}
-        moduleLabel={moduleLabel(unitsWithProgress, selectedLessonId)}
-        lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
         onSelectLesson={setSelectedLessonId}
       />
 

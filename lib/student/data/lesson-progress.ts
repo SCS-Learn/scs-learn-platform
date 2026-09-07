@@ -36,11 +36,13 @@ async function assertQuizMayBeCompleted(lessonId: string, platformUserId: string
 
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
-    .select("type, lesson_blocks(question_groups(questions(id)))")
+    .select("type, quiz_completion_threshold, lesson_blocks(question_groups(questions(id)))")
     .eq("id", lessonId)
     .maybeSingle();
   if (lessonError) throw new Error(lessonError.message);
   if (!lesson) throw new Error("Lesson not found");
+
+  const threshold = (lesson.quiz_completion_threshold as number | null) ?? 100;
 
   const blocks = (lesson.lesson_blocks ?? []) as unknown as {
     question_groups: { questions: { id: string }[] } | { questions: { id: string }[] }[] | null;
@@ -61,8 +63,10 @@ async function assertQuizMayBeCompleted(lessonId: string, platformUserId: string
     .maybeSingle();
   if (submissionError) throw new Error(submissionError.message);
 
-  if (!submission || submission.score_percent !== 100) {
-    throw new Error("Quiz lessons can only be marked complete after scoring 100%.");
+  if (!submission || (submission.score_percent as number) < threshold) {
+    throw new Error(
+      `Quiz lessons can only be marked complete after scoring at least ${threshold}%.`
+    );
   }
 }
 

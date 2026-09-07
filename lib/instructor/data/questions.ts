@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import {
+  defaultAnswerKeyForType,
+  defaultChoicesForType,
+} from "@/lib/quiz/parse";
+import type { AutogradableQuestionType, QuestionChoices, QuestionType } from "@/lib/quiz/types";
 
 export type QuestionGroup = {
   id: string;
@@ -37,8 +42,6 @@ export async function addQuestionGroup(
   };
 }
 
-import type { QuestionType } from "@/lib/quiz/types";
-
 export type { QuestionType } from "@/lib/quiz/types";
 export type PromptSource = "verbatim_extracted" | "llm_transcribed";
 
@@ -48,7 +51,7 @@ export type Question = {
   position: number;
   promptText: string;
   promptSource: PromptSource;
-  choices: string[] | null;
+  choices: QuestionChoices;
   answerKey: string | null;
   questionType: QuestionType;
   sourceSlideOrPageIndex: number | null;
@@ -61,7 +64,7 @@ export async function addQuestion(
     position: number;
     promptText: string;
     promptSource: PromptSource;
-    choices?: string[] | null;
+    choices?: QuestionChoices;
     answerKey?: string | null;
     questionType?: QuestionType;
     sourceSlideOrPageIndex?: number | null;
@@ -107,7 +110,7 @@ export async function updateQuestion(
   questionId: string,
   patch: {
     promptText: string;
-    choices: string[] | null;
+    choices: QuestionChoices;
     answerKey: string | null;
     questionType: QuestionType;
     needsReview?: boolean;
@@ -169,4 +172,32 @@ export async function getQuestionsForGroup(questionGroupId: string): Promise<Que
     sourceSlideOrPageIndex: row.source_slide_or_page_index,
     needsReview: row.needs_review,
   }));
+}
+
+export async function createQuestionInGroup(
+  courseCode: string,
+  questionGroupId: string,
+  position: number,
+  questionType: AutogradableQuestionType = "multiple_choice"
+): Promise<Question> {
+  const created = await addQuestion(questionGroupId, {
+    position,
+    promptText: "",
+    promptSource: "verbatim_extracted",
+    choices: defaultChoicesForType(questionType),
+    answerKey: defaultAnswerKeyForType(questionType),
+    questionType,
+    needsReview: true,
+  });
+
+  revalidatePath(`/instructor/${courseCode}`);
+  return created;
+}
+
+export async function deleteQuestion(courseCode: string, questionId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("questions").delete().eq("id", questionId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/instructor/${courseCode}`);
 }

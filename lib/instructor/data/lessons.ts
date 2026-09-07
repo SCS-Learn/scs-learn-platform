@@ -148,6 +148,7 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     contentSource: "html",
     blocks: [],
     isPublished: newLesson.is_published,
+    quizCompletionThreshold: 100,
     attachments: [],
     updatedAt: newLesson.updated_at,
   };
@@ -206,6 +207,7 @@ export async function addLessonFromImport(
     contentSource: patch.contentSource ?? "html",
     blocks: [],
     isPublished: newLesson.is_published,
+    quizCompletionThreshold: 100,
     attachments: [],
     updatedAt: newLesson.updated_at,
   };
@@ -235,6 +237,29 @@ export async function reorderLessons(
   if (failed?.error) throw new Error(failed.error.message);
 
   revalidatePath(`/instructor/${courseCode}`);
+}
+
+export async function updateQuizCompletionThreshold(
+  courseCode: string,
+  lessonId: string,
+  threshold: number
+) {
+  if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100) {
+    throw new Error("Completion threshold must be an integer from 0 to 100.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lessons")
+    .update({
+      quiz_completion_threshold: threshold,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", lessonId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`);
 }
 
 export async function updateLessonContent(

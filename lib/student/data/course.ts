@@ -13,12 +13,13 @@ import type {
   QuizSubmissionStatus,
   LessonType,
 } from "@/lib/student/types";
+import type { QuestionChoices } from "@/lib/quiz/types";
 
 type QuestionRow = {
   id: string;
   position: number;
   prompt_text: string;
-  choices: string[] | null;
+  choices: QuestionChoices;
   answer_key: string | null;
   question_type: string;
 };
@@ -69,6 +70,7 @@ type LessonRow = {
   content_html: string;
   content_source: string;
   is_published: boolean;
+  quiz_completion_threshold: number;
   attachments: AttachmentRow[];
   lesson_blocks: LessonBlockRow[];
 };
@@ -96,7 +98,7 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type)))))";
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type)))))";
 
 function toQuestion(row: QuestionRow): StudentQuestion {
   return {
@@ -200,6 +202,7 @@ function toLesson(
     blocks,
     autolab,
     quizSubmission,
+    quizCompletionThreshold: row.quiz_completion_threshold ?? 100,
     completedAt,
   };
 }

@@ -281,7 +281,18 @@ create table public.questions (
   choices jsonb,
   answer_key text,
   question_type text not null default 'unknown'
-    check (question_type in ('multiple_choice', 'short_answer', 'true_false', 'multiple_select', 'free_response', 'unknown')),
+    check (question_type in (
+      'multiple_choice', 'true_false', 'multiple_select',
+      'inline_dropdown', 'matching', 'categorization', 'ordering', 'hottext',
+      'choice_grid',
+      'short_answer', 'multi_blank', 'cloze', 'keyword_scored',
+      'numeric_tolerance', 'matrix_whole', 'matrix_per_cell', 'vector', 'integer',
+      'significant_figures', 'number_with_units',
+      'slider',
+      'symbolic_expression', 'equation_input', 'form_constrained_algebra',
+      'antiderivative', 'interval_set_list', 'chemical_formula',
+      'free_response', 'unknown'
+    )),
   source_slide_or_page_index integer,
   needs_review boolean not null default false,
   created_at timestamptz not null default now()
@@ -295,6 +306,10 @@ alter table public.lessons
 -- Null for content lessons and for a quiz lesson imported before this existed.
 alter table public.lessons
   add column category text check (category in ('assignment', 'homework'));
+
+alter table public.lessons
+  add column quiz_completion_threshold integer not null default 100
+    check (quiz_completion_threshold between 0 and 100);
 
 alter table public.attachments
   add column lesson_block_id uuid references public.lesson_blocks (id) on delete cascade,

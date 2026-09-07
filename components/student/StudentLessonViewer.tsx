@@ -31,10 +31,20 @@ export default function StudentLessonViewer({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const requiresPerfectScore = questions.length > 0;
-  const quizPerfect = lesson.quizSubmission?.scorePercent === 100;
-  const canMarkComplete = !requiresPerfectScore || quizPerfect;
+  const completionThreshold = lesson.quizCompletionThreshold;
+  const hasQuizQuestions = questions.length > 0;
+  const quizMeetsThreshold =
+    (lesson.quizSubmission?.scorePercent ?? 0) >= completionThreshold;
+  const canMarkComplete = !hasQuizQuestions || quizMeetsThreshold;
   const isComplete = completedAt != null;
+  const thresholdMessage =
+    completionThreshold === 100
+      ? "Score 100% to mark this quiz complete."
+      : `Score at least ${completionThreshold}% to mark this quiz complete.`;
+  const thresholdErrorMessage = thresholdMessage.replace(
+    " to mark this quiz complete.",
+    " before marking it complete."
+  );
 
   const handleToggleComplete = () => {
     setError(null);
@@ -47,7 +57,7 @@ export default function StudentLessonViewer({
           return;
         }
         if (!canMarkComplete) {
-          setError("Score 100% on this quiz before marking it complete.");
+          setError(thresholdErrorMessage);
           return;
         }
         const next = await markLessonComplete(courseCode, lesson.id);
@@ -101,9 +111,9 @@ export default function StudentLessonViewer({
               type="button"
               onClick={handleToggleComplete}
               disabled={isPending || (!isComplete && !canMarkComplete)}
-              className={`text-sm font-bold rounded px-4 py-2 flex items-center gap-2 disabled:opacity-50 ${
+              className={`text-sm font-bold px-4 py-2 flex items-center gap-2 disabled:opacity-50 ${
                 isComplete
-                  ? "border border-green-300 bg-green-50 text-green-800 hover:bg-green-100"
+                  ? "border border-green-500 text-green-800 hover:bg-gray-50"
                   : "bg-primary text-white hover:opacity-90"
               }`}
             >
@@ -114,8 +124,8 @@ export default function StudentLessonViewer({
               )}
               {isComplete ? "Completed" : "Mark as complete"}
             </button>
-            {requiresPerfectScore && !isComplete && !canMarkComplete && (
-              <p className="text-xs text-gray-500">Score 100% to mark this quiz complete.</p>
+            {hasQuizQuestions && !isComplete && !canMarkComplete && (
+              <p className="text-xs text-gray-500">{thresholdMessage}</p>
             )}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}

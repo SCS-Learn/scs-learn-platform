@@ -2,13 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { CheckCircle2, XCircle, RotateCcw, Loader2 } from "lucide-react";
+import QuestionInput from "@/components/quiz/QuestionInput";
 import { submitQuiz } from "@/lib/student/data/quiz-progress";
-import {
-  decodeMultipleSelectResponse,
-  encodeMultipleSelectResponse,
-  isCorrect,
-  isGradable,
-} from "@/lib/quiz/grading";
+import { formatCorrectAnswer } from "@/lib/quiz/format-answer";
+import { isCorrect, isGradable } from "@/lib/quiz/grading";
+import { questionEmbedsPrompt } from "@/lib/quiz/question-layout";
 import type { StudentQuestion, QuizSubmissionStatus } from "@/lib/student/types";
 
 function gradeLocally(
@@ -24,106 +22,6 @@ function gradeLocally(
     scorePercent: gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0,
     responses,
   };
-}
-
-function QuestionInput({
-  question,
-  response,
-  submitted,
-  onChange,
-}: {
-  question: StudentQuestion;
-  response: string;
-  submitted: boolean;
-  onChange: (value: string) => void;
-}) {
-  const type = question.questionType;
-  const choices =
-    type === "true_false" && (!question.choices || question.choices.length < 2)
-      ? ["True", "False"]
-      : question.choices;
-
-  if (type === "multiple_select" && choices && choices.length > 0) {
-    const selected = new Set(decodeMultipleSelectResponse(response));
-    return (
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs text-gray-500 mb-1">Select all that apply</p>
-        {choices.map((choice) => (
-          <label
-            key={choice}
-            className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded border ${
-              selected.has(choice) ? "border-primary/50 bg-primary/5" : "border-gray-200"
-            } ${submitted ? "cursor-default" : "cursor-pointer hover:bg-gray-50"}`}
-          >
-            <input
-              type="checkbox"
-              checked={selected.has(choice)}
-              disabled={submitted}
-              onChange={() => {
-                const next = new Set(selected);
-                if (next.has(choice)) next.delete(choice);
-                else next.add(choice);
-                onChange(encodeMultipleSelectResponse([...next]));
-              }}
-            />
-            {choice}
-          </label>
-        ))}
-      </div>
-    );
-  }
-
-  if (choices && choices.length > 0) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        {choices.map((choice) => (
-          <label
-            key={choice}
-            className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded border ${
-              response === choice ? "border-primary/50 bg-primary/5" : "border-gray-200"
-            } ${submitted ? "cursor-default" : "cursor-pointer hover:bg-gray-50"}`}
-          >
-            <input
-              type="radio"
-              name={question.id}
-              value={choice}
-              checked={response === choice}
-              disabled={submitted}
-              onChange={() => onChange(choice)}
-            />
-            {choice}
-          </label>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <input
-        type="text"
-        value={response}
-        disabled={submitted}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Type your answer..."
-        className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-primary/50 disabled:bg-white disabled:text-gray-700"
-      />
-      {type === "short_answer" && !submitted && (
-        <p className="text-xs text-gray-400">Short answer — capitalization does not matter.</p>
-      )}
-    </div>
-  );
-}
-
-function formatCorrectAnswer(question: StudentQuestion): string {
-  if (question.questionType === "multiple_select" && question.answerKey) {
-    try {
-      return (JSON.parse(question.answerKey) as string[]).join(", ");
-    } catch {
-      return question.answerKey;
-    }
-  }
-  return question.answerKey ?? "";
 }
 
 export default function QuizBlock({
@@ -212,64 +110,81 @@ export default function QuizBlock({
         </p>
       )}
 
+      {submitted && (
+        <div className="flex items-center gap-4 pb-2 border-b border-gray-100">
+          <p className="text-sm font-bold">
+            Score: {correctCount} / {submission?.gradableCount ?? gradableQuestions.length}
+            {submission && submission.gradableCount > 0 ? ` (${submission.scorePercent}%)` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={reset}
+            className="flex items-center gap-1.5 text-sm border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+          >
+            <RotateCcw size={13} />
+            Try again
+          </button>
+        </div>
+      )}
+
       {questions.map((question, index) => {
         const response = responses[question.id] ?? "";
         const graded = submitted && isGradable(question);
         const correct = graded && isCorrect(question, response);
 
+        const embedsPrompt = questionEmbedsPrompt(
+          question.questionType,
+          question.choices,
+          question.promptText
+        );
+
         return (
           <div
             key={question.id}
-            className={`border rounded-md p-4 ${
-              graded ? (correct ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50") : "border-gray-200"
+            className={`border p-4 ${
+              graded ? (correct ? "border-green-500" : "border-red-500") : "border-gray-200"
             }`}
           >
             <div className="flex items-start justify-between gap-2 mb-2">
               <p className="text-xs text-gray-400">Question {index + 1}</p>
               {graded && (correct ? <CheckCircle2 size={16} className="text-green-600" /> : <XCircle size={16} className="text-red-500" />)}
             </div>
-            <p className="text-sm font-medium whitespace-pre-wrap mb-3">{question.promptText}</p>
+            {!embedsPrompt && (
+              <p className="text-sm font-medium whitespace-pre-wrap mb-3">{question.promptText}</p>
+            )}
 
             <QuestionInput
-              question={question}
+              questionId={question.id}
+              questionType={question.questionType}
+              promptText={question.promptText}
+              choices={question.choices}
+              answerKey={question.answerKey}
               response={response}
               submitted={submitted}
+              feedback={graded ? (correct ? "correct" : "incorrect") : null}
               onChange={(value) => setResponses((prev) => ({ ...prev, [question.id]: value }))}
             />
 
             {graded && !correct && question.answerKey && (
-              <p className="text-xs text-gray-600 mt-2">Correct answer: {formatCorrectAnswer(question)}</p>
+              <p className="text-xs text-gray-600 mt-2">
+                Correct answer: {formatCorrectAnswer(question)}
+              </p>
             )}
           </div>
         );
       })}
 
       <div className="flex items-center gap-4">
-        {!submitted ? (
+        {!submitted && (
           <button
             type="button"
             onClick={handleSubmit}
             disabled={isPending}
-            className="text-sm font-bold bg-primary text-white rounded px-4 py-2 hover:opacity-90 disabled:opacity-60 flex items-center gap-2"
+            className="text-sm font-bold bg-primary text-white px-4 py-2 hover:opacity-90 disabled:opacity-60 flex items-center gap-2"
           >
             {isPending && <Loader2 size={14} className="animate-spin" />}
             Check answers
           </button>
-        ) : (
-          <>
-            <p className="text-sm font-bold">
-              Score: {correctCount} / {submission?.gradableCount ?? gradableQuestions.length}
-              {submission && submission.gradableCount > 0 ? ` (${submission.scorePercent}%)` : ""}
-            </p>
-            <button
-              type="button"
-              onClick={reset}
-              className="flex items-center gap-1.5 text-sm border border-gray-300 rounded px-3 py-1.5 text-gray-700 hover:bg-gray-50"
-            >
-              <RotateCcw size={13} />
-              Try again
-            </button>
-          </>
         )}
       </div>
 

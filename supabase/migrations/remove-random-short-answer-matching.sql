@@ -1,0 +1,20 @@
+-- Remove random_short_answer_matching question type (33 auto-gradable types remain).
+alter table public.questions drop constraint if exists questions_question_type_check;
+alter table public.questions add constraint questions_question_type_check
+  check (question_type in (
+    'multiple_choice', 'true_false', 'multiple_select',
+    'inline_dropdown', 'matching', 'categorization', 'ordering', 'hottext',
+    'choice_grid',
+    'short_answer', 'multi_blank', 'cloze', 'keyword_scored',
+    'numeric_tolerance', 'matrix_whole', 'matrix_per_cell', 'vector', 'integer',
+    'significant_figures', 'number_with_units',
+    'slider',
+    'symbolic_expression', 'equation_input', 'form_constrained_algebra',
+    'antiderivative', 'interval_set_list', 'chemical_formula',
+    'free_response', 'unknown'
+  ));
+
+-- Reclassify any existing rows (unlikely, but safe).
+update public.questions
+  set question_type = 'matching'
+  where question_type = 'random_short_answer_matching';

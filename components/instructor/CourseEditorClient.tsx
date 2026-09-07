@@ -17,6 +17,7 @@ import {
   reorderLessons as reorderLessonsAction,
   updateLessonContent,
   publishLesson as publishLessonAction,
+  updateQuizCompletionThreshold,
 } from "@/lib/instructor/data/lessons";
 import { deleteCourse as deleteCourseAction } from "@/lib/instructor/data/courses";
 
@@ -260,6 +261,26 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     });
   };
 
+  const selectedLessonHasQuizQuestions =
+    selectedLesson?.type === "quiz" ||
+    (selectedLesson?.blocks.some((block) => (block.questions?.length ?? 0) > 0) ?? false);
+
+  const updateQuizCompletionThresholdForLesson = (threshold: number) => {
+    if (!selectedLesson) return;
+    const clamped = Math.min(100, Math.max(0, Math.round(threshold)));
+    setUnits((prev) =>
+      prev.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) =>
+          l.id === selectedLessonId ? { ...l, quizCompletionThreshold: clamped } : l
+        ),
+      }))
+    );
+    startTransition(async () => {
+      await updateQuizCompletionThreshold(course.code, selectedLessonId, clamped);
+    });
+  };
+
   return (
     <main className="h-screen bg-gray-50 text-black grid grid-cols-[1fr_3fr_1fr] overflow-hidden">
       <ContentSidebar
@@ -309,6 +330,52 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
                 }))
               );
             }}
+            onQuestionAdded={(added) => {
+              setUnits((prev) =>
+                prev.map((unit) => ({
+                  ...unit,
+                  lessons: unit.lessons.map((lesson) =>
+                    lesson.id !== selectedLessonId
+                      ? lesson
+                      : {
+                          ...lesson,
+                          blocks: lesson.blocks.map((block) =>
+                            block.kind !== "question_group"
+                              ? block
+                              : {
+                                  ...block,
+                                  questions: [...(block.questions ?? []), added],
+                                }
+                          ),
+                        }
+                  ),
+                }))
+              );
+            }}
+            onQuestionDeleted={(questionId) => {
+              setUnits((prev) =>
+                prev.map((unit) => ({
+                  ...unit,
+                  lessons: unit.lessons.map((lesson) =>
+                    lesson.id !== selectedLessonId
+                      ? lesson
+                      : {
+                          ...lesson,
+                          blocks: lesson.blocks.map((block) =>
+                            block.kind !== "question_group"
+                              ? block
+                              : {
+                                  ...block,
+                                  questions: (block.questions ?? []).filter(
+                                    (q) => q.id !== questionId
+                                  ),
+                                }
+                          ),
+                        }
+                  ),
+                }))
+              );
+            }}
           />
         ) : selectedLessonId && selectedLesson ? (
           <LessonEditor
@@ -340,6 +407,9 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         savedLabel={
           selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
         }
+        showQuizCompletionThreshold={selectedLessonHasQuizQuestions}
+        quizCompletionThreshold={selectedLesson?.quizCompletionThreshold ?? 100}
+        onQuizCompletionThresholdChange={updateQuizCompletionThresholdForLesson}
         onPreview={() =>
           window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
         }

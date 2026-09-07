@@ -1,9 +1,11 @@
 export type LessonType = "lesson" | "quiz";
 
+import type { QuestionChoices } from "@/lib/quiz/types";
+
 export type QuestionView = {
   id: string;
   promptText: string;
-  choices: string[] | null;
+  choices: QuestionChoices;
   answerKey: string | null;
   questionType: string;
   needsReview: boolean;
@@ -20,6 +22,7 @@ export type LessonBlockView = {
   renderedImageUrls: string[] | null;
   pdfUrl: string | null;
   videoUrl: string | null;
+  questionGroupId: string | null;
   questions: QuestionView[] | null;
 };
 
@@ -36,6 +39,8 @@ export type LessonItem = {
   contentSource: LessonContentSource;
   blocks: LessonBlockView[];
   isPublished: boolean;
+  /** Minimum score (%) required to mark this quiz complete; only applies to quizzes. */
+  quizCompletionThreshold: number;
   updatedAt: string; // ISO timestamp
   attachments: Attachment[];
 };

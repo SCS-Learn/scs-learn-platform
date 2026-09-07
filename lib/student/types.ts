@@ -1,11 +1,11 @@
 export type LessonType = "lesson" | "quiz";
 
-import type { QuestionType } from "@/lib/quiz/types";
+import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
 
 export type StudentQuestion = {
   id: string;
   promptText: string;
-  choices: string[] | null;
+  choices: QuestionChoices;
   /** Used client-side for instant grading — never shown until the learner submits. */
   answerKey: string | null;
   questionType: QuestionType;
@@ -54,6 +54,8 @@ export type StudentLesson = {
   blocks: StudentLessonBlock[];
   autolab: AutolabStatus | null;
   quizSubmission: QuizSubmissionStatus | null;
+  /** Minimum score (%) required to mark this quiz complete; only applies to quizzes. */
+  quizCompletionThreshold: number;
   /** ISO timestamp when the learner marked this lesson complete; null if not complete. */
   completedAt: string | null;
 };

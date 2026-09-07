@@ -11,14 +11,19 @@ export default function BlockLessonViewer({
   lessonType,
   lessonTitle,
   onQuestionSaved,
+  onQuestionAdded,
+  onQuestionDeleted,
 }: {
   courseCode: string;
   blocks: LessonBlockView[];
   lessonType: LessonType;
   lessonTitle: string;
   onQuestionSaved?: (question: QuestionView) => void;
+  onQuestionAdded?: (question: QuestionView) => void;
+  onQuestionDeleted?: (questionId: string) => void;
 }) {
   const questionBlocks = blocks.filter((b) => b.kind === "question_group");
+  const questionGroupId = questionBlocks.find((b) => b.questionGroupId)?.questionGroupId ?? null;
   const initialQuestions = questionBlocks.flatMap((block) => block.questions ?? []);
   const [questions, setQuestions] = useState(initialQuestions);
 
@@ -35,10 +40,19 @@ export default function BlockLessonViewer({
       <InstructorQuizEditor
         courseCode={courseCode}
         lessonTitle={lessonTitle}
+        questionGroupId={questionGroupId}
         questions={questions}
         onQuestionSaved={(updated) => {
           setQuestions((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
           onQuestionSaved?.(updated);
+        }}
+        onQuestionAdded={(added) => {
+          setQuestions((prev) => [...prev, added]);
+          onQuestionAdded?.(added);
+        }}
+        onQuestionDeleted={(questionId) => {
+          setQuestions((prev) => prev.filter((q) => q.id !== questionId));
+          onQuestionDeleted?.(questionId);
         }}
       />
     );

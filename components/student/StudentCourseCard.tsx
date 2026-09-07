@@ -12,7 +12,7 @@ export default function StudentCourseCard({ course }: { course: StudentCourseSum
   const buttonLabel = hasStarted ? "Resume from where you left off" : "Start course";
 
   return (
-    <article className="border border-gray-200 rounded-md bg-white p-5 flex flex-col gap-4 hover:border-primary/40 hover:shadow-sm transition">
+    <article className="border border-gray-200 bg-white p-5 flex flex-col gap-4 hover:border-black hover:shadow-sm transition">
       <div>
         <div className="flex items-start justify-between gap-3 mb-1">
           <p className="text-xs font-bold text-primary tracking-wide">{course.code}</p>

@@ -13,6 +13,7 @@ import type {
   QuestionView,
   Attachment,
 } from "@/lib/instructor/mock-data";
+import type { QuestionChoices } from "@/lib/quiz/types";
 
 type AttachmentRow = {
   id: string;
@@ -26,7 +27,7 @@ type QuestionRow = {
   id: string;
   position: number;
   prompt_text: string;
-  choices: string[] | null;
+  choices: QuestionChoices;
   answer_key: string | null;
   question_type: string;
   needs_review: boolean;
@@ -41,7 +42,7 @@ type LessonBlockRow = {
   body_html: string | null;
   rendered_image_urls: string[] | null;
   video_url: string | null;
-  question_groups: { questions: QuestionRow[] } | null;
+  question_groups: { id: string; questions: QuestionRow[] } | null;
 };
 
 type LessonRow = {
@@ -54,6 +55,7 @@ type LessonRow = {
   content_html: string;
   content_source: string;
   is_published: boolean;
+  quiz_completion_threshold: number;
   updated_at: string;
   attachments: AttachmentRow[];
   lesson_blocks: LessonBlockRow[];
@@ -128,6 +130,7 @@ function toLessonItem(row: LessonRow): LessonItem {
       renderedImageUrls: block.rendered_image_urls,
       pdfUrl: pdfUrlForBlock(block, row.attachments),
       videoUrl: block.video_url,
+      questionGroupId: block.question_groups?.id ?? null,
       questions: block.question_groups
         ? [...block.question_groups.questions].sort((a, b) => a.position - b.position).map(toQuestionView)
         : null,
@@ -143,6 +146,7 @@ function toLessonItem(row: LessonRow): LessonItem {
     contentSource: row.content_source as LessonContentSource,
     blocks,
     isPublished: row.is_published,
+    quizCompletionThreshold: row.quiz_completion_threshold ?? 100,
     updatedAt: row.updated_at,
     attachments: visibleAttachments,
   };
@@ -169,7 +173,7 @@ function toInstructorCourse(row: CourseRow): InstructorCourse {
 }
 
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
+  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
   const supabase = await createClient();
