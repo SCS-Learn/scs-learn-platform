@@ -1,4 +1,4 @@
-export type LessonType = "lesson" | "quiz";
+export type LessonType = "lesson" | "quiz" | "external";
 
 import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
 
@@ -21,6 +21,15 @@ export type StudentLessonBlock = {
   pdfUrl: string | null;
   videoUrl: string | null;
   questions: StudentQuestion[] | null;
+};
+
+/** Cogniterra LTI activity linked to this lesson — see lib/lti/tools.ts. */
+export type LtiStatus = {
+  linkId: string;
+  title: string;
+  pointsPossible: number;
+  score: number | null;
+  reportedAt: string | null;
 };
 
 /** A pulled Autolab score for the current stub learner, joined onto its lesson — see lib/autolab/grades.ts for the sync side. */
@@ -53,6 +62,7 @@ export type StudentLesson = {
   contentSource: "html" | "blocks";
   blocks: StudentLessonBlock[];
   autolab: AutolabStatus | null;
+  lti: LtiStatus | null;
   quizSubmission: QuizSubmissionStatus | null;
   /** Minimum score (%) required to mark this quiz complete; only applies to quizzes. */
   quizCompletionThreshold: number;

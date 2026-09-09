@@ -18,6 +18,13 @@ import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/exp
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
 import { analyzeDriveFileContent, quizLessonCategory, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
+import {
+  saveCogniterraCourseConfig,
+  wireExternalLessonsToCogniterra,
+  getCogniterraCourseConfig,
+  type CogniterraSetupInput,
+} from "@/lib/instructor/data/cogniterra";
+import type { DriveAssignmentForMatch } from "@/lib/cogniterra/match-lessons";
 import type { FileContentSource } from "@/lib/google/file-content-source";
 import { detectVideoLink } from "@/lib/google/detect-video-link";
 import { detectVideoUrlInDocument } from "@/lib/google/extract-document-text";
@@ -435,6 +442,50 @@ async function addSlideFileBlock(
   return false;
 }
 
+function shouldBecomeExternalLesson(analysis: DriveFileAnalysis): boolean {
+  return analysis.category === "assignment" || analysis.category === "homework";
+}
+
+async function populateExternalLesson(
+  lessonId: string,
+  quiz: { title: string; file: DriveEntry },
+  entry: { analysis: DriveFileAnalysis; resolved: ResolvedFile },
+  drive: Awaited<ReturnType<typeof getDriveClient>>,
+  driveFilesById: Map<string, DriveEntry>,
+  duplicatesBySurvivorId: Map<string, string[]>,
+  resourceKeyHeader: string | undefined
+): Promise<boolean> {
+  const supabase = await createClient();
+  const { error: typeError } = await supabase
+    .from("lessons")
+    .update({ type: "external" })
+    .eq("id", lessonId);
+  if (typeError) throw new Error(typeError.message);
+
+  const notesHtml = await buildNotesHtmlForFiles(
+    drive,
+    [quiz.file],
+    new Map([[quiz.file.id, entry]]),
+    resourceKeyHeader
+  );
+  if (notesHtml) {
+    await addLessonBlock(lessonId, {
+      kind: "course_notes",
+      position: 1,
+      title: quiz.title,
+      sourceDriveFileId: quiz.file.id,
+      bodyHtml: notesHtml,
+    });
+  }
+
+  await addDriveLinkAttachments(
+    lessonId,
+    [quiz.file.id, ...(duplicatesBySurvivorId.get(quiz.file.id) ?? [])],
+    driveFilesById
+  );
+  return true;
+}
+
 async function buildNotesHtmlForFiles(
   drive: Awaited<ReturnType<typeof getDriveClient>>,
   files: DriveEntry[],
@@ -648,8 +699,9 @@ async function populateTopicLesson(
 
 export async function runDriveImportOrganize(
   courseCode: string,
-  folderUrl: string
-): Promise<{ unitIds: string[]; lessonIds: string[] }> {
+  folderUrl: string,
+  options?: { cogniterra?: CogniterraSetupInput }
+): Promise<{ unitIds: string[]; lessonIds: string[]; cogniterraWired: number }> {
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
@@ -660,6 +712,15 @@ export async function runDriveImportOrganize(
     .eq("code", courseCode)
     .single();
   if (courseError || !course) throw new Error("Unknown course code");
+
+  if (
+    options?.cogniterra?.cogniterraCourseId &&
+    options.cogniterra.consumerKey &&
+    (options.cogniterra.sharedSecret ||
+      (await getCogniterraCourseConfig(courseCode)) !== null)
+  ) {
+    await saveCogniterraCourseConfig(courseCode, options.cogniterra);
+  }
 
   const drive = await getDriveClient();
   const nestedTree = await buildDriveImportTree(drive, folderId, resourceKey).catch((error) => {
@@ -742,7 +803,7 @@ export async function runDriveImportOrganize(
   const classifiableCount = filteredTree.units.reduce((sum, unit) => sum + unit.files.length, 0);
   if (classifiableCount === 0) {
     revalidatePath(`/instructor/${courseCode}`);
-    return { unitIds: [], lessonIds: [] };
+    return { unitIds: [], lessonIds: [], cogniterraWired: 0 };
   }
 
   const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
@@ -778,6 +839,7 @@ export async function runDriveImportOrganize(
 
   const unitIds: string[] = [];
   const lessonIds: string[] = [];
+  const externalAssignments: DriveAssignmentForMatch[] = [];
 
   for (const unit of plannedUnits) {
     const newUnit = await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
@@ -849,6 +911,26 @@ export async function runDriveImportOrganize(
       );
 
       if (!hasQuestions) {
+        if (shouldBecomeExternalLesson(entry.analysis)) {
+          await populateExternalLesson(
+            newLesson.id,
+            quiz,
+            entry,
+            drive,
+            driveFilesById,
+            duplicatesBySurvivorId,
+            resourceKeyHeader
+          );
+          externalAssignments.push({
+            lessonId: newLesson.id,
+            title: quiz.title,
+            topicSummary: entry.analysis.topicSummary,
+          });
+          lessonIds.push(newLesson.id);
+          unitLessonCount += 1;
+          continue;
+        }
+
         console.warn(
           `runDriveImportOrganize: dropping empty quiz lesson "${quiz.title}" - no auto-gradable questions could be extracted`
         );
@@ -872,6 +954,20 @@ export async function runDriveImportOrganize(
     unitIds.push(newUnit.id);
   }
 
+  const { wired: cogniterraWired } = await wireExternalLessonsToCogniterra(
+    courseCode,
+    externalAssignments
+  );
+  if (cogniterraWired > 0) {
+    console.log(
+      `runDriveImportOrganize: wired ${cogniterraWired} external lesson(s) to Cogniterra`
+    );
+  } else if (externalAssignments.length > 0) {
+    console.warn(
+      `runDriveImportOrganize: ${externalAssignments.length} external assignment(s) but none wired to Cogniterra (is cogniterra config saved?)`
+    );
+  }
+
   revalidatePath(`/instructor/${courseCode}`);
-  return { unitIds, lessonIds };
+  return { unitIds, lessonIds, cogniterraWired };
 }

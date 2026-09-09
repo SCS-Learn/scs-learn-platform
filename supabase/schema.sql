@@ -290,7 +290,7 @@ create table public.questions (
       'significant_figures', 'number_with_units',
       'slider',
       'symbolic_expression', 'equation_input', 'form_constrained_algebra',
-      'antiderivative', 'interval_set_list', 'chemical_formula',
+      'antiderivative', 'interval_set_list',
       'free_response', 'unknown'
     )),
   source_slide_or_page_index integer,
@@ -308,7 +308,7 @@ alter table public.lessons
   add column category text check (category in ('assignment', 'homework'));
 
 alter table public.lessons
-  add column quiz_completion_threshold integer not null default 100
+  add column quiz_completion_threshold integer not null default 80
     check (quiz_completion_threshold between 0 and 100);
 
 alter table public.attachments

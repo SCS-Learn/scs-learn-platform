@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
+import { reconcileQuizSubmission } from "@/lib/quiz/grading";
+import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
+import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
 
 export async function fetchLessonCompletionsForLessons(
   lessonIds: string[],
@@ -36,34 +39,71 @@ async function assertQuizMayBeCompleted(lessonId: string, platformUserId: string
 
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
-    .select("type, quiz_completion_threshold, lesson_blocks(question_groups(questions(id)))")
+    .select(
+      "quiz_completion_threshold, lesson_blocks(question_groups(questions(id, prompt_text, choices, answer_key, question_type)))"
+    )
     .eq("id", lessonId)
     .maybeSingle();
   if (lessonError) throw new Error(lessonError.message);
   if (!lesson) throw new Error("Lesson not found");
 
-  const threshold = (lesson.quiz_completion_threshold as number | null) ?? 100;
+  const threshold = (lesson.quiz_completion_threshold as number | null) ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD;
+
+  type QuestionRow = {
+    id: string;
+    prompt_text: string;
+    choices: QuestionChoices;
+    answer_key: string | null;
+    question_type: string;
+  };
 
   const blocks = (lesson.lesson_blocks ?? []) as unknown as {
-    question_groups: { questions: { id: string }[] } | { questions: { id: string }[] }[] | null;
+    question_groups: { questions: QuestionRow[] } | { questions: QuestionRow[] }[] | null;
   }[];
-  const hasQuestions = blocks.some((block) => {
+
+  const questions = blocks.flatMap((block) => {
     const groups = block.question_groups;
-    if (!groups) return false;
+    if (!groups) return [];
     const list = Array.isArray(groups) ? groups : [groups];
-    return list.some((group) => (group.questions?.length ?? 0) > 0);
+    return list.flatMap((group) =>
+      (group.questions ?? []).map((q) => ({
+        id: q.id,
+        promptText: q.prompt_text,
+        choices: q.choices,
+        answerKey: q.answer_key,
+        questionType: q.question_type as QuestionType,
+      }))
+    );
   });
-  if (!hasQuestions) return;
+  if (questions.length === 0) return;
 
   const { data: submission, error: submissionError } = await supabase
     .from("quiz_submissions")
-    .select("score_percent")
+    .select("submitted_at, quiz_responses(question_id, response_text)")
     .eq("lesson_id", lessonId)
     .eq("platform_user_id", platformUserId)
     .maybeSingle();
   if (submissionError) throw new Error(submissionError.message);
 
-  if (!submission || (submission.score_percent as number) < threshold) {
+  if (!submission) {
+    throw new Error(
+      `Quiz lessons can only be marked complete after scoring at least ${threshold}%.`
+    );
+  }
+
+  const responses: Record<string, string> = {};
+  for (const response of (submission.quiz_responses ?? []) as {
+    question_id: string;
+    response_text: string;
+  }[]) {
+    responses[response.question_id] = response.response_text;
+  }
+
+  const reconciled = reconcileQuizSubmission(questions, {
+    submittedAt: submission.submitted_at as string,
+    responses,
+  });
+  if (!reconciled || reconciled.scorePercent < threshold) {
     throw new Error(
       `Quiz lessons can only be marked complete after scoring at least ${threshold}%.`
     );

@@ -1,4 +1,4 @@
-export type LessonType = "lesson" | "quiz";
+export type LessonType = "lesson" | "quiz" | "external";
 
 import type { QuestionChoices } from "@/lib/quiz/types";
 
@@ -43,6 +43,8 @@ export type LessonItem = {
   quizCompletionThreshold: number;
   updatedAt: string; // ISO timestamp
   attachments: Attachment[];
+  /** Present when this lesson is linked to Cogniterra (or another LTI tool). */
+  ltiLinkId: string | null;
 };
 
 export type Unit = {

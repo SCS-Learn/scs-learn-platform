@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Unit, LessonItem, LessonType } from "@/lib/instructor/mock-data";
+import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
+
+export type { LessonType };
 
 function nextUnitNumber(existingCodes: string[]): number {
   const numbers = existingCodes.map((code) => Number(code.match(/(\d+)/)?.[1] ?? 0));
@@ -148,8 +151,9 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     contentSource: "html",
     blocks: [],
     isPublished: newLesson.is_published,
-    quizCompletionThreshold: 100,
+    quizCompletionThreshold: DEFAULT_QUIZ_COMPLETION_THRESHOLD,
     attachments: [],
+    ltiLinkId: null,
     updatedAt: newLesson.updated_at,
   };
 }
@@ -207,8 +211,9 @@ export async function addLessonFromImport(
     contentSource: patch.contentSource ?? "html",
     blocks: [],
     isPublished: newLesson.is_published,
-    quizCompletionThreshold: 100,
+    quizCompletionThreshold: DEFAULT_QUIZ_COMPLETION_THRESHOLD,
     attachments: [],
+    ltiLinkId: null,
     updatedAt: newLesson.updated_at,
   };
 }

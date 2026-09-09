@@ -7,6 +7,7 @@ import type { StudentLesson, QuizSubmissionStatus } from "@/lib/student/types";
 import { markLessonComplete, unmarkLessonComplete } from "@/lib/student/data/lesson-progress";
 import QuizBlock from "@/components/student/QuizBlock";
 import AutogradedAssignmentCard from "@/components/student/AutogradedAssignmentCard";
+import ExternalActivity from "@/components/lti/ExternalActivity";
 
 function allQuestionsFromLesson(lesson: StudentLesson) {
   return lesson.blocks.flatMap((block) => block.questions ?? []);
@@ -26,7 +27,8 @@ export default function StudentLessonViewer({
   onCompletionChange?: (lessonId: string, completedAt: string | null) => void;
 }) {
   const questions = allQuestionsFromLesson(lesson);
-  const isAssessment = lesson.type === "quiz" || questions.length > 0;
+  const isExternal = lesson.type === "external" || lesson.lti !== null;
+  const isAssessment = !isExternal && (lesson.type === "quiz" || questions.length > 0);
   const [completedAt, setCompletedAt] = useState(lesson.completedAt);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -72,11 +74,22 @@ export default function StudentLessonViewer({
   return (
     <div className="h-full min-h-0 min-w-0 overflow-hidden bg-white flex flex-col">
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {lesson.lti && (
+          <ExternalActivity
+            lessonId={lesson.id}
+            title={lesson.lti.title}
+            kind="lti"
+            url={`/api/lti/launch/${lesson.lti.linkId}`}
+            initialScore={lesson.lti.score}
+            pointsPossible={lesson.lti.pointsPossible}
+          />
+        )}
+
         {lesson.autolab && (
           <AutogradedAssignmentCard lessonId={lesson.id} autolab={lesson.autolab} />
         )}
 
-        {lesson.contentSource === "blocks" ? (
+        {!isExternal && lesson.contentSource === "blocks" ? (
           lesson.blocks.length === 0 ? (
             <p className="px-8 py-6 text-sm text-gray-400">This lesson has no content yet.</p>
           ) : isAssessment ? (
@@ -96,14 +109,16 @@ export default function StudentLessonViewer({
           ) : (
             <TopicLessonViewer blocks={lesson.blocks as TopicLessonBlock[]} lessonTitle={lesson.title} />
           )
-        ) : (
+        ) : !isExternal ? (
           <div className="lesson-tab-panel">
             <div
               className="course-notes-content lesson-content-editor"
               dangerouslySetInnerHTML={{ __html: lesson.contentHtml }}
             />
           </div>
-        )}
+        ) : lesson.blocks.length > 0 ? (
+          <TopicLessonViewer blocks={lesson.blocks as TopicLessonBlock[]} lessonTitle={lesson.title} />
+        ) : null}
 
         <div className="px-8 py-5 border-t border-gray-100 flex flex-col gap-2">
           <div className="flex items-center gap-3">

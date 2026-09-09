@@ -5,6 +5,11 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { getDriveImportPreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
 import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
+import {
+  getCogniterraCourseConfig,
+  getCogniterraEnvDefaults,
+} from "@/lib/instructor/data/cogniterra";
+import CogniterraSetupFields from "@/components/instructor/CogniterraSetupFields";
 
 type Status = "input" | "scanning" | "confirm" | "importing" | "error";
 
@@ -28,11 +33,28 @@ export default function GoogleDriveImportModal({
   } | null>(null);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [cogniterraCourseId, setCogniterraCourseId] = useState("");
+  const [cogniterraConsumerKey, setCogniterraConsumerKey] = useState("");
+  const [cogniterraSharedSecret, setCogniterraSharedSecret] = useState("");
+  const [existingCogniterra, setExistingCogniterra] = useState<string | null>(null);
 
   useEffect(() => {
     void getDriveShareEmail().then(setShareEmail);
     void getGoogleOAuthConnectionStatus().then(setGoogleConnected);
-  }, []);
+    void getCogniterraCourseConfig(courseCode).then((config) => {
+      if (config) {
+        setExistingCogniterra(config.cogniterraCourseId);
+        setCogniterraCourseId(config.cogniterraCourseId);
+        setCogniterraConsumerKey(config.consumerKey);
+      } else {
+        void getCogniterraEnvDefaults().then((defaults) => {
+          if (defaults.cogniterraCourseId) setCogniterraCourseId(defaults.cogniterraCourseId);
+          if (defaults.consumerKey) setCogniterraConsumerKey(defaults.consumerKey);
+          if (defaults.sharedSecret) setCogniterraSharedSecret(defaults.sharedSecret);
+        });
+      }
+    });
+  }, [courseCode]);
 
   const scanFolder = async () => {
     if (!folderUrl.trim()) return;
@@ -47,11 +69,29 @@ export default function GoogleDriveImportModal({
     }
   };
 
+  const cogniterraReady =
+    Boolean(cogniterraCourseId.trim()) &&
+    Boolean(cogniterraConsumerKey.trim()) &&
+    Boolean(cogniterraSharedSecret.trim() || existingCogniterra);
+
   const confirmImport = async () => {
     setStatus("importing");
     try {
-      const result = await runDriveImportOrganize(courseCode, folderUrl);
-      onImportComplete(result);
+      const shouldSaveCogniterra =
+        cogniterraCourseId.trim() &&
+        cogniterraConsumerKey.trim() &&
+        (cogniterraSharedSecret.trim() || existingCogniterra);
+
+      const cogniterra = shouldSaveCogniterra
+        ? {
+            cogniterraCourseId: cogniterraCourseId.trim(),
+            consumerKey: cogniterraConsumerKey.trim(),
+            sharedSecret: cogniterraSharedSecret.trim(),
+          }
+        : undefined;
+
+      const result = await runDriveImportOrganize(courseCode, folderUrl, { cogniterra });
+      onImportComplete({ unitIds: result.unitIds, lessonIds: result.lessonIds });
       onClose();
     } catch (error) {
       setErrorMessage(
@@ -69,7 +109,7 @@ export default function GoogleDriveImportModal({
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="bg-white text-black rounded-md shadow-xl w-full max-w-lg p-6 flex flex-col"
+        className="bg-white text-black rounded-md shadow-xl w-full max-w-lg p-6 flex flex-col max-h-[90vh] overflow-y-auto"
       >
         <h2 className="text-lg font-bold mb-1">Import from Google Drive</h2>
 
@@ -77,8 +117,8 @@ export default function GoogleDriveImportModal({
           <div className="py-4">
             <p className="text-sm text-gray-500 mb-4">
               Paste a link to the Drive folder for this course. All files are collected regardless of
-              folder layout — AI reads each file and builds units, content lessons (Lesson Content +
-              Lesson Files), and quizzes automatically.
+              folder layout — AI reads each file and builds units, content lessons, and quizzes
+              automatically.
             </p>
             {googleConnected === false && (
               <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-4 flex items-center justify-between gap-3">
@@ -127,6 +167,19 @@ export default function GoogleDriveImportModal({
               disabled={status === "scanning"}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-4 disabled:opacity-60"
             />
+
+            <div className="mb-4">
+              <CogniterraSetupFields
+                cogniterraCourseId={cogniterraCourseId}
+                consumerKey={cogniterraConsumerKey}
+                sharedSecret={cogniterraSharedSecret}
+                existingCourseId={existingCogniterra}
+                onCogniterraCourseIdChange={setCogniterraCourseId}
+                onConsumerKeyChange={setCogniterraConsumerKey}
+                onSharedSecretChange={setCogniterraSharedSecret}
+              />
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -150,14 +203,14 @@ export default function GoogleDriveImportModal({
         )}
 
         {status === "confirm" && preview && (
-          <div className="py-6">
+          <div className="py-4">
             <p className="text-sm text-gray-600 mb-4">
               Found <span className="font-bold">{preview.fileCount ?? preview.lessonCount}</span> file
               {(preview.fileCount ?? preview.lessonCount) === 1 ? "" : "s"}. On import, AI will
-              structure them into units and lessons — content lessons get a Lesson Content tab
-              (video/notes) and a Lesson Files tab (slides), plus separate quiz lessons for
-              homework and assessments.
+              structure them into units and lessons.
+              {cogniterraReady ? " Cogniterra assignments will be linked automatically." : ""}
             </p>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -172,7 +225,7 @@ export default function GoogleDriveImportModal({
                 disabled={(preview.fileCount ?? preview.lessonCount) === 0}
                 className="text-sm font-bold text-black border border-black px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-40"
               >
-                Import
+                Import{cogniterraReady ? " & link Cogniterra" : ""}
               </button>
             </div>
           </div>
@@ -181,7 +234,7 @@ export default function GoogleDriveImportModal({
         {status === "importing" && (
           <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10">
             <Loader2 size={20} className="animate-spin" />
-            Rendering slides and structuring the course with AI — this can take a bit for larger folders...
+            Rendering slides, structuring the course, and matching Cogniterra assignments...
           </div>
         )}
 

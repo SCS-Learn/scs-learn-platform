@@ -81,11 +81,6 @@ export function formatCorrectAnswer(question: QuizQuestionFields): string {
     if (parsed) return parsed.value;
   }
 
-  if (questionType === "chemical_formula") {
-    const parsed = parseJson<{ formula: string }>(answerKey);
-    if (parsed) return parsed.formula;
-  }
-
   if (questionType === "form_constrained_algebra") {
     const parsed = parseJson<{ example: string }>(answerKey);
     if (parsed) return parsed.example;

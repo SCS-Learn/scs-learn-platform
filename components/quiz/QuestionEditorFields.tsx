@@ -7,6 +7,31 @@ import {
   isValidShortAnswer,
 } from "@/lib/quiz/grading";
 import OrderingEditor from "@/components/quiz/OrderingEditor";
+import InlineDropdownEditor from "@/components/quiz/InlineDropdownEditor";
+import MatchingEditor from "@/components/quiz/MatchingEditor";
+import CategorizationEditor from "@/components/quiz/CategorizationEditor";
+import ChoiceGridEditor from "@/components/quiz/ChoiceGridEditor";
+import HottextEditor from "@/components/quiz/HottextEditor";
+import MatrixEditor from "@/components/quiz/MatrixEditor";
+import VectorEditor from "@/components/quiz/VectorEditor";
+import SignificantFiguresEditor from "@/components/quiz/SignificantFiguresEditor";
+import {
+  parseInlineDropdownAnswerKey,
+  parseInlineDropdownChoices,
+} from "@/lib/quiz/inline-dropdown";
+import {
+  parseCategorizationChoices,
+  parseChoiceGridAnswerKey,
+  parseChoiceGridChoices,
+  parseHottextAnswerKey,
+  parseHottextChoices,
+  parseMappingAnswerKey,
+  parseMatchingChoices,
+  parseMatrixPerCellAnswerKey,
+  parseMatrixWholeAnswerKey,
+  parseSignificantFiguresAnswerKey,
+  parseVectorAnswerKey,
+} from "@/lib/quiz/structured-choices";
 import {
   parseOrderingAnswerKey,
   parseOrderingChoices,
@@ -18,8 +43,9 @@ import {
   defaultChoicesForType,
 } from "@/lib/quiz/parse";
 import {
-  AUTOGRADABLE_QUESTION_TYPES,
+  COMMON_QUESTION_TYPES,
   QUESTION_CATEGORIES,
+  QUESTION_TYPE_DROPDOWN_ORDER,
   QUESTION_TYPE_META,
   type AutogradableQuestionType,
   type QuestionChoices,
@@ -58,7 +84,6 @@ const USES_JSON_ANSWER: AutogradableQuestionType[] = [
   "form_constrained_algebra",
   "antiderivative",
   "interval_set_list",
-  "chemical_formula",
 ];
 
 function usesStringChoices(type: AutogradableQuestionType): boolean {
@@ -95,7 +120,6 @@ const ANSWER_HINTS: Partial<Record<AutogradableQuestionType, string>> = {
   form_constrained_algebra: 'JSON answer key for the expected form',
   antiderivative: 'JSON with the expected antiderivative (up to a constant)',
   interval_set_list: 'JSON with the expected interval, set, or list',
-  chemical_formula: 'JSON with the expected formula or equation',
 };
 
 function promptPlaceholder(type: AutogradableQuestionType): string {
@@ -264,7 +288,7 @@ export function editorStateFromQuestion(question: {
   choices: QuestionChoices;
   answerKey: string | null;
 }): EditorState {
-  const type = AUTOGRADABLE_QUESTION_TYPES.includes(question.questionType as AutogradableQuestionType)
+  const type = QUESTION_TYPE_DROPDOWN_ORDER.includes(question.questionType as AutogradableQuestionType)
     ? (question.questionType as AutogradableQuestionType)
     : "short_answer";
   return {
@@ -277,9 +301,17 @@ export function editorStateFromQuestion(question: {
 
 export function validateEditorState(state: EditorState): string | null {
   const trimmedPrompt = state.promptText.trim();
-  if (!trimmedPrompt) return "Question text is required.";
-
   const { questionType, choices, answerKey } = state;
+
+  if (!trimmedPrompt) {
+    if (questionType === "hottext") {
+      const config = parseHottextChoices(choices);
+      if (!config?.passage.trim()) return "Question text or passage is required.";
+    } else {
+      return "Question text is required.";
+    }
+  }
+
   let nextAnswer = answerKey.trim();
   if (!nextAnswer) return "Answer key is required.";
 
@@ -306,6 +338,75 @@ export function validateEditorState(state: EditorState): string | null {
     const sanitized = sanitizeOrder(correct, config.items);
     if (sanitized.length !== config.items.length) {
       return "Correct order must include every item exactly once.";
+    }
+  } else if (questionType === "inline_dropdown") {
+    const config = parseInlineDropdownChoices(choices);
+    if (!config || config.blanks.length === 0) return "Add at least one dropdown blank.";
+    for (const blank of config.blanks) {
+      if (blank.options.length < 2) {
+        return `Blank ${blank.id} needs at least two options.`;
+      }
+    }
+    const answers = parseInlineDropdownAnswerKey(nextAnswer);
+    for (const blank of config.blanks) {
+      if (!answers[blank.id] || !blank.options.includes(answers[blank.id])) {
+        return `Select the correct option for blank ${blank.id}.`;
+      }
+    }
+  } else if (questionType === "matching") {
+    const config = parseMatchingChoices(choices);
+    if (!config || config.left.length < 2 || config.right.length < 2) {
+      return "Add at least two items in each column.";
+    }
+    const mapping = parseMappingAnswerKey(nextAnswer);
+    for (const item of config.left) {
+      if (!mapping[item] || !config.right.includes(mapping[item])) {
+        return `Select the correct match for "${item}".`;
+      }
+    }
+  } else if (questionType === "categorization") {
+    const config = parseCategorizationChoices(choices);
+    if (!config || config.categories.length < 1 || config.items.length < 1) {
+      return "Add at least one category and one item.";
+    }
+    const mapping = parseMappingAnswerKey(nextAnswer);
+    for (const item of config.items) {
+      if (!mapping[item] || !config.categories.includes(mapping[item])) {
+        return `Select the correct category for "${item}".`;
+      }
+    }
+  } else if (questionType === "choice_grid") {
+    const config = parseChoiceGridChoices(choices);
+    if (!config || config.rows.length < 1 || config.cols.length < 1 || config.options.length < 2) {
+      return "Add rows, columns, and at least two options.";
+    }
+    const answers = parseChoiceGridAnswerKey(nextAnswer);
+    for (const row of config.rows) {
+      for (const col of config.cols) {
+        const value = answers[row]?.[col];
+        if (!value || !config.options.includes(value)) {
+          return `Select the correct option for ${row} / ${col}.`;
+        }
+      }
+    }
+  } else if (questionType === "hottext") {
+    const config = parseHottextChoices(choices);
+    if (!config || !config.passage.trim()) return "Passage is required.";
+    if (config.terms.length < 1) return "Add at least one clickable term.";
+    const correct = parseHottextAnswerKey(nextAnswer);
+    if (correct.length === 0) return "Select at least one correct term.";
+  } else if (questionType === "matrix_whole") {
+    const matrix = parseMatrixWholeAnswerKey(nextAnswer);
+    if (!matrix || matrix.length < 1) return "Set correct matrix values.";
+  } else if (questionType === "matrix_per_cell") {
+    const cells = parseMatrixPerCellAnswerKey(nextAnswer);
+    if (!cells || Object.keys(cells).length === 0) return "Set correct cell values.";
+  } else if (questionType === "vector") {
+    const key = parseVectorAnswerKey(nextAnswer);
+    if (!key || key.vector.length < 1) return "Set the correct vector components.";
+  } else if (questionType === "significant_figures") {
+    if (!parseSignificantFiguresAnswerKey(nextAnswer)) {
+      return "Enter a valid value and significant figure count.";
     }
   } else if (questionType === "short_answer") {
     if (!isValidShortAnswer(nextAnswer)) {
@@ -334,23 +435,36 @@ export function QuestionTypeSelect({
   value: AutogradableQuestionType;
   onChange: (type: AutogradableQuestionType) => void;
 }) {
+  const commonSet = new Set(COMMON_QUESTION_TYPES);
+  const moreTypes = QUESTION_TYPE_DROPDOWN_ORDER.filter((type) => !commonSet.has(type));
+
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as AutogradableQuestionType)}
       className="text-sm border border-gray-200 px-3 py-2 bg-white max-w-xs"
     >
-      {QUESTION_CATEGORIES.map((cat) => (
-        <optgroup key={cat.id} label={cat.label}>
-          {AUTOGRADABLE_QUESTION_TYPES
-            .filter((t) => QUESTION_TYPE_META[t].category === cat.id)
-            .map((type) => (
+      <optgroup label="Common">
+        {COMMON_QUESTION_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {QUESTION_TYPE_META[type].label}
+          </option>
+        ))}
+      </optgroup>
+      {QUESTION_CATEGORIES.map((cat) => {
+        const types = moreTypes.filter((type) => QUESTION_TYPE_META[type].category === cat.id);
+        if (types.length === 0) return null;
+
+        return (
+          <optgroup key={cat.id} label={cat.label}>
+            {types.map((type) => (
               <option key={type} value={type}>
                 {QUESTION_TYPE_META[type].label}
               </option>
             ))}
-        </optgroup>
-      ))}
+          </optgroup>
+        );
+      })}
     </select>
   );
 }
@@ -397,6 +511,62 @@ export function QuestionEditorFields({
           choices={choices}
           answerKey={answerKey}
           onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "inline_dropdown" ? (
+        <InlineDropdownEditor
+          choices={choices}
+          answerKey={answerKey}
+          questionId={questionId}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "matching" ? (
+        <MatchingEditor
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "categorization" ? (
+        <CategorizationEditor
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "choice_grid" ? (
+        <ChoiceGridEditor
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "hottext" ? (
+        <HottextEditor
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "matrix_whole" || questionType === "matrix_per_cell" ? (
+        <MatrixEditor
+          mode={questionType}
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "vector" ? (
+        <VectorEditor
+          choices={choices}
+          answerKey={answerKey}
+          onChoicesChange={(c) => onChange({ choices: c })}
+          onAnswerKeyChange={(k) => onChange({ answerKey: k })}
+        />
+      ) : questionType === "significant_figures" ? (
+        <SignificantFiguresEditor
+          answerKey={answerKey}
           onAnswerKeyChange={(k) => onChange({ answerKey: k })}
         />
       ) : usesStringChoices(questionType) && stringChoices ? (

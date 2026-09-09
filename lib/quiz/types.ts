@@ -1,4 +1,7 @@
-/** Question types the platform can auto-grade in-app (27 types). */
+/** Default minimum quiz score (%) required before a learner can mark the lesson complete. */
+export const DEFAULT_QUIZ_COMPLETION_THRESHOLD = 80;
+
+/** Question types the platform can auto-grade in-app. */
 export type AutogradableQuestionType =
   // Selection & arrangement
   | "multiple_choice"
@@ -29,8 +32,7 @@ export type AutogradableQuestionType =
   | "equation_input"
   | "form_constrained_algebra"
   | "antiderivative"
-  | "interval_set_list"
-  | "chemical_formula";
+  | "interval_set_list";
 
 export type QuestionType = AutogradableQuestionType | "free_response" | "unknown";
 
@@ -72,12 +74,48 @@ export const QUESTION_TYPE_META: Record<AutogradableQuestionType, QuestionTypeMe
   form_constrained_algebra: { label: "Form-constrained algebra", category: "symbolic" },
   antiderivative: { label: "Antiderivative (up to a constant)", category: "symbolic" },
   interval_set_list: { label: "Interval, set, list & union", category: "symbolic" },
-  chemical_formula: { label: "Chemical formula & equation", category: "symbolic" },
 };
 
-export const AUTOGRADABLE_QUESTION_TYPES: AutogradableQuestionType[] = Object.keys(
-  QUESTION_TYPE_META
-) as AutogradableQuestionType[];
+/** Frequently used types — shown first in instructor question-type dropdowns. */
+export const COMMON_QUESTION_TYPES: AutogradableQuestionType[] = [
+  "multiple_choice",
+  "true_false",
+  "short_answer",
+  "multiple_select",
+  "numeric_tolerance",
+  "integer",
+  "number_with_units",
+  "multi_blank",
+  "matching",
+  "ordering",
+];
+
+/**
+ * All autogradable types in display order: common types first, then less-used types
+ * grouped by category (selection → text → numeric → symbolic).
+ */
+export const QUESTION_TYPE_DROPDOWN_ORDER: AutogradableQuestionType[] = [
+  ...COMMON_QUESTION_TYPES,
+  "significant_figures",
+  "inline_dropdown",
+  "categorization",
+  "cloze",
+  "keyword_scored",
+  "choice_grid",
+  "hottext",
+  "symbolic_expression",
+  "equation_input",
+  "vector",
+  "matrix_per_cell",
+  "matrix_whole",
+  "slider",
+  "form_constrained_algebra",
+  "antiderivative",
+  "interval_set_list",
+];
+
+export const AUTOGRADABLE_QUESTION_TYPES: AutogradableQuestionType[] =
+  QUESTION_TYPE_DROPDOWN_ORDER;
 
 export const QUESTION_CATEGORIES: { id: QuestionCategory; label: string }[] = [
   { id: "selection", label: "Selection & arrangement" },

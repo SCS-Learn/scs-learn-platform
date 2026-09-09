@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isCorrect, matchesShortAnswer } from "./grading.js";
+import { isCorrect, matchesShortAnswer, scoreQuiz, reconcileQuizSubmission } from "./grading.ts";
 
 describe("matchesShortAnswer", () => {
   it("matches plain text case-insensitively", () => {
@@ -145,5 +145,81 @@ describe("isCorrect", () => {
       ),
       true
     );
+  });
+
+  it("grades significant figures by rounding", () => {
+    assert.equal(
+      isCorrect(
+        {
+          questionType: "significant_figures",
+          answerKey: '{"value":3.14,"sigFigs":2}',
+          choices: null,
+          promptText: "",
+        },
+        "3.1"
+      ),
+      true
+    );
+    assert.equal(
+      isCorrect(
+        {
+          questionType: "significant_figures",
+          answerKey: '{"value":3.14,"sigFigs":2}',
+          choices: null,
+          promptText: "",
+        },
+        "3.2"
+      ),
+      false
+    );
+  });
+});
+
+describe("scoreQuiz / reconcileQuizSubmission", () => {
+  const questions = [
+    {
+      id: "q1",
+      questionType: "multiple_choice" as const,
+      answerKey: "A",
+      choices: ["A", "B"],
+      promptText: "One",
+    },
+    {
+      id: "q2",
+      questionType: "multiple_choice" as const,
+      answerKey: "B",
+      choices: ["A", "B"],
+      promptText: "Two",
+    },
+    {
+      id: "q3",
+      questionType: "multiple_choice" as const,
+      answerKey: "A",
+      choices: ["A", "B"],
+      promptText: "Three",
+    },
+  ];
+
+  it("uses the live question count as the score denominator", () => {
+    const scored = scoreQuiz(questions, { q1: "A", q2: "A", q3: "A" });
+    assert.equal(scored.correctCount, 2);
+    assert.equal(scored.gradableCount, 3);
+    assert.equal(scored.scorePercent, 67);
+  });
+
+  it("rescores after a question is removed", () => {
+    const remaining = questions.filter((q) => q.id !== "q2");
+    const reconciled = reconcileQuizSubmission(remaining, {
+      submittedAt: "2026-01-01T00:00:00.000Z",
+      responses: { q1: "A", q2: "B", q3: "A" },
+      correctCount: 3,
+      gradableCount: 3,
+      scorePercent: 100,
+    });
+    assert.ok(reconciled);
+    assert.equal(reconciled.gradableCount, 2);
+    assert.equal(reconciled.correctCount, 2);
+    assert.equal(reconciled.scorePercent, 100);
+    assert.deepEqual(reconciled.responses, { q1: "A", q3: "A" });
   });
 });

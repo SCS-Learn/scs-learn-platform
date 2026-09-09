@@ -1,5 +1,6 @@
 import { effectiveOrderingResponse } from "@/lib/quiz/ordering";
 import { parseJson } from "@/lib/quiz/parse";
+import { gradeSignificantFigures } from "@/lib/quiz/sig-figs";
 import { isAutogradableQuestionType, type QuizQuestionFields } from "@/lib/quiz/types";
 
 export function normalize(value: string): string {
@@ -122,16 +123,6 @@ function numbersClose(a: number, b: number, tolerance = 1e-9): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
-function countSigFigs(value: number): number {
-  const s = value.toString();
-  if (s.includes("e") || s.includes("E")) {
-    const [mantissa] = s.split(/e/i);
-    return countSigFigs(Number(mantissa));
-  }
-  const stripped = s.replace(/^-/, "").replace(/^0+\.?0*/, "").replace(".", "");
-  return stripped.length || 1;
-}
-
 function normalizeExpression(expr: string): string {
   return expr
     .trim()
@@ -142,10 +133,6 @@ function normalizeExpression(expr: string): string {
     .replace(/\*/g, "")
     .replace(/×/g, "")
     .replace(/÷/g, "/");
-}
-
-function normalizeChemicalFormula(formula: string): string {
-  return formula.trim().replace(/\s+/g, "").replace(/₂/g, "2").replace(/₃/g, "3");
 }
 
 function parseVector(value: string): number[] | null {
@@ -291,9 +278,7 @@ export function isCorrect(question: QuizQuestionFields, response: string): boole
   if (type === "significant_figures") {
     const key = parseJson<{ value: number; sigFigs: number }>(question.answerKey);
     if (!key) return false;
-    const n = parseNumber(response);
-    if (n === null) return false;
-    return numbersClose(n, key.value, Math.abs(key.value) * 0.01 + 1e-9) && countSigFigs(n) === key.sigFigs;
+    return gradeSignificantFigures(response, key);
   }
 
   if (type === "number_with_units") {
@@ -364,11 +349,41 @@ export function isCorrect(question: QuizQuestionFields, response: string): boole
     return normalize(response).replace(/\s/g, "") === normalize(key.value).replace(/\s/g, "");
   }
 
-  if (type === "chemical_formula") {
-    const key = parseJson<{ formula: string }>(question.answerKey);
-    if (!key) return false;
-    return normalizeChemicalFormula(response) === normalizeChemicalFormula(key.formula);
-  }
-
   return normalize(response) === normalize(question.answerKey);
+}
+
+export type ScoredQuizQuestion = QuizQuestionFields & { id: string };
+
+/** Grade a full attempt against the current question set (denominator = live gradable count). */
+export function scoreQuiz(
+  questions: ScoredQuizQuestion[],
+  responses: Record<string, string>
+): { correctCount: number; gradableCount: number; scorePercent: number } {
+  const gradableQuestions = questions.filter(isGradable);
+  const correctCount = gradableQuestions.filter((q) => isCorrect(q, responses[q.id] ?? "")).length;
+  const gradableCount = gradableQuestions.length;
+  return {
+    correctCount,
+    gradableCount,
+    scorePercent: gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0,
+  };
+}
+
+/** Drop responses for removed questions and rescore against the live question list. */
+export function reconcileQuizSubmission<T extends { responses: Record<string, string>; submittedAt: string }>(
+  questions: ScoredQuizQuestion[],
+  submission: T | null
+): (T & { correctCount: number; gradableCount: number; scorePercent: number }) | null {
+  if (!submission) return null;
+  const responses: Record<string, string> = {};
+  for (const question of questions) {
+    if (question.id in submission.responses) {
+      responses[question.id] = submission.responses[question.id];
+    }
+  }
+  return {
+    ...submission,
+    ...scoreQuiz(questions, responses),
+    responses,
+  };
 }

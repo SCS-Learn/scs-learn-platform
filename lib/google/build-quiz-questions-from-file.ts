@@ -239,7 +239,6 @@ Symbolic & math:
 - form_constrained_algebra: choicesJson = "null". answerKey = {"pattern":"...","example":"2x^2+1"}.
 - antiderivative: choicesJson = "null". answerKey = {"expression":"x^2 + C","allowConstant":true}.
 - interval_set_list: choicesJson = "null". answerKey = {"type":"interval","value":"(0,1)"}.
-- chemical_formula: choicesJson = "null". answerKey = {"formula":"H2O"}.
 
 Rules:
 - choicesJson is ALWAYS a JSON-encoded string: use "null" when there is no config, or a JSON array/object as above.

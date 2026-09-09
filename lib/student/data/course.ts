@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
 import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-progress";
 import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
+import { reconcileQuizSubmission } from "@/lib/quiz/grading";
+import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
 import type {
   StudentCourse,
   StudentCourseSummary,
@@ -10,6 +12,7 @@ import type {
   StudentLessonBlock,
   StudentQuestion,
   AutolabStatus,
+  LtiStatus,
   QuizSubmissionStatus,
   LessonType,
 } from "@/lib/student/types";
@@ -110,6 +113,54 @@ function toQuestion(row: QuestionRow): StudentQuestion {
   };
 }
 
+type LtiScoreRow = {
+  platform_user_id: string;
+  score: number | null;
+  reported_at: string | null;
+};
+
+type LtiLinkRow = {
+  id: string;
+  lesson_id: string;
+  title: string;
+  points_possible: number;
+  lti_results: LtiScoreRow[] | null;
+};
+
+function toLtiStatus(link: LtiLinkRow, learnerId: string): LtiStatus {
+  const scoreRow = link.lti_results?.find((s) => s.platform_user_id === learnerId) ?? null;
+  return {
+    linkId: link.id,
+    title: link.title,
+    pointsPossible: Number(link.points_possible),
+    score: scoreRow?.score ?? null,
+    reportedAt: scoreRow?.reported_at ?? null,
+  };
+}
+
+async function fetchLtiStatusByLessonId(
+  lessonIds: string[],
+  learnerId: string
+): Promise<Map<string, LtiStatus>> {
+  if (lessonIds.length === 0) return new Map();
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("lti_links")
+      .select("id, lesson_id, title, points_possible, lti_results(platform_user_id, score, reported_at)")
+      .in("lesson_id", lessonIds);
+    if (error) throw new Error(error.message);
+
+    return new Map(
+      (data ?? []).map((row) => [row.lesson_id, toLtiStatus(row as unknown as LtiLinkRow, learnerId)])
+    );
+  } catch (error) {
+    console.warn("Skipping LTI status (lti tables likely not run yet):", error);
+    return new Map();
+  }
+}
+
 function toAutolabStatus(link: AutolabLinkRow, learnerId: string): AutolabStatus {
   const scoreRow = link.autolab_scores?.find((s) => s.platform_user_id === learnerId) ?? null;
   return {
@@ -173,6 +224,7 @@ function pdfUrlForBlock(block: LessonBlockRow, attachments: AttachmentRow[]): st
 function toLesson(
   row: LessonRow,
   autolab: AutolabStatus | null,
+  lti: LtiStatus | null,
   quizSubmission: QuizSubmissionStatus | null,
   completedAt: string | null
 ): StudentLesson {
@@ -192,6 +244,8 @@ function toLesson(
         : null,
     }));
 
+  const questions = blocks.flatMap((block) => block.questions ?? []);
+
   return {
     id: row.id,
     code: row.code,
@@ -201,8 +255,9 @@ function toLesson(
     contentSource: row.content_source as StudentLesson["contentSource"],
     blocks,
     autolab,
-    quizSubmission,
-    quizCompletionThreshold: row.quiz_completion_threshold ?? 100,
+    lti,
+    quizSubmission: reconcileQuizSubmission(questions, quizSubmission),
+    quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
     completedAt,
   };
 }
@@ -210,6 +265,7 @@ function toLesson(
 function toUnit(
   row: UnitRow,
   autolabByLessonId: Map<string, AutolabStatus>,
+  ltiByLessonId: Map<string, LtiStatus>,
   quizByLessonId: Map<string, QuizSubmissionStatus>,
   completedByLessonId: Map<string, string>
 ): StudentUnit | null {
@@ -220,6 +276,7 @@ function toUnit(
       toLesson(
         l,
         autolabByLessonId.get(l.id) ?? null,
+        ltiByLessonId.get(l.id) ?? null,
         quizByLessonId.get(l.id) ?? null,
         completedByLessonId.get(l.id) ?? null
       )
@@ -231,12 +288,13 @@ function toUnit(
 function toCourse(
   row: CourseRow,
   autolabByLessonId: Map<string, AutolabStatus>,
+  ltiByLessonId: Map<string, LtiStatus>,
   quizByLessonId: Map<string, QuizSubmissionStatus>,
   completedByLessonId: Map<string, string>
 ): StudentCourse {
   const units = [...row.units]
     .sort((a, b) => a.position - b.position)
-    .map((u) => toUnit(u, autolabByLessonId, quizByLessonId, completedByLessonId))
+    .map((u) => toUnit(u, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId))
     .filter((u): u is StudentUnit => u !== null);
   return { code: row.code, title: row.title, department: row.department, track: row.track, units };
 }
@@ -334,11 +392,12 @@ export async function getStudentCourse(courseCode: string): Promise<StudentCours
 
   const course = data as unknown as CourseRow;
   const lessonIds = course.units.flatMap((u) => u.lessons.map((l) => l.id));
-  const [autolabByLessonId, quizByLessonId, completedByLessonId] = await Promise.all([
+  const [autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId] = await Promise.all([
     fetchAutolabStatusByLessonId(lessonIds, learner.id),
+    fetchLtiStatusByLessonId(lessonIds, learner.id),
     fetchQuizSubmissionsForLessons(lessonIds, learner.id),
     fetchLessonCompletionsForLessons(lessonIds, learner.id),
   ]);
 
-  return toCourse(course, autolabByLessonId, quizByLessonId, completedByLessonId);
+  return toCourse(course, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId);
 }

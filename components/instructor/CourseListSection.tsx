@@ -8,6 +8,8 @@ import { createCourse, deleteCourse } from "@/lib/instructor/data/courses";
 import { getDriveFolderCoursePreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
 import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
+import { getCogniterraEnvDefaults } from "@/lib/instructor/data/cogniterra";
+import CogniterraSetupFields from "@/components/instructor/CogniterraSetupFields";
 import type { InstructorCourse } from "@/lib/instructor/mock-data";
 
 type CreateStatus = "input" | "scanning" | "confirm" | "creating" | "importing";
@@ -30,11 +32,19 @@ function CreateCourseModal({
   } | null>(null);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [cogniterraCourseId, setCogniterraCourseId] = useState("");
+  const [cogniterraConsumerKey, setCogniterraConsumerKey] = useState("");
+  const [cogniterraSharedSecret, setCogniterraSharedSecret] = useState("");
   const [, startTransition] = useTransition();
 
   useEffect(() => {
     void getDriveShareEmail().then(setShareEmail);
     void getGoogleOAuthConnectionStatus().then(setGoogleConnected);
+    void getCogniterraEnvDefaults().then((defaults) => {
+      if (defaults.cogniterraCourseId) setCogniterraCourseId(defaults.cogniterraCourseId);
+      if (defaults.consumerKey) setCogniterraConsumerKey(defaults.consumerKey);
+      if (defaults.sharedSecret) setCogniterraSharedSecret(defaults.sharedSecret);
+    });
   }, []);
 
   const isPending = status === "creating" || status === "importing";
@@ -64,7 +74,20 @@ function CreateCourseModal({
 
         setStatus("importing");
         try {
-          const importResult = await runDriveImportOrganize(result.code, folderUrl.trim());
+          const shouldSaveCogniterra =
+            cogniterraCourseId.trim() &&
+            cogniterraConsumerKey.trim() &&
+            cogniterraSharedSecret.trim();
+
+          const importResult = await runDriveImportOrganize(result.code, folderUrl.trim(), {
+            cogniterra: shouldSaveCogniterra
+              ? {
+                  cogniterraCourseId: cogniterraCourseId.trim(),
+                  consumerKey: cogniterraConsumerKey.trim(),
+                  sharedSecret: cogniterraSharedSecret.trim(),
+                }
+              : undefined,
+          });
           onCreated(result.code, importResult);
         } catch (importErr) {
           const message =
@@ -91,7 +114,7 @@ function CreateCourseModal({
         aria-modal="true"
         aria-labelledby="create-course-title"
         onClick={(e) => e.stopPropagation()}
-        className="bg-white text-black rounded-md shadow-xl w-full max-w-lg p-6"
+        className="bg-white text-black rounded-md shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
       >
         <h2 id="create-course-title" className="text-lg font-bold mb-4">
           Create a new course
@@ -167,6 +190,15 @@ function CreateCourseModal({
                   className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
                 />
               </label>
+
+              <CogniterraSetupFields
+                cogniterraCourseId={cogniterraCourseId}
+                consumerKey={cogniterraConsumerKey}
+                sharedSecret={cogniterraSharedSecret}
+                onCogniterraCourseIdChange={setCogniterraCourseId}
+                onConsumerKeyChange={setCogniterraConsumerKey}
+                onSharedSecretChange={setCogniterraSharedSecret}
+              />
             </div>
 
             {googleConnected === false && (

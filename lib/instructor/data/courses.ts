@@ -13,6 +13,7 @@ import type {
   QuestionView,
   Attachment,
 } from "@/lib/instructor/mock-data";
+import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
 import type { QuestionChoices } from "@/lib/quiz/types";
 
 type AttachmentRow = {
@@ -146,9 +147,10 @@ function toLessonItem(row: LessonRow): LessonItem {
     contentSource: row.content_source as LessonContentSource,
     blocks,
     isPublished: row.is_published,
-    quizCompletionThreshold: row.quiz_completion_threshold ?? 100,
+    quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
     updatedAt: row.updated_at,
     attachments: visibleAttachments,
+    ltiLinkId: null,
   };
 }
 
@@ -198,7 +200,30 @@ export async function getCourseWithContent(courseCode: string): Promise<Instruct
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  return toInstructorCourse(data as unknown as CourseRow);
+  const course = toInstructorCourse(data as unknown as CourseRow);
+  const lessonIds = course.units.flatMap((unit) => unit.lessons.map((lesson) => lesson.id));
+  if (lessonIds.length === 0) return course;
+
+  try {
+    const { data: links, error: linkError } = await supabase
+      .from("lti_links")
+      .select("id, lesson_id")
+      .in("lesson_id", lessonIds);
+    if (linkError) throw linkError;
+    const linkIdByLesson = new Map((links ?? []).map((link) => [link.lesson_id, link.id]));
+    return {
+      ...course,
+      units: course.units.map((unit) => ({
+        ...unit,
+        lessons: unit.lessons.map((lesson) => ({
+          ...lesson,
+          ltiLinkId: linkIdByLesson.get(lesson.id) ?? null,
+        })),
+      })),
+    };
+  } catch {
+    return course;
+  }
 }
 
 export type CreateCourseInput = {

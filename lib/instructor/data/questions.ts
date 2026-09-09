@@ -134,6 +134,7 @@ export async function updateQuestion(
   if (error || !data) throw new Error(error?.message ?? "Failed to update question");
 
   revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`);
 
   return {
     id: data.id,
@@ -174,12 +175,53 @@ export async function getQuestionsForGroup(questionGroupId: string): Promise<Que
   }));
 }
 
+async function nextQuestionPosition(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  questionGroupId: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("questions")
+    .select("position")
+    .eq("question_group_id", questionGroupId)
+    .order("position", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0]?.position ?? 0) + 1;
+}
+
+/** Compact positions to 1..n in current order so labels and inserts stay contiguous. */
+async function renumberQuestionsInGroup(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  questionGroupId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("questions")
+    .select("id")
+    .eq("question_group_id", questionGroupId)
+    .order("position");
+  if (error) throw new Error(error.message);
+
+  const results = await Promise.all(
+    (data ?? []).map((row, index) =>
+      supabase.from("questions").update({ position: index + 1 }).eq("id", row.id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
+}
+
+function revalidateQuizPaths(courseCode: string) {
+  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`);
+}
+
 export async function createQuestionInGroup(
   courseCode: string,
   questionGroupId: string,
-  position: number,
   questionType: AutogradableQuestionType = "multiple_choice"
 ): Promise<Question> {
+  const supabase = await createClient();
+  const position = await nextQuestionPosition(supabase, questionGroupId);
   const created = await addQuestion(questionGroupId, {
     position,
     promptText: "",
@@ -190,14 +232,24 @@ export async function createQuestionInGroup(
     needsReview: true,
   });
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidateQuizPaths(courseCode);
   return created;
 }
 
 export async function deleteQuestion(courseCode: string, questionId: string): Promise<void> {
   const supabase = await createClient();
+  const { data: existing, error: lookupError } = await supabase
+    .from("questions")
+    .select("question_group_id")
+    .eq("id", questionId)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!existing) throw new Error("Question not found");
+
   const { error } = await supabase.from("questions").delete().eq("id", questionId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  await renumberQuestionsInGroup(supabase, existing.question_group_id);
+
+  revalidateQuizPaths(courseCode);
 }

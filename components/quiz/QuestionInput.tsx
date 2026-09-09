@@ -639,10 +639,30 @@ function MatrixCellInput({
   );
 }
 
+function parseVectorResponse(response: string, dims: number): number[] {
+  const parsed = parseJson<unknown>(response);
+  if (Array.isArray(parsed)) {
+    return Array.from({ length: dims }, (_, i) => {
+      const n = Number(parsed[i]);
+      return Number.isFinite(n) ? n : 0;
+    });
+  }
+  if (parsed && typeof parsed === "object" && "vector" in parsed) {
+    const vector = (parsed as { vector: unknown }).vector;
+    if (Array.isArray(vector)) {
+      return Array.from({ length: dims }, (_, i) => {
+        const n = Number(vector[i]);
+        return Number.isFinite(n) ? n : 0;
+      });
+    }
+  }
+  return Array(dims).fill(0);
+}
+
 function VectorInput({ response, submitted, onChange, choices }: Omit<QuestionInputProps, "questionId" | "questionType" | "promptText">) {
   const config = asObjectChoices(choices);
-  const dims = (config?.dimensions as number) ?? 3;
-  const values = parseJson<number[]>(response) ?? Array(dims).fill(0);
+  const dims = Math.max(1, (config?.dimensions as number) ?? 3);
+  const values = parseVectorResponse(response, dims);
 
   const setComponent = (index: number, value: string) => {
     const next = [...values];
@@ -781,7 +801,6 @@ export default function QuestionInput(props: QuestionInputProps) {
     case "form_constrained_algebra":
     case "antiderivative":
     case "interval_set_list":
-    case "chemical_formula":
       return <TextField value={response} disabled={submitted} feedback={feedback} onChange={onChange} />;
     default:
       if (stringChoices && stringChoices.length > 0) {

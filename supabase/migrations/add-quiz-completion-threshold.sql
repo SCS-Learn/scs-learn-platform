@@ -1,6 +1,6 @@
 -- Minimum quiz score (%) required before a learner can mark the lesson complete.
 alter table public.lessons
-  add column if not exists quiz_completion_threshold integer not null default 100;
+  add column if not exists quiz_completion_threshold integer not null default 80;
 
 alter table public.lessons
   drop constraint if exists lessons_quiz_completion_threshold_check;

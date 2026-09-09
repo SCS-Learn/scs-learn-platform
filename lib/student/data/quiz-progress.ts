@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
-import { isCorrect, isGradable } from "@/lib/quiz/grading";
+import { isCorrect, isGradable, scoreQuiz } from "@/lib/quiz/grading";
 import type { StudentQuestion } from "@/lib/student/types";
 
 export type QuizSubmissionStatus = {
@@ -65,19 +65,18 @@ export async function submitQuiz(
   const supabase = await createClient();
 
   const questionById = new Map(questions.map((question) => [question.id, question]));
-  const gradableQuestions = questions.filter(isGradable);
+  const responseMap: Record<string, string> = {};
+  for (const response of responses) {
+    responseMap[response.questionId] = response.responseText;
+  }
+  const { correctCount, gradableCount, scorePercent } = scoreQuiz(questions, responseMap);
 
-  let correctCount = 0;
   const gradedResponses = responses.map(({ questionId, responseText }) => {
     const question = questionById.get(questionId);
     const gradable = question ? isGradable(question) : false;
     const correct = question ? isCorrect(question, responseText) : false;
-    if (gradable && correct) correctCount += 1;
     return { questionId, responseText, isCorrect: gradable ? correct : null };
   });
-
-  const gradableCount = gradableQuestions.length;
-  const scorePercent = gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0;
 
   const { data: submission, error: submissionError } = await supabase
     .from("quiz_submissions")
@@ -114,11 +113,6 @@ export async function submitQuiz(
   }
 
   revalidatePath(`/student/${courseCode}`);
-
-  const responseMap: Record<string, string> = {};
-  for (const response of gradedResponses) {
-    responseMap[response.questionId] = response.responseText;
-  }
 
   return {
     submittedAt: submission.submitted_at as string,

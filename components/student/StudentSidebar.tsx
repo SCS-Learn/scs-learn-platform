@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, FileText, CircleHelp, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, FileText, CircleHelp, CheckCircle2, ExternalLink } from "lucide-react";
 import type { StudentUnit, StudentLesson } from "@/lib/student/types";
 
 function LessonIcon({ type }: { type: StudentLesson["type"] }) {
-  return type === "quiz" ? (
-    <CircleHelp size={14} className="text-gray-400 shrink-0" />
-  ) : (
-    <FileText size={14} className="text-gray-400 shrink-0" />
-  );
+  if (type === "quiz") {
+    return <CircleHelp size={14} className="text-gray-400 shrink-0" />;
+  }
+  if (type === "external") {
+    return <ExternalLink size={14} className="text-gray-400 shrink-0" />;
+  }
+  return <FileText size={14} className="text-gray-400 shrink-0" />;
 }
 
 export default function StudentSidebar({
@@ -52,9 +54,11 @@ export default function StudentSidebar({
               {unit.lessons.map((lesson) => {
                 const isSelected = lesson.id === selectedLessonId;
                 const hasAutolab = lesson.autolab !== null;
+                const hasLti = lesson.lti !== null;
                 const hasQuizSubmission = lesson.quizSubmission !== null;
                 const isQuizLesson =
-                  lesson.type === "quiz" || lesson.blocks.some((b) => (b.questions?.length ?? 0) > 0);
+                  !hasLti &&
+                  (lesson.type === "quiz" || lesson.blocks.some((b) => (b.questions?.length ?? 0) > 0));
                 const isComplete = lesson.completedAt != null;
                 return (
                   <button
@@ -72,6 +76,8 @@ export default function StudentSidebar({
                     {isComplete ? (
                       <CheckCircle2 size={13} className="text-green-500 shrink-0" aria-label="Completed" />
                     ) : hasAutolab && lesson.autolab?.score != null ? (
+                      <CheckCircle2 size={13} className="text-green-500 shrink-0" />
+                    ) : hasLti && lesson.lti?.score != null ? (
                       <CheckCircle2 size={13} className="text-green-500 shrink-0" />
                     ) : !hasAutolab && isQuizLesson && hasQuizSubmission ? (
                       <span className="text-[10px] font-bold text-green-600 shrink-0">

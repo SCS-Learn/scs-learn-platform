@@ -149,7 +149,7 @@ export function defaultAnswerKeyForType(type: AutogradableQuestionType): string 
     case "integer":
       return JSON.stringify({ value: 42 });
     case "significant_figures":
-      return JSON.stringify({ value: 3.14, sigFigs: 3 });
+      return JSON.stringify({ value: 3.14, sigFigs: 2 });
     case "number_with_units":
       return JSON.stringify({ value: 9.8, unit: "m/s^2" });
     case "slider":
@@ -164,8 +164,6 @@ export function defaultAnswerKeyForType(type: AutogradableQuestionType): string 
       return JSON.stringify({ expression: "x^2 + C", allowConstant: true });
     case "interval_set_list":
       return JSON.stringify({ type: "interval", value: "(0, 1)" });
-    case "chemical_formula":
-      return JSON.stringify({ formula: "H2O" });
     default:
       return "";
   }

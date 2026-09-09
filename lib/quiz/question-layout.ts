@@ -22,13 +22,6 @@ export function questionEmbedsPrompt(
       return promptHasInlinePlaceholders(promptText);
     case "cloze":
       return Array.isArray(config?.segments) && (config.segments as unknown[]).length > 0;
-    case "hottext":
-      return (
-        typeof config?.passage === "string" &&
-        config.passage.length > 0 &&
-        Array.isArray(config?.terms) &&
-        (config.terms as unknown[]).length > 0
-      );
     default:
       return false;
   }

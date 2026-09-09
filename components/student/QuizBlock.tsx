@@ -5,24 +5,9 @@ import { CheckCircle2, XCircle, RotateCcw, Loader2 } from "lucide-react";
 import QuestionInput from "@/components/quiz/QuestionInput";
 import { submitQuiz } from "@/lib/student/data/quiz-progress";
 import { formatCorrectAnswer } from "@/lib/quiz/format-answer";
-import { isCorrect, isGradable } from "@/lib/quiz/grading";
+import { isCorrect, isGradable, scoreQuiz } from "@/lib/quiz/grading";
 import { questionEmbedsPrompt } from "@/lib/quiz/question-layout";
 import type { StudentQuestion, QuizSubmissionStatus } from "@/lib/student/types";
-
-function gradeLocally(
-  questions: StudentQuestion[],
-  responses: Record<string, string>
-): Pick<QuizSubmissionStatus, "correctCount" | "gradableCount" | "scorePercent" | "responses"> {
-  const gradableQuestions = questions.filter(isGradable);
-  const correctCount = gradableQuestions.filter((q) => isCorrect(q, responses[q.id] ?? "")).length;
-  const gradableCount = gradableQuestions.length;
-  return {
-    correctCount,
-    gradableCount,
-    scorePercent: gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0,
-    responses,
-  };
-}
 
 export default function QuizBlock({
   courseCode,
@@ -43,27 +28,24 @@ export default function QuizBlock({
   onReset?: () => void;
 }) {
   const [responses, setResponses] = useState<Record<string, string>>(initialSubmission?.responses ?? {});
-  const [submission, setSubmission] = useState<QuizSubmissionStatus | null>(initialSubmission);
   const [submitted, setSubmitted] = useState(initialSubmission !== null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const gradableQuestions = questions.filter(isGradable);
-  const correctCount =
-    submission?.correctCount ??
-    gradableQuestions.filter((q) => isCorrect(q, responses[q.id] ?? "")).length;
+  // Always score against the current question list so add/delete updates the denominator.
+  const liveScore = scoreQuiz(questions, responses);
 
   const handleSubmit = () => {
     setError(null);
     startTransition(async () => {
       try {
         if (previewMode || !courseCode || !lessonId) {
-          const graded = gradeLocally(questions, responses);
+          const graded = scoreQuiz(questions, responses);
           const local: QuizSubmissionStatus = {
             ...graded,
             submittedAt: new Date().toISOString(),
+            responses,
           };
-          setSubmission(local);
           setSubmitted(true);
           onSubmitted?.(local);
           return;
@@ -74,7 +56,6 @@ export default function QuizBlock({
           responseText: responses[question.id] ?? "",
         }));
         const result = await submitQuiz(courseCode, lessonId, payload, questions);
-        setSubmission(result);
         setResponses(result.responses);
         setSubmitted(true);
         onSubmitted?.(result);
@@ -86,7 +67,6 @@ export default function QuizBlock({
 
   const reset = () => {
     setResponses({});
-    setSubmission(null);
     setSubmitted(false);
     setError(null);
     onReset?.();
@@ -113,8 +93,8 @@ export default function QuizBlock({
       {submitted && (
         <div className="flex items-center gap-4 pb-2 border-b border-gray-100">
           <p className="text-sm font-bold">
-            Score: {correctCount} / {submission?.gradableCount ?? gradableQuestions.length}
-            {submission && submission.gradableCount > 0 ? ` (${submission.scorePercent}%)` : ""}
+            Score: {liveScore.correctCount} / {liveScore.gradableCount}
+            {liveScore.gradableCount > 0 ? ` (${liveScore.scorePercent}%)` : ""}
           </p>
           <button
             type="button"

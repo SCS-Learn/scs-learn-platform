@@ -6,6 +6,7 @@ import ContentSidebar from "@/components/instructor/ContentSidebar";
 import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
 import BlockLessonViewer from "@/components/instructor/BlockLessonViewer";
+import ExternalActivity from "@/components/lti/ExternalActivity";
 import { lessonTypeOptions, type InstructorCourse, type Unit } from "@/lib/instructor/mock-data";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import {
@@ -20,6 +21,7 @@ import {
   updateQuizCompletionThreshold,
 } from "@/lib/instructor/data/lessons";
 import { deleteCourse as deleteCourseAction } from "@/lib/instructor/data/courses";
+import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
 
 function wordCountOf(html: string) {
   const text = html.replace(/<[^>]*>/g, " ").trim();
@@ -300,7 +302,16 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
       <div className="min-h-0 h-full overflow-y-auto bg-white border-x border-gray-300">
         {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
-          <BlockLessonViewer
+          <div className="flex flex-col gap-4 p-4">
+            {selectedLesson.ltiLinkId && (
+              <ExternalActivity
+                lessonId={selectedLesson.id}
+                title={selectedLesson.title}
+                kind="lti"
+                url={`/api/lti/launch/${selectedLesson.ltiLinkId}`}
+              />
+            )}
+            <BlockLessonViewer
             key={`blocks-${selectedLessonId}`}
             courseCode={course.code}
             blocks={selectedLesson.blocks}
@@ -377,6 +388,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
               );
             }}
           />
+          </div>
         ) : selectedLessonId && selectedLesson ? (
           <LessonEditor
             key={`editor-${selectedLessonId}`}
@@ -408,7 +420,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
           selectedLesson ? `Saved ${formatRelativeTime(selectedLesson.updatedAt).toLowerCase()}` : ""
         }
         showQuizCompletionThreshold={selectedLessonHasQuizQuestions}
-        quizCompletionThreshold={selectedLesson?.quizCompletionThreshold ?? 100}
+        quizCompletionThreshold={selectedLesson?.quizCompletionThreshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD}
         onQuizCompletionThresholdChange={updateQuizCompletionThresholdForLesson}
         onPreview={() =>
           window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")

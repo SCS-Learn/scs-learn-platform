@@ -154,8 +154,7 @@ export default function InstructorQuizEditor({
       try {
         const created = await createQuestionInGroup(
           courseCode,
-          questionGroupId,
-          questions.length + 1
+          questionGroupId
         );
         onQuestionAdded(toQuestionView(created));
       } catch (error) {
