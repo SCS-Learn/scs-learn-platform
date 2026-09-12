@@ -6,8 +6,13 @@ import ContentSidebar from "@/components/instructor/ContentSidebar";
 import LessonSettingsSidebar from "@/components/instructor/LessonSettingsSidebar";
 import LessonEditor from "@/components/instructor/LessonEditor";
 import BlockLessonViewer from "@/components/instructor/BlockLessonViewer";
-import ExternalActivity from "@/components/lti/ExternalActivity";
-import { lessonTypeOptions, type InstructorCourse, type Unit } from "@/lib/instructor/mock-data";
+import InstructorExternalLessonPane from "@/components/instructor/InstructorExternalLessonPane";
+import {
+  lessonLabelToType,
+  lessonTypeToLabel,
+  type InstructorCourse,
+  type Unit,
+} from "@/lib/instructor/mock-data";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import {
   addUnit as addUnitAction,
@@ -17,6 +22,7 @@ import {
   deleteLesson as deleteLessonAction,
   reorderLessons as reorderLessonsAction,
   updateLessonContent,
+  updateLessonType,
   publishLesson as publishLessonAction,
   updateQuizCompletionThreshold,
 } from "@/lib/instructor/data/lessons";
@@ -41,7 +47,6 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
   const firstLessonId = units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
   const [selectedLessonId, setSelectedLessonId] = useState(firstLessonId);
-  const [selectedType, setSelectedType] = useState(lessonTypeOptions[0]);
   const [, startTransition] = useTransition();
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,11 +60,29 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
   );
 
   const selectedLesson = selectedUnit?.lessons.find((l) => l.id === selectedLessonId);
+  const selectedType = selectedLesson ? lessonTypeToLabel(selectedLesson.type) : "Content";
 
   const wordCount = useMemo(
     () => wordCountOf(selectedLesson?.contentHtml ?? ""),
     [selectedLesson?.contentHtml]
   );
+
+  const changeLessonType = (label: string) => {
+    if (!selectedLesson) return;
+    const nextType = lessonLabelToType(label);
+    if (nextType === selectedLesson.type) return;
+    setUnits((prev) =>
+      prev.map((unit) => ({
+        ...unit,
+        lessons: unit.lessons.map((lesson) =>
+          lesson.id === selectedLessonId ? { ...lesson, type: nextType } : lesson
+        ),
+      }))
+    );
+    startTransition(async () => {
+      await updateLessonType(course.code, selectedLessonId, nextType);
+    });
+  };
 
   const flushPendingSave = () => {
     if (saveTimerRef.current) {
@@ -265,7 +288,8 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
   const selectedLessonHasQuizQuestions =
     selectedLesson?.type === "quiz" ||
-    (selectedLesson?.blocks.some((block) => (block.questions?.length ?? 0) > 0) ?? false);
+    (selectedLesson?.type !== "external" &&
+      (selectedLesson?.blocks.some((block) => (block.questions?.length ?? 0) > 0) ?? false));
 
   const updateQuizCompletionThresholdForLesson = (threshold: number) => {
     if (!selectedLesson) return;
@@ -300,104 +324,108 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         onDeleteCourse={deleteCourse}
       />
 
-      <div className="min-h-0 h-full overflow-y-auto bg-white border-x border-gray-300">
+      <div className="min-h-0 h-full overflow-hidden bg-white border-x border-gray-300">
         {selectedLessonId && selectedLesson && selectedLesson.contentSource === "blocks" ? (
-          <div className="flex flex-col gap-4 p-4">
-            {selectedLesson.ltiLinkId && (
-              <ExternalActivity
-                lessonId={selectedLesson.id}
-                title={selectedLesson.title}
-                kind="lti"
-                url={`/api/lti/launch/${selectedLesson.ltiLinkId}`}
+          selectedLesson.type === "external" || selectedLesson.ltiLinkId ? (
+            <InstructorExternalLessonPane
+              key={`external-${selectedLessonId}`}
+              lessonId={selectedLesson.id}
+              lessonTitle={selectedLesson.title}
+              ltiLinkId={selectedLesson.ltiLinkId}
+              blocks={selectedLesson.blocks}
+            />
+          ) : (
+            <div className="h-full overflow-y-auto">
+              <BlockLessonViewer
+                key={`blocks-${selectedLessonId}`}
+                courseCode={course.code}
+                blocks={selectedLesson.blocks}
+                lessonType={selectedLesson.type}
+                lessonTitle={selectedLesson.title}
+                onQuestionSaved={(updated) => {
+                  setUnits((prev) =>
+                    prev.map((unit) => ({
+                      ...unit,
+                      lessons: unit.lessons.map((lesson) =>
+                        lesson.id !== selectedLessonId
+                          ? lesson
+                          : {
+                              ...lesson,
+                              blocks: lesson.blocks.map((block) =>
+                                block.kind !== "question_group" || !block.questions
+                                  ? block
+                                  : {
+                                      ...block,
+                                      questions: block.questions.map((q) =>
+                                        q.id === updated.id ? updated : q
+                                      ),
+                                    }
+                              ),
+                            }
+                      ),
+                    }))
+                  );
+                }}
+                onQuestionAdded={(added) => {
+                  setUnits((prev) =>
+                    prev.map((unit) => ({
+                      ...unit,
+                      lessons: unit.lessons.map((lesson) =>
+                        lesson.id !== selectedLessonId
+                          ? lesson
+                          : {
+                              ...lesson,
+                              blocks: lesson.blocks.map((block) =>
+                                block.kind !== "question_group"
+                                  ? block
+                                  : {
+                                      ...block,
+                                      questions: [...(block.questions ?? []), added],
+                                    }
+                              ),
+                            }
+                      ),
+                    }))
+                  );
+                }}
+                onQuestionDeleted={(questionId) => {
+                  setUnits((prev) =>
+                    prev.map((unit) => ({
+                      ...unit,
+                      lessons: unit.lessons.map((lesson) =>
+                        lesson.id !== selectedLessonId
+                          ? lesson
+                          : {
+                              ...lesson,
+                              blocks: lesson.blocks.map((block) =>
+                                block.kind !== "question_group"
+                                  ? block
+                                  : {
+                                      ...block,
+                                      questions: (block.questions ?? []).filter(
+                                        (q) => q.id !== questionId
+                                      ),
+                                    }
+                              ),
+                            }
+                      ),
+                    }))
+                  );
+                }}
               />
-            )}
-            <BlockLessonViewer
-            key={`blocks-${selectedLessonId}`}
-            courseCode={course.code}
-            blocks={selectedLesson.blocks}
-            lessonType={selectedLesson.type}
-            lessonTitle={selectedLesson.title}
-            onQuestionSaved={(updated) => {
-              setUnits((prev) =>
-                prev.map((unit) => ({
-                  ...unit,
-                  lessons: unit.lessons.map((lesson) =>
-                    lesson.id !== selectedLessonId
-                      ? lesson
-                      : {
-                          ...lesson,
-                          blocks: lesson.blocks.map((block) =>
-                            block.kind !== "question_group" || !block.questions
-                              ? block
-                              : {
-                                  ...block,
-                                  questions: block.questions.map((q) =>
-                                    q.id === updated.id ? updated : q
-                                  ),
-                                }
-                          ),
-                        }
-                  ),
-                }))
-              );
-            }}
-            onQuestionAdded={(added) => {
-              setUnits((prev) =>
-                prev.map((unit) => ({
-                  ...unit,
-                  lessons: unit.lessons.map((lesson) =>
-                    lesson.id !== selectedLessonId
-                      ? lesson
-                      : {
-                          ...lesson,
-                          blocks: lesson.blocks.map((block) =>
-                            block.kind !== "question_group"
-                              ? block
-                              : {
-                                  ...block,
-                                  questions: [...(block.questions ?? []), added],
-                                }
-                          ),
-                        }
-                  ),
-                }))
-              );
-            }}
-            onQuestionDeleted={(questionId) => {
-              setUnits((prev) =>
-                prev.map((unit) => ({
-                  ...unit,
-                  lessons: unit.lessons.map((lesson) =>
-                    lesson.id !== selectedLessonId
-                      ? lesson
-                      : {
-                          ...lesson,
-                          blocks: lesson.blocks.map((block) =>
-                            block.kind !== "question_group"
-                              ? block
-                              : {
-                                  ...block,
-                                  questions: (block.questions ?? []).filter(
-                                    (q) => q.id !== questionId
-                                  ),
-                                }
-                          ),
-                        }
-                  ),
-                }))
-              );
-            }}
-          />
-          </div>
+            </div>
+          )
         ) : selectedLessonId && selectedLesson ? (
-          <LessonEditor
-            key={`editor-${selectedLessonId}`}
-            lessonId={selectedLessonId}
-            title={selectedLesson.title}
-            onTitleChange={(title) => updateSelectedLesson({ title })}
-            content={selectedLesson.contentHtml}
-            onContentChange={(contentHtml) => updateSelectedLesson({ contentHtml })}
-          />
+          <div className="h-full overflow-y-auto">
+            <LessonEditor
+              key={`editor-${selectedLessonId}`}
+              lessonId={selectedLessonId}
+              title={selectedLesson.title}
+              onTitleChange={(title) => updateSelectedLesson({ title })}
+              content={selectedLesson.contentHtml}
+              onContentChange={(contentHtml) => updateSelectedLesson({ contentHtml })}
+            />
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center text-sm text-gray-400">
             Add a section and a lesson to start writing.
@@ -413,7 +441,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         lessonLabel={selectedLesson ? `Lesson ${selectedLesson.code}` : ""}
         currentModule={selectedLesson ? `Lesson ${selectedLesson.code} — ${selectedLesson.title}` : ""}
         selectedType={selectedType}
-        onTypeChange={setSelectedType}
+        onTypeChange={changeLessonType}
         wordCount={wordCount}
         isPublished={selectedLesson?.isPublished ?? false}
         savedLabel={

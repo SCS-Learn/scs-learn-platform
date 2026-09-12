@@ -63,7 +63,21 @@ export type InstructorCourse = {
   units: Unit[];
 };
 
-export const lessonTypeOptions = ["Content", "Quiz"];
+export const lessonTypeOptions = ["Content", "Quiz", "External assignment"] as const;
+
+export type LessonTypeLabel = (typeof lessonTypeOptions)[number];
+
+export function lessonTypeToLabel(type: LessonType): LessonTypeLabel {
+  if (type === "quiz") return "Quiz";
+  if (type === "external") return "External assignment";
+  return "Content";
+}
+
+export function lessonLabelToType(label: string): LessonType {
+  if (label === "Quiz") return "quiz";
+  if (label === "External assignment") return "external";
+  return "lesson";
+}
 
 export type Attachment = {
   id: string;

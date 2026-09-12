@@ -138,7 +138,7 @@ export default function LessonSettingsSidebar({
             ))}
           </select>
           <p className="mt-3 text-sm text-gray-500 leading-relaxed">
-            A module holds content or a quiz, never both.
+            A module is content, a quiz, or an external assignment.
           </p>
         </SectionBlock>
 

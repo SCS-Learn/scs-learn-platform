@@ -1,6 +1,7 @@
 export type LessonType = "lesson" | "quiz" | "external";
 
 import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
+import type { QuestionVariant } from "@/lib/quiz/variants";
 
 export type StudentQuestion = {
   id: string;
@@ -9,6 +10,8 @@ export type StudentQuestion = {
   /** Used client-side for instant grading — never shown until the learner submits. */
   answerKey: string | null;
   questionType: QuestionType;
+  /** Full rotation pool (length 10) when generated; empty/absent = no rotation. */
+  variants?: QuestionVariant[];
 };
 
 export type StudentLessonBlock = {
@@ -51,6 +54,8 @@ export type QuizSubmissionStatus = {
   gradableCount: number;
   scorePercent: number;
   responses: Record<string, string>;
+  /** Active quiz version index (0–9 when variants exist). */
+  variantIndex: number;
 };
 
 export type StudentLesson = {

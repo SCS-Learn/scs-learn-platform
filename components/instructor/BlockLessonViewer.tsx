@@ -35,6 +35,10 @@ export default function BlockLessonViewer({
     );
   }
 
+  if (lessonType === "external") {
+    return <TopicLessonViewer blocks={blocks as TopicLessonBlock[]} lessonTitle={lessonTitle} />;
+  }
+
   if (lessonType === "quiz" || questionBlocks.length > 0) {
     return (
       <InstructorQuizEditor

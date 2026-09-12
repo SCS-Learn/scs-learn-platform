@@ -2,11 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { generateQuestionVariantsForDb } from "@/lib/quiz/generate-variants";
 import {
   defaultAnswerKeyForType,
   defaultChoicesForType,
 } from "@/lib/quiz/parse";
-import type { AutogradableQuestionType, QuestionChoices, QuestionType } from "@/lib/quiz/types";
+import {
+  isAutogradableQuestionType,
+  type AutogradableQuestionType,
+  type QuestionChoices,
+  type QuestionType,
+} from "@/lib/quiz/types";
 
 export type QuestionGroup = {
   id: string;
@@ -105,6 +111,36 @@ export async function addQuestion(
   };
 }
 
+/** Generate and store the 10-variant pool for a question. Failures leave variants untouched. */
+export async function persistQuestionVariants(
+  questionId: string,
+  seed: {
+    promptText: string;
+    questionType: QuestionType;
+    choices: QuestionChoices;
+    answerKey: string | null;
+  }
+): Promise<void> {
+  if (!seed.promptText.trim()) return;
+  if (!isAutogradableQuestionType(seed.questionType)) return;
+
+  try {
+    const variants = await generateQuestionVariantsForDb(seed);
+    if (!variants) return;
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("questions")
+      .update({ variants })
+      .eq("id", questionId);
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    console.warn(
+      `persistQuestionVariants: failed for question ${questionId}:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
 export async function updateQuestion(
   courseCode: string,
   questionId: string,
@@ -132,6 +168,13 @@ export async function updateQuestion(
     )
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to update question");
+
+  await persistQuestionVariants(questionId, {
+    promptText: patch.promptText,
+    questionType: patch.questionType,
+    choices: patch.choices,
+    answerKey: patch.answerKey,
+  });
 
   revalidatePath(`/instructor/${courseCode}`);
   revalidatePath(`/student/${courseCode}`);

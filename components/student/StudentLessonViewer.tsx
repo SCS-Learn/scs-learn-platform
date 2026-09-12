@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import TopicLessonViewer, { type TopicLessonBlock } from "@/components/lesson/TopicLessonViewer";
 import type { StudentLesson, QuizSubmissionStatus } from "@/lib/student/types";
@@ -9,8 +9,61 @@ import QuizBlock from "@/components/student/QuizBlock";
 import AutogradedAssignmentCard from "@/components/student/AutogradedAssignmentCard";
 import ExternalActivity from "@/components/lti/ExternalActivity";
 
+type ExternalTab = "assignment" | "writeup";
+
+const EXTERNAL_TAB_LABELS: Record<ExternalTab, string> = {
+  assignment: "Assignment",
+  writeup: "Writeup",
+};
+
 function allQuestionsFromLesson(lesson: StudentLesson) {
   return lesson.blocks.flatMap((block) => block.questions ?? []);
+}
+
+function CompletionFooter({
+  isComplete,
+  isPending,
+  canMarkComplete,
+  hasQuizQuestions,
+  thresholdMessage,
+  error,
+  onToggle,
+}: {
+  isComplete: boolean;
+  isPending: boolean;
+  canMarkComplete: boolean;
+  hasQuizQuestions: boolean;
+  thresholdMessage: string;
+  error: string | null;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="shrink-0 px-8 py-5 border-t border-gray-100 flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={isPending || (!isComplete && !canMarkComplete)}
+          className={`text-sm font-bold px-4 py-2 flex items-center gap-2 disabled:opacity-50 ${
+            isComplete
+              ? "border border-green-500 text-green-800 hover:bg-gray-50"
+              : "bg-primary text-white hover:opacity-90"
+          }`}
+        >
+          {isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <CheckCircle2 size={14} />
+          )}
+          {isComplete ? "Completed" : "Mark as complete"}
+        </button>
+        {hasQuizQuestions && !isComplete && !canMarkComplete && (
+          <p className="text-xs text-gray-500">{thresholdMessage}</p>
+        )}
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  );
 }
 
 export default function StudentLessonViewer({
@@ -32,6 +85,30 @@ export default function StudentLessonViewer({
   const [completedAt, setCompletedAt] = useState(lesson.completedAt);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const writeupBlock = useMemo(
+    () => lesson.blocks.find((block) => block.kind === "course_notes" && block.bodyHtml),
+    [lesson.blocks]
+  );
+  const hasWriteup = Boolean(writeupBlock?.bodyHtml);
+  const hasAssignment = Boolean(lesson.lti) || Boolean(lesson.autolab);
+
+  const externalTabs = useMemo(() => {
+    const tabs: ExternalTab[] = [];
+    if (hasAssignment) tabs.push("assignment");
+    if (hasWriteup) tabs.push("writeup");
+    return tabs;
+  }, [hasAssignment, hasWriteup]);
+
+  const [externalTab, setExternalTab] = useState<ExternalTab>(
+    () => externalTabs[0] ?? "assignment"
+  );
+
+  useEffect(() => {
+    if (!externalTabs.includes(externalTab)) {
+      setExternalTab(externalTabs[0] ?? "assignment");
+    }
+  }, [externalTab, externalTabs]);
 
   const completionThreshold = lesson.quizCompletionThreshold;
   const hasQuizQuestions = questions.length > 0;
@@ -71,25 +148,95 @@ export default function StudentLessonViewer({
     });
   };
 
+  const completionProps = {
+    isComplete,
+    isPending,
+    canMarkComplete,
+    hasQuizQuestions,
+    thresholdMessage,
+    error,
+    onToggle: handleToggleComplete,
+  };
+
+  if (isExternal) {
+    const showTabBar = externalTabs.length > 1;
+    const activeTab = externalTabs.includes(externalTab)
+      ? externalTab
+      : (externalTabs[0] ?? "assignment");
+
+    return (
+      <div className="h-full min-h-0 min-w-0 overflow-hidden bg-white flex flex-col">
+        <div className="topic-lesson-header shrink-0">
+          <h1 className="topic-lesson-title">{lesson.title}</h1>
+          {showTabBar && (
+            <div className="lesson-tab-bar" role="tablist" aria-label="External assignment sections">
+              {externalTabs.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  className={`lesson-tab${activeTab === tab ? " is-active" : ""}`}
+                  onClick={() => setExternalTab(tab)}
+                >
+                  {EXTERNAL_TAB_LABELS[tab]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col">
+          {activeTab === "assignment" && (
+            <div className="flex-1 min-h-0 flex flex-col gap-4 px-8 py-4 overflow-hidden">
+              {lesson.lti && (
+                <ExternalActivity
+                  lessonId={lesson.id}
+                  title={lesson.lti.title}
+                  kind="lti"
+                  url={`/api/lti/launch/${lesson.lti.linkId}`}
+                  initialScore={lesson.lti.score}
+                  pointsPossible={lesson.lti.pointsPossible}
+                  hideTitle
+                  fillAvailableHeight
+                />
+              )}
+              {lesson.autolab && (
+                <div className="overflow-y-auto">
+                  <AutogradedAssignmentCard lessonId={lesson.id} autolab={lesson.autolab} />
+                </div>
+              )}
+              {!lesson.lti && !lesson.autolab && (
+                <p className="text-sm text-gray-400">
+                  This external assignment is not linked to an activity yet.
+                </p>
+              )}
+            </div>
+          )}
+
+          {activeTab === "writeup" && writeupBlock?.bodyHtml && (
+            <div
+              className="flex-1 min-h-0 overflow-y-auto lesson-tab-panel"
+              role="tabpanel"
+              aria-label="Writeup"
+            >
+              <div
+                className="course-notes-content lesson-content-editor"
+                dangerouslySetInnerHTML={{ __html: writeupBlock.bodyHtml }}
+              />
+            </div>
+          )}
+        </div>
+
+        <CompletionFooter {...completionProps} />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full min-h-0 min-w-0 overflow-hidden bg-white flex flex-col">
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {lesson.lti && (
-          <ExternalActivity
-            lessonId={lesson.id}
-            title={lesson.lti.title}
-            kind="lti"
-            url={`/api/lti/launch/${lesson.lti.linkId}`}
-            initialScore={lesson.lti.score}
-            pointsPossible={lesson.lti.pointsPossible}
-          />
-        )}
-
-        {lesson.autolab && (
-          <AutogradedAssignmentCard lessonId={lesson.id} autolab={lesson.autolab} />
-        )}
-
-        {!isExternal && lesson.contentSource === "blocks" ? (
+        {lesson.contentSource === "blocks" ? (
           lesson.blocks.length === 0 ? (
             <p className="px-8 py-6 text-sm text-gray-400">This lesson has no content yet.</p>
           ) : isAssessment ? (
@@ -109,42 +256,16 @@ export default function StudentLessonViewer({
           ) : (
             <TopicLessonViewer blocks={lesson.blocks as TopicLessonBlock[]} lessonTitle={lesson.title} />
           )
-        ) : !isExternal ? (
+        ) : (
           <div className="lesson-tab-panel">
             <div
               className="course-notes-content lesson-content-editor"
               dangerouslySetInnerHTML={{ __html: lesson.contentHtml }}
             />
           </div>
-        ) : lesson.blocks.length > 0 ? (
-          <TopicLessonViewer blocks={lesson.blocks as TopicLessonBlock[]} lessonTitle={lesson.title} />
-        ) : null}
+        )}
 
-        <div className="px-8 py-5 border-t border-gray-100 flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleToggleComplete}
-              disabled={isPending || (!isComplete && !canMarkComplete)}
-              className={`text-sm font-bold px-4 py-2 flex items-center gap-2 disabled:opacity-50 ${
-                isComplete
-                  ? "border border-green-500 text-green-800 hover:bg-gray-50"
-                  : "bg-primary text-white hover:opacity-90"
-              }`}
-            >
-              {isPending ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={14} />
-              )}
-              {isComplete ? "Completed" : "Mark as complete"}
-            </button>
-            {hasQuizQuestions && !isComplete && !canMarkComplete && (
-              <p className="text-xs text-gray-500">{thresholdMessage}</p>
-            )}
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
+        <CompletionFooter {...completionProps} />
       </div>
     </div>
   );

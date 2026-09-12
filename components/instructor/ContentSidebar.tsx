@@ -281,6 +281,11 @@ export default function ContentSidebar({
                             Quiz
                           </span>
                         )}
+                        {lesson.type === "external" && (
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            External
+                          </span>
+                        )}
                         <button
                           type="button"
                           aria-label="Delete lesson"

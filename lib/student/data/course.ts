@@ -4,6 +4,7 @@ import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-prog
 import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
 import { reconcileQuizSubmission } from "@/lib/quiz/grading";
 import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
+import { applyQuestionVariants, parseVariants } from "@/lib/quiz/variants";
 import type {
   StudentCourse,
   StudentCourseSummary,
@@ -25,6 +26,7 @@ type QuestionRow = {
   choices: QuestionChoices;
   answer_key: string | null;
   question_type: string;
+  variants?: unknown;
 };
 
 type AutolabScoreRow = {
@@ -101,15 +103,17 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type)))))";
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, variants)))))";
 
 function toQuestion(row: QuestionRow): StudentQuestion {
+  const variants = parseVariants(row.variants);
   return {
     id: row.id,
     promptText: row.prompt_text,
     choices: row.choices,
     answerKey: row.answer_key,
     questionType: row.question_type as StudentQuestion["questionType"],
+    ...(variants.length > 0 ? { variants } : {}),
   };
 }
 
@@ -245,6 +249,8 @@ function toLesson(
     }));
 
   const questions = blocks.flatMap((block) => block.questions ?? []);
+  const variantIndex = quizSubmission?.variantIndex ?? 0;
+  const scoredQuestions = applyQuestionVariants(questions, variantIndex);
 
   return {
     id: row.id,
@@ -256,7 +262,7 @@ function toLesson(
     blocks,
     autolab,
     lti,
-    quizSubmission: reconcileQuizSubmission(questions, quizSubmission),
+    quizSubmission: reconcileQuizSubmission(scoredQuestions, quizSubmission),
     quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
     completedAt,
   };

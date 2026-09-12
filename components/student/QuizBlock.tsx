@@ -7,6 +7,11 @@ import { submitQuiz } from "@/lib/student/data/quiz-progress";
 import { formatCorrectAnswer } from "@/lib/quiz/format-answer";
 import { isCorrect, isGradable, scoreQuiz } from "@/lib/quiz/grading";
 import { questionEmbedsPrompt } from "@/lib/quiz/question-layout";
+import {
+  applyQuestionVariants,
+  nextVariantIndex,
+  quizVariantPoolSize,
+} from "@/lib/quiz/variants";
 import type { StudentQuestion, QuizSubmissionStatus } from "@/lib/student/types";
 
 export default function QuizBlock({
@@ -27,40 +32,60 @@ export default function QuizBlock({
   onSubmitted?: (status: QuizSubmissionStatus) => void;
   onReset?: () => void;
 }) {
-  const [responses, setResponses] = useState<Record<string, string>>(initialSubmission?.responses ?? {});
+  const poolSize = quizVariantPoolSize(questions);
+  const [variantIndex, setVariantIndex] = useState(
+    initialSubmission?.variantIndex ?? 0
+  );
+  const [responses, setResponses] = useState<Record<string, string>>(
+    initialSubmission?.responses ?? {}
+  );
   const [submitted, setSubmitted] = useState(initialSubmission !== null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Always score against the current question list so add/delete updates the denominator.
-  const liveScore = scoreQuiz(questions, responses);
+  const activeQuestions = applyQuestionVariants(questions, variantIndex);
+
+  // Always score against the current (variant) question list.
+  const liveScore = scoreQuiz(activeQuestions, responses);
 
   const handleSubmit = () => {
     setError(null);
     startTransition(async () => {
       try {
         if (previewMode || !courseCode || !lessonId) {
-          const graded = scoreQuiz(questions, responses);
+          const graded = scoreQuiz(activeQuestions, responses);
           const local: QuizSubmissionStatus = {
             ...graded,
             submittedAt: new Date().toISOString(),
             responses,
+            variantIndex,
           };
           setSubmitted(true);
           onSubmitted?.(local);
           return;
         }
 
-        const payload = questions.map((question) => ({
+        const payload = activeQuestions.map((question) => ({
           questionId: question.id,
           responseText: responses[question.id] ?? "",
         }));
-        const result = await submitQuiz(courseCode, lessonId, payload, questions);
+        const result = await submitQuiz(
+          courseCode,
+          lessonId,
+          payload,
+          activeQuestions,
+          variantIndex
+        );
         setResponses(result.responses);
+        setVariantIndex(result.variantIndex);
         setSubmitted(true);
         onSubmitted?.(result);
       } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "Could not save your answers.");
+        setError(
+          submitError instanceof Error
+            ? submitError.message
+            : "Could not save your answers."
+        );
       }
     });
   };
@@ -69,6 +94,7 @@ export default function QuizBlock({
     setResponses({});
     setSubmitted(false);
     setError(null);
+    setVariantIndex((current) => nextVariantIndex(current, poolSize));
     onReset?.();
   };
 
@@ -107,7 +133,7 @@ export default function QuizBlock({
         </div>
       )}
 
-      {questions.map((question, index) => {
+      {activeQuestions.map((question, index) => {
         const response = responses[question.id] ?? "";
         const graded = submitted && isGradable(question);
         const correct = graded && isCorrect(question, response);
@@ -120,17 +146,28 @@ export default function QuizBlock({
 
         return (
           <div
-            key={question.id}
+            key={`${question.id}-v${variantIndex}`}
             className={`border p-4 ${
-              graded ? (correct ? "border-green-500" : "border-red-500") : "border-gray-200"
+              graded
+                ? correct
+                  ? "border-green-500"
+                  : "border-red-500"
+                : "border-gray-200"
             }`}
           >
             <div className="flex items-start justify-between gap-2 mb-2">
               <p className="text-xs text-gray-400">Question {index + 1}</p>
-              {graded && (correct ? <CheckCircle2 size={16} className="text-green-600" /> : <XCircle size={16} className="text-red-500" />)}
+              {graded &&
+                (correct ? (
+                  <CheckCircle2 size={16} className="text-green-600" />
+                ) : (
+                  <XCircle size={16} className="text-red-500" />
+                ))}
             </div>
             {!embedsPrompt && (
-              <p className="text-sm font-medium whitespace-pre-wrap mb-3">{question.promptText}</p>
+              <p className="text-sm font-medium whitespace-pre-wrap mb-3">
+                {question.promptText}
+              </p>
             )}
 
             <QuestionInput
@@ -142,7 +179,9 @@ export default function QuizBlock({
               response={response}
               submitted={submitted}
               feedback={graded ? (correct ? "correct" : "incorrect") : null}
-              onChange={(value) => setResponses((prev) => ({ ...prev, [question.id]: value }))}
+              onChange={(value) =>
+                setResponses((prev) => ({ ...prev, [question.id]: value }))
+              }
             />
 
             {graded && !correct && question.answerKey && (

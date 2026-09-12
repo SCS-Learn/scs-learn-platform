@@ -12,6 +12,7 @@ export type QuizSubmissionStatus = {
   gradableCount: number;
   scorePercent: number;
   responses: Record<string, string>;
+  variantIndex: number;
 };
 
 export async function fetchQuizSubmissionsForLessons(
@@ -25,7 +26,7 @@ export async function fetchQuizSubmissionsForLessons(
     const { data, error } = await supabase
       .from("quiz_submissions")
       .select(
-        "id, lesson_id, correct_count, gradable_count, score_percent, submitted_at, quiz_responses(question_id, response_text)"
+        "id, lesson_id, correct_count, gradable_count, score_percent, submitted_at, variant_index, quiz_responses(question_id, response_text)"
       )
       .eq("platform_user_id", platformUserId)
       .in("lesson_id", lessonIds);
@@ -34,7 +35,10 @@ export async function fetchQuizSubmissionsForLessons(
     return new Map(
       (data ?? []).map((row) => {
         const responses: Record<string, string> = {};
-        for (const response of (row.quiz_responses ?? []) as { question_id: string; response_text: string }[]) {
+        for (const response of (row.quiz_responses ?? []) as {
+          question_id: string;
+          response_text: string;
+        }[]) {
           responses[response.question_id] = response.response_text;
         }
         return [
@@ -45,12 +49,16 @@ export async function fetchQuizSubmissionsForLessons(
             gradableCount: row.gradable_count as number,
             scorePercent: row.score_percent as number,
             responses,
+            variantIndex: (row.variant_index as number | null | undefined) ?? 0,
           },
         ] as const;
       })
     );
   } catch (error) {
-    console.warn("Skipping quiz progress (supabase/migrations/add-quiz-progress.sql likely not run yet):", error);
+    console.warn(
+      "Skipping quiz progress (supabase/migrations/add-quiz-progress.sql likely not run yet):",
+      error
+    );
     return new Map();
   }
 }
@@ -59,7 +67,8 @@ export async function submitQuiz(
   courseCode: string,
   lessonId: string,
   responses: { questionId: string; responseText: string }[],
-  questions: StudentQuestion[]
+  questions: StudentQuestion[],
+  variantIndex = 0
 ): Promise<QuizSubmissionStatus> {
   const learner = await getLaunchingUser();
   const supabase = await createClient();
@@ -78,6 +87,10 @@ export async function submitQuiz(
     return { questionId, responseText, isCorrect: gradable ? correct : null };
   });
 
+  const safeVariantIndex = Number.isFinite(variantIndex)
+    ? Math.max(0, Math.trunc(variantIndex))
+    : 0;
+
   const { data: submission, error: submissionError } = await supabase
     .from("quiz_submissions")
     .upsert(
@@ -87,11 +100,12 @@ export async function submitQuiz(
         correct_count: correctCount,
         gradable_count: gradableCount,
         score_percent: scorePercent,
+        variant_index: safeVariantIndex,
         submitted_at: new Date().toISOString(),
       },
       { onConflict: "lesson_id,platform_user_id" }
     )
-    .select("id, submitted_at, correct_count, gradable_count, score_percent")
+    .select("id, submitted_at, correct_count, gradable_count, score_percent, variant_index")
     .single();
 
   if (submissionError || !submission) {
@@ -120,5 +134,6 @@ export async function submitQuiz(
     gradableCount: submission.gradable_count as number,
     scorePercent: submission.score_percent as number,
     responses: responseMap,
+    variantIndex: (submission.variant_index as number | null | undefined) ?? safeVariantIndex,
   };
 }

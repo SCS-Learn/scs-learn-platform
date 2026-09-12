@@ -49,7 +49,7 @@ import { extractQuestionsFromDriveFile } from "@/lib/google/extract-questions-fr
 import { addUnitFromImport, addLessonFromImport, deleteLesson, deleteUnit } from "@/lib/instructor/data/lessons";
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { addLessonBlock } from "@/lib/instructor/data/lesson-blocks";
-import { addQuestionGroup, addQuestion } from "@/lib/instructor/data/questions";
+import { addQuestionGroup, addQuestion, persistQuestionVariants } from "@/lib/instructor/data/questions";
 
 function cleanFilenameTitle(name: string): string {
   return name.replace(/\.[a-zA-Z0-9]+$/, "").replace(/[_-]+/g, " ").trim();
@@ -571,8 +571,10 @@ async function populateQuizLesson(
     position: 1,
   });
 
+  const createdQuestions: Awaited<ReturnType<typeof addQuestion>>[] = [];
+
   for (const question of extracted) {
-    await addQuestion(group.id, {
+    const created = await addQuestion(group.id, {
       position: question.position,
       promptText: question.promptText,
       promptSource: question.promptSource,
@@ -582,6 +584,23 @@ async function populateQuizLesson(
       sourceSlideOrPageIndex: question.sourceSlideOrPageIndex,
       needsReview: question.needsReview,
     });
+    createdQuestions.push(created);
+  }
+
+  // Generate variant pools with bounded parallelism so import stays responsive.
+  const concurrency = 3;
+  for (let i = 0; i < createdQuestions.length; i += concurrency) {
+    const batch = createdQuestions.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map((q) =>
+        persistQuestionVariants(q.id, {
+          promptText: q.promptText,
+          questionType: q.questionType,
+          choices: q.choices,
+          answerKey: q.answerKey,
+        })
+      )
+    );
   }
 
   await addLessonBlock(lessonId, {

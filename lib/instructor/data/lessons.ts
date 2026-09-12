@@ -286,6 +286,22 @@ export async function updateLessonContent(
   // edit in its own local state) needs to reflect it.
 }
 
+export async function updateLessonType(
+  courseCode: string,
+  lessonId: string,
+  type: LessonType
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lessons")
+    .update({ type, updated_at: new Date().toISOString() })
+    .eq("id", lessonId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`);
+}
+
 export async function publishLesson(courseCode: string, lessonId: string) {
   const supabase = await createClient();
   const { error } = await supabase

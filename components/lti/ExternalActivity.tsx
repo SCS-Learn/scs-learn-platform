@@ -22,6 +22,13 @@ export type ExternalActivityProps = {
   openInNewTab?: boolean;
   initialScore?: number | null;
   pointsPossible?: number;
+  /** Hide the activity title when a parent already shows the lesson title. */
+  hideTitle?: boolean;
+  /**
+   * Grow to fill a flex parent with a defined height. Parent should be
+   * `flex flex-col` with `flex-1 min-h-0` (or similar).
+   */
+  fillAvailableHeight?: boolean;
 };
 
 type SyncState =
@@ -39,6 +46,8 @@ export default function ExternalActivity({
   openInNewTab = false,
   initialScore = null,
   pointsPossible = 100,
+  hideTitle = false,
+  fillAvailableHeight = false,
 }: ExternalActivityProps) {
   const [sync, setSync] = useState<SyncState>(
     initialScore === null ? { status: "idle" } : { status: "done", score: initialScore }
@@ -90,28 +99,42 @@ export default function ExternalActivity({
       ? `${sync.score} / ${pointsPossible}`
       : null;
 
+  const showHeader = !hideTitle || scoreLabel !== null;
+
   return (
-    <section className="flex flex-col gap-3">
-      <header className="flex items-baseline justify-between gap-4">
-        <h2 className="text-lg font-medium text-stone-800">{title}</h2>
-        {scoreLabel ? (
-          <span className="text-sm font-medium text-stone-700">{scoreLabel}</span>
-        ) : null}
-      </header>
+    <section
+      className={`flex flex-col gap-3 ${fillAvailableHeight ? "h-full min-h-0" : ""}`}
+    >
+      {showHeader ? (
+        <header className="flex shrink-0 items-baseline justify-between gap-4">
+          {!hideTitle ? (
+            <h2 className="text-lg font-medium text-stone-800">{title}</h2>
+          ) : (
+            <span className="text-sm text-stone-500">Score</span>
+          )}
+          {scoreLabel ? (
+            <span className="text-sm font-medium text-stone-700">{scoreLabel}</span>
+          ) : null}
+        </header>
+      ) : null}
 
       {kind === "lti" && !openInNewTab ? (
         <iframe
           ref={frameRef}
           src={url}
           title={title}
-          className="h-[70vh] w-full rounded-lg border border-stone-200 bg-white"
+          className={
+            fillAvailableHeight
+              ? "min-h-0 w-full flex-1 border border-stone-200 bg-white"
+              : "h-[calc(100vh-10rem)] min-h-[32rem] w-full border border-stone-200 bg-white"
+          }
           // Cogniterra needs scripts, its own origin, forms for the launch POST,
           // and popups for links out of a step.
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
           allow="clipboard-write"
         />
       ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4">
+        <div className="flex flex-col gap-3 border border-stone-200 bg-white p-4">
           <p className="text-sm text-stone-600">
             {kind === "autolab"
               ? "This assessment is graded in Autolab. Open it, submit your work, then check your score here."

@@ -295,6 +295,8 @@ create table public.questions (
     )),
   source_slide_or_page_index integer,
   needs_review boolean not null default false,
+  -- Student-facing paraphrases; [] = no rotation, length 10 when generated.
+  variants jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -330,6 +332,7 @@ create table if not exists public.quiz_submissions (
   correct_count integer not null default 0,
   gradable_count integer not null default 0,
   score_percent integer not null default 0,
+  variant_index integer not null default 0,
   submitted_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   unique (lesson_id, platform_user_id)
