@@ -41,6 +41,8 @@ export type LessonItem = {
   isPublished: boolean;
   /** Minimum score (%) required to mark this quiz complete; only applies to quizzes. */
   quizCompletionThreshold: number;
+  /** Whether students see the free_response (AI-graded) reference answer after submitting; off by default. */
+  showReferenceAnswers: boolean;
   updatedAt: string; // ISO timestamp
   attachments: Attachment[];
   /** Present when this lesson is linked to Cogniterra (or another LTI tool). */

@@ -255,6 +255,7 @@ async function fetchAiVariants(seed: VariantSeed): Promise<QuestionVariant[]> {
 Rules:
 - Preserve questionType "${seed.questionType}" and the underlying correct answer.
 - Lightly reword the prompt (synonyms, sentence structure) without changing meaning or difficulty.
+- If the prompt contains a fenced code block, a Markdown table, or other formatted content, preserve it verbatim (do not reformat, reflow, or reword text inside it) — only reword the surrounding prose.
 - For multiple_choice / multiple_select / true_false: keep the SAME option texts, but MUST shuffle their display order differently for EVERY variant. answerKey must be the exact correct option text (or JSON array of texts for multiple_select) from the seed.
 - For ordering: keep the same items and correct sequence in answerKey; MUST use a different shuffled displayOrder for every variant.
 - For matching / categorization / inline_dropdown: keep answer mappings; MUST shuffle the student-facing option/item order.

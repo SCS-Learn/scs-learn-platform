@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import type { drive_v3, slides_v1 } from "googleapis";
 import { uploadDriveFile } from "@/lib/google/upload-drive-file";
 import { withDriveRetry } from "@/lib/google/drive-retry";
@@ -32,7 +33,9 @@ export async function convertPptxToGoogleSlides(
     const created = await withDriveRetry(`create temp slides for ${fileId}`, () =>
       drive.files.create({
         requestBody: { name: `__render_tmp__${title}`, mimeType: CONVERTED_MIME_TYPE },
-        media: { mimeType: SOURCE_PPTX_MIME_TYPE, body: Buffer.from(rawBytes as ArrayBuffer) },
+        // media.body must be a readable stream, not a raw Buffer - the Drive
+        // client calls .pipe() on it internally, which a Buffer doesn't have.
+        media: { mimeType: SOURCE_PPTX_MIME_TYPE, body: Readable.from(Buffer.from(rawBytes as ArrayBuffer)) },
         fields: "id",
         supportsAllDrives: true,
       })

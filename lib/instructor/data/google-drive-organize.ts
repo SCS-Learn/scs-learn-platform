@@ -8,13 +8,22 @@ import {
   flattenDriveImportTree,
   type DriveEntry,
 } from "@/lib/google/drive-traversal";
-import { detectDuplicatesFromUnits } from "@/lib/google/classify-drive-topics";
+import { detectDuplicatesFromUnits, type TopicGroup } from "@/lib/google/classify-drive-topics";
 import {
   classifyOrganizeImport,
   organizeClassificationToPersistable,
+  type OrganizeUnitForPersist,
 } from "@/lib/google/classify-drive-organize";
+import {
+  extractYoutubeVideoId,
+  fetchYoutubePlaylistVideos,
+  looksLikePlaylistReference,
+  youtubeWatchUrl,
+  type YoutubePlaylistVideo,
+} from "@/lib/google/youtube-playlist";
+import { fetchAllVideosForChannel } from "@/lib/google/youtube-channel-playlists";
+import { placeYoutubeVideos, type YoutubeExistingUnit } from "@/lib/google/place-youtube-videos";
 import { isQuizFilename } from "@/lib/google/file-role";
-import { exportDriveFileAsNotesHtml, mergeNotesSections } from "@/lib/google/export-drive-notes-html";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
 import { analyzeDriveFileContent, quizLessonCategory, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
@@ -50,6 +59,54 @@ import { addUnitFromImport, addLessonFromImport, deleteLesson, deleteUnit } from
 import { addAttachment } from "@/lib/instructor/data/attachments";
 import { addLessonBlock } from "@/lib/instructor/data/lesson-blocks";
 import { addQuestionGroup, addQuestion, persistQuestionVariants } from "@/lib/instructor/data/questions";
+
+/**
+ * Every Drive file, and every YouTube video, already pulled into this course
+ * - across every place a source file id (a topic lesson's primary file, its
+ * other slide/notes blocks, a quiz's question group) or a video block's URL
+ * is recorded. Re-running import over the same folder/playlist must skip
+ * these outright, rather than asking the classifier/placement model to
+ * structure content it already turned into a lesson once - that previously
+ * produced fully duplicated units/lessons/questions that had to be deleted by
+ * hand.
+ */
+async function alreadyImportedCourseContent(
+  courseId: string
+): Promise<{ driveFileIds: Set<string>; youtubeVideoIds: Set<string> }> {
+  const supabase = await createClient();
+  const driveFileIds = new Set<string>();
+  const youtubeVideoIds = new Set<string>();
+
+  const { data: units } = await supabase.from("units").select("id").eq("course_id", courseId);
+  const unitIds = (units ?? []).map((u) => u.id as string);
+  if (unitIds.length === 0) return { driveFileIds, youtubeVideoIds };
+
+  const { data: lessons } = await supabase
+    .from("lessons")
+    .select("id, source_drive_file_id")
+    .in("unit_id", unitIds);
+  for (const lesson of lessons ?? []) {
+    if (lesson.source_drive_file_id) driveFileIds.add(lesson.source_drive_file_id as string);
+  }
+
+  const lessonIds = (lessons ?? []).map((l) => l.id as string);
+  if (lessonIds.length === 0) return { driveFileIds, youtubeVideoIds };
+
+  const [{ data: blocks }, { data: groups }] = await Promise.all([
+    supabase.from("lesson_blocks").select("source_drive_file_id, video_url").in("lesson_id", lessonIds),
+    supabase.from("question_groups").select("source_drive_file_id").in("lesson_id", lessonIds),
+  ]);
+  for (const block of blocks ?? []) {
+    if (block.source_drive_file_id) driveFileIds.add(block.source_drive_file_id as string);
+    const videoId = block.video_url ? extractYoutubeVideoId(block.video_url as string) : null;
+    if (videoId) youtubeVideoIds.add(videoId);
+  }
+  for (const group of groups ?? []) {
+    if (group.source_drive_file_id) driveFileIds.add(group.source_drive_file_id as string);
+  }
+
+  return { driveFileIds, youtubeVideoIds };
+}
 
 function cleanFilenameTitle(name: string): string {
   return name.replace(/\.[a-zA-Z0-9]+$/, "").replace(/[_-]+/g, " ").trim();
@@ -446,11 +503,15 @@ function shouldBecomeExternalLesson(analysis: DriveFileAnalysis): boolean {
   return analysis.category === "assignment" || analysis.category === "homework";
 }
 
+/**
+ * Renders the assignment file itself as a lesson block (whatever type its
+ * routing resolves to — notes, slides, PDF) rather than a synthesized
+ * "Course Notes" summary, matching how topic lessons render their files.
+ */
 async function populateExternalLesson(
   lessonId: string,
   quiz: { title: string; file: DriveEntry },
   entry: { analysis: DriveFileAnalysis; resolved: ResolvedFile },
-  drive: Awaited<ReturnType<typeof getDriveClient>>,
   driveFilesById: Map<string, DriveEntry>,
   duplicatesBySurvivorId: Map<string, string[]>,
   resourceKeyHeader: string | undefined
@@ -462,20 +523,15 @@ async function populateExternalLesson(
     .eq("id", lessonId);
   if (typeError) throw new Error(typeError.message);
 
-  const notesHtml = await buildNotesHtmlForFiles(
-    drive,
-    [quiz.file],
-    new Map([[quiz.file.id, entry]]),
-    resourceKeyHeader
-  );
-  if (notesHtml) {
-    await addLessonBlock(lessonId, {
-      kind: "course_notes",
-      position: 1,
-      title: quiz.title,
-      sourceDriveFileId: quiz.file.id,
-      bodyHtml: notesHtml,
-    });
+  if (entry.resolved.routing !== "unsupported") {
+    await addSlideFileBlock(
+      lessonId,
+      quiz.file,
+      entry.resolved,
+      entry.analysis,
+      resourceKeyHeader,
+      1
+    );
   }
 
   await addDriveLinkAttachments(
@@ -484,30 +540,6 @@ async function populateExternalLesson(
     driveFilesById
   );
   return true;
-}
-
-async function buildNotesHtmlForFiles(
-  drive: Awaited<ReturnType<typeof getDriveClient>>,
-  files: DriveEntry[],
-  resolvedByFileId: Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>,
-  resourceKeyHeader: string | undefined
-): Promise<string | null> {
-  const sections: { title: string; html: string }[] = [];
-
-  for (const file of files) {
-    const entry = resolvedByFileId.get(file.id);
-    if (!entry) continue;
-
-    const pdfBase64 =
-      entry.resolved.routing === "slide_pdf" ? entry.resolved.pdfBase64 : null;
-
-    const html = await exportDriveFileAsNotesHtml(drive, file, resourceKeyHeader, pdfBase64);
-    if (html) {
-      sections.push({ title: cleanFilenameTitle(file.name), html });
-    }
-  }
-
-  return sections.length > 0 ? mergeNotesSections(sections) : null;
 }
 
 async function addDriveLinkAttachments(
@@ -531,8 +563,9 @@ async function addDriveLinkAttachments(
 
 async function populateQuizLesson(
   lessonId: string,
-  quiz: { title: string; file: DriveEntry },
+  quiz: { title: string; file: DriveEntry; extraFiles: DriveEntry[] },
   entry: { analysis: DriveFileAnalysis; resolved: ResolvedFile },
+  resolvedByFileId: Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>,
   course: { title: string; department: string },
   drive: Awaited<ReturnType<typeof getDriveClient>>,
   driveFilesById: Map<string, DriveEntry>,
@@ -541,11 +574,18 @@ async function populateQuizLesson(
 ): Promise<boolean> {
   const { resolved } = entry;
 
+  const extraSources = quiz.extraFiles
+    .map((file) => {
+      const extraEntry = resolvedByFileId.get(file.id);
+      return extraEntry ? { file, resolved: extraEntry.resolved } : null;
+    })
+    .filter((e): e is { file: DriveEntry; resolved: ResolvedFile } => e !== null);
+
   const extracted = await extractQuestionsFromDriveFile(
     course,
     drive,
-    quiz.file,
-    resolved,
+    { file: quiz.file, resolved },
+    extraSources,
     resourceKeyHeader
   ).catch((error) => {
     console.error(
@@ -556,11 +596,11 @@ async function populateQuizLesson(
   });
 
   if (extracted.length === 0) {
-    // Nothing auto-gradable came out of this file - a question_group/lesson
+    // Nothing gradable came out of this file - a question_group/lesson
     // block with zero questions is a dead end for a student, so don't create
     // them at all. The caller drops the whole (now genuinely empty) lesson.
     console.warn(
-      `populateQuizLesson: no auto-gradable questions found in "${quiz.file.name}"`
+      `populateQuizLesson: no gradable questions found in "${quiz.file.name}"`
     );
     return false;
   }
@@ -634,12 +674,12 @@ async function populateTopicLesson(
     videoFiles: DriveEntry[];
     slideFiles: DriveEntry[];
     notesFiles: DriveEntry[];
+    externalVideo?: { url: string; title: string } | null;
   },
   resolvedByFileId: Map<string, { analysis: DriveFileAnalysis; resolved: ResolvedFile }>,
   driveFilesById: Map<string, DriveEntry>,
   duplicatesBySurvivorId: Map<string, string[]>,
-  resourceKeyHeader: string | undefined,
-  drive: Awaited<ReturnType<typeof getDriveClient>>
+  resourceKeyHeader: string | undefined
 ): Promise<number> {
   let blockPosition = 0;
   let blocksAdded = 0;
@@ -666,8 +706,26 @@ async function populateTopicLesson(
     }
   }
 
-  // 2. Toggleable slide files
-  for (const file of topic.slideFiles) {
+  // 1b. Fall back to a YouTube-playlist video when Drive had no video file
+  // for this topic (see attachYoutubePlaylistVideos).
+  if (!videoFile && topic.externalVideo) {
+    await addLessonBlock(lessonId, {
+      kind: "video",
+      position: blockPosition + 1,
+      title: topic.externalVideo.title || null,
+      sourceDriveFileId: null,
+      videoUrl: topic.externalVideo.url,
+    });
+    blockPosition += 1;
+    blocksAdded += 1;
+  }
+
+  // 2. Toggleable slide files and notes/reading files — each rendered as its
+  // own block straight from its source file. This is an import parser, not a
+  // summarizer: no separate "Course Notes" block gets synthesized by
+  // re-extracting a file whose content is already shown verbatim here, since
+  // that only ever produced a duplicate copy of the same material.
+  for (const file of [...topic.slideFiles, ...topic.notesFiles]) {
     const entry = resolvedByFileId.get(file.id);
     if (!entry || entry.resolved.routing === "unsupported") continue;
     const added = await addSlideFileBlock(
@@ -685,28 +743,6 @@ async function populateTopicLesson(
     allFileIds.add(file.id);
   }
 
-  // 3. Course notes as HTML at the bottom
-  if (topic.notesFiles.length > 0) {
-    const notesHtml = await buildNotesHtmlForFiles(
-      drive,
-      topic.notesFiles,
-      resolvedByFileId,
-      resourceKeyHeader
-    );
-    if (notesHtml) {
-      blockPosition += 1;
-      blocksAdded += 1;
-      await addLessonBlock(lessonId, {
-        kind: "course_notes",
-        position: blockPosition,
-        title: "Course Notes",
-        sourceDriveFileId: topic.notesFiles[0]?.id ?? null,
-        bodyHtml: notesHtml,
-      });
-      for (const file of topic.notesFiles) allFileIds.add(file.id);
-    }
-  }
-
   // Drive link attachments for every file in this topic
   for (const fileId of allFileIds) {
     const dupes = duplicatesBySurvivorId.get(fileId) ?? [];
@@ -716,18 +752,237 @@ async function populateTopicLesson(
   return blocksAdded;
 }
 
+/**
+ * Fetches lecture videos from either a single YouTube playlist link or a
+ * channel link (when a course splits lectures into one playlist per unit),
+ * and has an LLM place them into the course's unit/topic structure —
+ * filling a Drive-classified topic that has no video yet where one clearly
+ * fits, and inventing brand-new units/topics for lectures that exist only on
+ * YouTube (e.g. a Drive folder with no per-lecture structure of its own —
+ * just a single doc linking out to the playlist/channel). Mutates `units`
+ * (and its topics) in place, including pushing new unit/topic entries.
+ * Best-effort: any failure is returned as a warning string rather than
+ * thrown, so a broken/unreadable playlist/channel never blocks the rest of
+ * the (already-succeeded) Drive import.
+ */
+async function attachYoutubePlaylistVideos(
+  course: { title: string; department: string },
+  units: OrganizeUnitForPersist[],
+  folderId: string,
+  playlistOrChannelUrl: string,
+  alreadyPlacedVideoIds: Set<string>
+): Promise<string | null> {
+  let videos: YoutubePlaylistVideo[];
+  let truncatedNote: string | null = null;
+  try {
+    if (looksLikePlaylistReference(playlistOrChannelUrl)) {
+      videos = await fetchYoutubePlaylistVideos(playlistOrChannelUrl);
+    } else {
+      const result = await fetchAllVideosForChannel(playlistOrChannelUrl);
+      videos = result.videos;
+      if (result.truncated) {
+        truncatedNote = "That channel has more playlists than could be scanned — only the first 20 were checked.";
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not read that YouTube playlist or channel.";
+    console.error("attachYoutubePlaylistVideos: failed to read playlist/channel:", message);
+    return message;
+  }
+
+  console.log(`attachYoutubePlaylistVideos: fetched ${videos.length} video(s) from ${playlistOrChannelUrl}`);
+
+  // Never re-place a video this course already has a lesson for — otherwise
+  // re-running import with the same playlist/channel link (e.g. after new
+  // lectures were added to it) re-declares brand-new duplicate units/topics
+  // for videos that already have a home, since a YouTube-only lesson has no
+  // Drive file id for the ordinary already-imported check above to catch.
+  const alreadyPlacedCount = videos.filter((v) => alreadyPlacedVideoIds.has(v.videoId)).length;
+  videos = videos.filter((v) => !alreadyPlacedVideoIds.has(v.videoId));
+  if (alreadyPlacedCount > 0) {
+    console.log(`attachYoutubePlaylistVideos: skipping ${alreadyPlacedCount} video(s) already placed in this course`);
+  }
+
+  if (videos.length === 0) {
+    return alreadyPlacedCount > 0
+      ? null
+      : "That YouTube playlist/channel has no videos.";
+  }
+
+  // Existing units/topics are referenced by a stable id assigned here, never
+  // by title — Opus reusing a slightly-reworded title instead of an id is
+  // exactly what previously produced near-duplicate units for the same
+  // lecture (e.g. two "Genome Assembly..." units, one with 3 lessons and one
+  // with 15, created within a single run).
+  const existingUnits: YoutubeExistingUnit[] = units.map((unit, ui) => ({
+    id: `u${ui}`,
+    title: unit.title,
+    topics: unit.topics.map((topic, ti) => ({
+      id: `u${ui}t${ti}`,
+      title: topic.title,
+      hasVideo: topic.videoFiles.length > 0,
+    })),
+  }));
+  const unitByExistingId = new Map(existingUnits.map((eu, ui) => [eu.id, units[ui]!]));
+  const topicByExistingId = new Map<string, TopicGroup>();
+  existingUnits.forEach((eu, ui) => {
+    eu.topics.forEach((et, ti) => topicByExistingId.set(et.id, units[ui]!.topics[ti]!));
+  });
+
+  let result;
+  try {
+    result = await placeYoutubeVideos(course, videos, existingUnits);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not place playlist videos into the course.";
+    console.error("attachYoutubePlaylistVideos: placement failed:", message);
+    return message;
+  }
+
+  console.log(
+    `attachYoutubePlaylistVideos: declared ${result.newUnits.length} new unit(s), placed ${result.placements.length}/${videos.length} video(s)`
+  );
+
+  const newUnitObjects = new Map<string, OrganizeUnitForPersist>();
+  for (const nu of result.newUnits) {
+    newUnitObjects.set(nu.key, {
+      title: nu.title,
+      order: 0, // unused for persistence — final position comes from array order after anchor-based insertion below
+      sourceDriveFolderId: folderId,
+      topics: [],
+      quizzes: [],
+    });
+  }
+
+  const resolveUnit = (unitRef: string): OrganizeUnitForPersist | undefined =>
+    unitByExistingId.get(unitRef) ?? newUnitObjects.get(unitRef);
+
+  // Tracks, per existing unit + anchor topic id ("" = lead), the index a new
+  // topic was last inserted at — so several new topics anchored to the same
+  // point stack in the order they're processed instead of reversing each
+  // other, and later anchors correctly account for earlier insertions.
+  const lastTopicInsertionIndex = new Map<OrganizeUnitForPersist, Map<string, number>>();
+
+  const videoById = new Map(videos.map((v) => [v.videoId, v]));
+  for (const placement of result.placements) {
+    const video = videoById.get(placement.videoId);
+    const unit = resolveUnit(placement.unitRef);
+    if (!video || !unit) continue;
+
+    let topic: TopicGroup | undefined;
+    if (placement.existingTopicId) {
+      topic = topicByExistingId.get(placement.existingTopicId);
+      if (!topic || topic.videoFiles.length > 0 || topic.externalVideo) continue; // already validated, but never override
+    } else {
+      topic = {
+        title: placement.newTopicTitle ?? video.title,
+        order: video.position, // real playlist position — ground truth, not LLM-guessed
+        videoFiles: [],
+        slideFiles: [],
+        notesFiles: [],
+        externalVideo: null,
+      };
+
+      if (newUnitObjects.has(placement.unitRef)) {
+        // Brand-new unit — every topic in it is new, so real playlist
+        // position (sorted in once the unit is inserted below) is already a
+        // correct, simple ordering; no anchoring needed.
+        unit.topics.push(topic);
+      } else {
+        // Existing (Drive-derived) unit — slot the new topic in next to the
+        // related material it was anchored to, instead of always at the end.
+        const anchorMap = lastTopicInsertionIndex.get(unit) ?? new Map<string, number>();
+        lastTopicInsertionIndex.set(unit, anchorMap);
+
+        const anchorId = placement.insertAfterTopicId ?? "";
+        const anchorTopic = anchorId ? topicByExistingId.get(anchorId) : undefined;
+        let insertIndex: number;
+        if (anchorMap.has(anchorId)) {
+          insertIndex = anchorMap.get(anchorId)! + 1;
+        } else if (anchorId === "") {
+          insertIndex = 0;
+        } else {
+          const anchorIndex = anchorTopic ? unit.topics.indexOf(anchorTopic) : -1;
+          insertIndex = anchorIndex >= 0 ? anchorIndex + 1 : unit.topics.length;
+        }
+
+        unit.topics.splice(insertIndex, 0, topic);
+        anchorMap.set(anchorId, insertIndex);
+      }
+    }
+
+    topic.externalVideo = { url: youtubeWatchUrl(video.videoId), title: video.title };
+  }
+
+  // Insert each new unit right after the specific existing unit it anchored
+  // to (re-resolving that anchor's current array index each time so several
+  // new units anchored to the same point stack in the order Opus gave them,
+  // and later anchors correctly account for earlier insertions). An empty or
+  // unresolved anchor falls back to appending at the end — safer than
+  // guessing a numeric position, which is what previously misplaced a
+  // "course review" unit at position 26 of 32 instead of near the end.
+  const lastInsertionIndexByAnchor = new Map<string, number>();
+  for (const nu of result.newUnits) {
+    const unitObj = newUnitObjects.get(nu.key);
+    if (!unitObj || unitObj.topics.length === 0) continue; // declared but never actually used
+
+    unitObj.topics.sort((a, b) => a.order - b.order);
+
+    const anchorKey = nu.insertAfterUnitId ?? "";
+    let insertIndex: number;
+    if (lastInsertionIndexByAnchor.has(anchorKey)) {
+      insertIndex = lastInsertionIndexByAnchor.get(anchorKey)! + 1;
+    } else if (anchorKey === "") {
+      insertIndex = 0;
+    } else {
+      const anchorUnit = unitByExistingId.get(anchorKey);
+      const anchorIndex = anchorUnit ? units.indexOf(anchorUnit) : -1;
+      insertIndex = anchorIndex >= 0 ? anchorIndex + 1 : units.length;
+    }
+
+    units.splice(insertIndex, 0, unitObj);
+    lastInsertionIndexByAnchor.set(anchorKey, insertIndex);
+  }
+
+  const placementNote = result.placements.length === 0 ? "None of the videos could be placed into the course." : null;
+  return [truncatedNote, placementNote].filter(Boolean).join(" ") || null;
+}
+
+// Matches "Final Review", "Final Exam Review", "Course Review", "Cumulative
+// Review", "Comprehensive Review", "Review for the final", etc. - but not a
+// mid-course "Midterm 1 Review" or a plain per-topic "Recursion Review",
+// which should stay wherever their own topic sorts.
+const FINAL_REVIEW_UNIT_TITLE_PATTERN =
+  /\bfinal\b[\s\S]*\breview\b|\breview\b[\s\S]*\bfinal\b|\bcourse\s+review\b|\bcumulative\s+review\b|\bcomprehensive\s+review\b/i;
+
+function moveFinalReviewUnitsToEnd(units: OrganizeUnitForPersist[]): OrganizeUnitForPersist[] {
+  const regular: OrganizeUnitForPersist[] = [];
+  const finalReview: OrganizeUnitForPersist[] = [];
+  for (const unit of units) {
+    (FINAL_REVIEW_UNIT_TITLE_PATTERN.test(unit.title) ? finalReview : regular).push(unit);
+  }
+  return finalReview.length > 0 ? [...regular, ...finalReview] : units;
+}
+
 export async function runDriveImportOrganize(
   courseCode: string,
   folderUrl: string,
+  youtubePlaylistUrl?: string,
   options?: { cogniterra?: CogniterraSetupInput }
-): Promise<{ unitIds: string[]; lessonIds: string[]; cogniterraWired: number }> {
+): Promise<{
+  unitIds: string[];
+  lessonIds: string[];
+  youtubePlaylistWarning?: string | null;
+  cogniterraWired: number;
+  skippedAlreadyImportedCount: number;
+  failedUnitTitles: string[];
+}> {
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
   const supabase = await createClient();
   const { data: course, error: courseError } = await supabase
     .from("courses")
-    .select("code, title, department")
+    .select("id, code, title, department")
     .eq("code", courseCode)
     .single();
   if (courseError || !course) throw new Error("Unknown course code");
@@ -748,7 +1003,32 @@ export async function runDriveImportOrganize(
 
   // Folder layout is not a contract — flatten everything and let the model
   // decide units / multi-file content lessons / quizzes from file content.
-  const tree = flattenDriveImportTree(nestedTree, folderId);
+  const flatTree = flattenDriveImportTree(nestedTree, folderId);
+
+  // Never hand the classifier a file (or the placement model a video) this
+  // course already imported — otherwise re-running the same folder/playlist
+  // (retrying, or adding a few new files later) re-structures and re-persists
+  // everything it already built once, producing fully duplicated
+  // units/lessons/questions.
+  const { driveFileIds: alreadyImportedFileIds, youtubeVideoIds: alreadyPlacedVideoIds } =
+    await alreadyImportedCourseContent(course.id);
+  let skippedAlreadyImportedCount = 0;
+  const tree = {
+    ...flatTree,
+    units: flatTree.units.map((unit) => ({
+      ...unit,
+      files: unit.files.filter((f) => {
+        if (!alreadyImportedFileIds.has(f.id)) return true;
+        skippedAlreadyImportedCount += 1;
+        return false;
+      }),
+    })),
+  };
+  if (skippedAlreadyImportedCount > 0) {
+    console.log(
+      `runDriveImportOrganize: skipping ${skippedAlreadyImportedCount} file(s) already imported into "${courseCode}"`
+    );
+  }
 
   const driveFilesById = new Map(tree.units.flatMap((u) => u.files).map((f) => [f.id, f]));
 
@@ -820,37 +1100,68 @@ export async function runDriveImportOrganize(
   );
 
   const classifiableCount = filteredTree.units.reduce((sum, unit) => sum + unit.files.length, 0);
-  if (classifiableCount === 0) {
+  const trimmedPlaylistUrl = youtubePlaylistUrl?.trim() || null;
+
+  // A Drive folder with nothing classifiable (e.g. just a doc linking out to
+  // the actual lecture videos) is only a dead end when there's no YouTube
+  // source to build the course from instead - otherwise plannedUnits starts
+  // empty and attachYoutubePlaylistVideos below builds it from scratch.
+  if (classifiableCount === 0 && !trimmedPlaylistUrl) {
     revalidatePath(`/instructor/${courseCode}`);
-    return { unitIds: [], lessonIds: [], cogniterraWired: 0 };
+    return {
+      unitIds: [],
+      lessonIds: [],
+      youtubePlaylistWarning: null,
+      cogniterraWired: 0,
+      skippedAlreadyImportedCount,
+      failedUnitTitles: [],
+    };
   }
 
-  const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
-  const classification = await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
-
-  // Prefer model duplicates; fold in basename-detected pairs the model missed.
-  const duplicates = [...classification.duplicates];
-  const seenDupIds = new Set(duplicates.map((d) => d.driveFileId));
-  for (const dup of basenameDupes.duplicates) {
-    if (seenDupIds.has(dup.driveFileId)) continue;
-    duplicates.push(dup);
-    seenDupIds.add(dup.driveFileId);
-  }
-
-  const { units: plannedUnits, extraDuplicates } = organizeClassificationToPersistable(
-    { ...classification, duplicates },
-    driveFilesById,
-    folderId
-  );
-
+  let plannedUnits: OrganizeUnitForPersist[] = [];
   const duplicatesBySurvivorId = new Map<string, string[]>();
-  for (const duplicate of [...duplicates, ...extraDuplicates]) {
-    const list = duplicatesBySurvivorId.get(duplicate.duplicateOfDriveFileId) ?? [];
-    list.push(duplicate.driveFileId);
-    duplicatesBySurvivorId.set(duplicate.duplicateOfDriveFileId, list);
+  let unclassified: { name: string; driveFileId: string; reason: string }[] = [];
+
+  if (classifiableCount > 0) {
+    const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
+    const classification = await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
+    unclassified = classification.unclassified;
+
+    // Prefer model duplicates; fold in basename-detected pairs the model missed.
+    const duplicates = [...classification.duplicates];
+    const seenDupIds = new Set(duplicates.map((d) => d.driveFileId));
+    for (const dup of basenameDupes.duplicates) {
+      if (seenDupIds.has(dup.driveFileId)) continue;
+      duplicates.push(dup);
+      seenDupIds.add(dup.driveFileId);
+    }
+
+    const { units, extraDuplicates } = organizeClassificationToPersistable(
+      { ...classification, duplicates },
+      driveFilesById,
+      folderId
+    );
+    plannedUnits = units;
+
+    for (const duplicate of [...duplicates, ...extraDuplicates]) {
+      const list = duplicatesBySurvivorId.get(duplicate.duplicateOfDriveFileId) ?? [];
+      list.push(duplicate.driveFileId);
+      duplicatesBySurvivorId.set(duplicate.duplicateOfDriveFileId, list);
+    }
   }
 
-  for (const item of classification.unclassified) {
+  const youtubePlaylistWarning = trimmedPlaylistUrl
+    ? await attachYoutubePlaylistVideos(course, plannedUnits, folderId, trimmedPlaylistUrl, alreadyPlacedVideoIds)
+    : null;
+
+  // A cumulative/final course review almost never has one clear topical home,
+  // so an LLM ordering call (classifyOrganizeGrouping's prerequisite-based
+  // "order", or a YouTube review video's own new-unit anchor) is never a hard
+  // guarantee it lands last - this is a deterministic backstop on top of
+  // those prompts, not a replacement for them.
+  plannedUnits = moveFinalReviewUnitsToEnd(plannedUnits);
+
+  for (const item of unclassified) {
     console.log(
       `runDriveImportOrganize: unclassified "${item.name}" (${item.driveFileId}): ${item.reason}`
     );
@@ -859,8 +1170,31 @@ export async function runDriveImportOrganize(
   const unitIds: string[] = [];
   const lessonIds: string[] = [];
   const externalAssignments: DriveAssignmentForMatch[] = [];
+  const failedUnitTitles: string[] = [];
 
   for (const unit of plannedUnits) {
+    // A DB/network hiccup partway through one unit (a Supabase gateway
+    // timeout has been observed here on long-running imports) must not
+    // discard every other already-classified unit along with it — catch and
+    // move on, so the rest of the course still imports. A re-run of import
+    // picks the failed unit's files back up (they never got a
+    // source_drive_file_id recorded, so alreadyImportedCourseContent above
+    // won't skip them).
+    try {
+      await importOneUnit(unit, { title: course.title, department: course.department });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `runDriveImportOrganize: unit "${unit.title}" failed to import, skipping to the next unit (re-run import to retry it): ${message}`
+      );
+      failedUnitTitles.push(unit.title);
+    }
+  }
+
+  async function importOneUnit(
+    unit: OrganizeUnitForPersist,
+    course: { title: string; department: string }
+  ): Promise<void> {
     const newUnit = await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
     let unitLessonCount = 0;
     let lessonPosition = 0;
@@ -868,14 +1202,17 @@ export async function runDriveImportOrganize(
     for (const topic of unit.topics) {
       const primaryFile =
         topic.videoFiles[0] ?? topic.slideFiles[0] ?? topic.notesFiles[0];
-      if (!primaryFile) continue;
+      // A topic with no Drive file at all is still valid when it's a
+      // YouTube-only lecture (see attachYoutubePlaylistVideos) — everything
+      // else (a Drive-classified topic that produced no files) still bails.
+      if (!primaryFile && !topic.externalVideo) continue;
 
       lessonPosition += 1;
       const newLesson = await addLessonFromImport(newUnit.id, {
         title: topic.title,
         type: "lesson",
         position: lessonPosition,
-        sourceDriveFileId: primaryFile.id,
+        sourceDriveFileId: primaryFile?.id ?? null,
         contentSource: "blocks",
       });
 
@@ -885,8 +1222,7 @@ export async function runDriveImportOrganize(
         resolvedByFileId,
         driveFilesById,
         duplicatesBySurvivorId,
-        resourceKeyHeader,
-        drive
+        resourceKeyHeader
       );
 
       if (blocksAdded === 0) {
@@ -922,6 +1258,7 @@ export async function runDriveImportOrganize(
         newLesson.id,
         quiz,
         entry,
+        resolvedByFileId,
         { title: course.title, department: course.department },
         drive,
         driveFilesById,
@@ -935,7 +1272,6 @@ export async function runDriveImportOrganize(
             newLesson.id,
             quiz,
             entry,
-            drive,
             driveFilesById,
             duplicatesBySurvivorId,
             resourceKeyHeader
@@ -951,7 +1287,7 @@ export async function runDriveImportOrganize(
         }
 
         console.warn(
-          `runDriveImportOrganize: dropping empty quiz lesson "${quiz.title}" - no auto-gradable questions could be extracted`
+          `runDriveImportOrganize: dropping empty quiz lesson "${quiz.title}" - no gradable questions could be extracted`
         );
         await deleteLesson(courseCode, newLesson.id);
         lessonPosition -= 1;
@@ -967,7 +1303,7 @@ export async function runDriveImportOrganize(
       // with a title and nothing underneath it.
       console.warn(`runDriveImportOrganize: dropping empty unit "${unit.title}" - no lesson survived content resolution`);
       await deleteUnit(courseCode, newUnit.id);
-      continue;
+      return;
     }
 
     unitIds.push(newUnit.id);
@@ -988,5 +1324,12 @@ export async function runDriveImportOrganize(
   }
 
   revalidatePath(`/instructor/${courseCode}`);
-  return { unitIds, lessonIds, cogniterraWired };
+  return {
+    unitIds,
+    lessonIds,
+    youtubePlaylistWarning,
+    cogniterraWired,
+    skippedAlreadyImportedCount,
+    failedUnitTitles,
+  };
 }

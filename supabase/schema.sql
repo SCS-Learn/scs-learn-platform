@@ -65,6 +65,10 @@ create table public.lessons (
   content_html text not null default '',
   is_published boolean not null default false,
   source_drive_file_id text,
+  -- Off by default - a student never sees a free_response (AI-graded)
+  -- reference answer after submitting unless the instructor turns this on
+  -- for that specific quiz lesson.
+  show_reference_answers boolean not null default false,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -329,7 +333,10 @@ create table if not exists public.quiz_submissions (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references public.lessons (id) on delete cascade,
   platform_user_id text not null,
-  correct_count integer not null default 0,
+  -- Accumulates fractional per-question scores (0..1 each) — free_response
+  -- questions can earn partial credit from the LLM grader (see
+  -- supabase/migrations/add-free-response-grading.sql).
+  correct_count numeric not null default 0,
   gradable_count integer not null default 0,
   score_percent integer not null default 0,
   variant_index integer not null default 0,
@@ -344,6 +351,14 @@ create table if not exists public.quiz_responses (
   question_id uuid not null references public.questions (id) on delete cascade,
   response_text text not null default '',
   is_correct boolean,
+  -- Set for every gradable response (0..1); free_response questions get a
+  -- partial-credit fraction and short feedback from the LLM grader instead
+  -- of a plain boolean.
+  score_fraction numeric,
+  feedback text,
+  -- Student's thumbs-up/down on the LLM grader's feedback for this response
+  -- (free_response only) - lets instructors spot-check grading quality.
+  grading_feedback_rating text check (grading_feedback_rating in ('up', 'down')),
   created_at timestamptz not null default now(),
   unique (submission_id, question_id)
 );

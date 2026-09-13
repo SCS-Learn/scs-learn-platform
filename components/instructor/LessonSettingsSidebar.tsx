@@ -37,6 +37,9 @@ export default function LessonSettingsSidebar({
   showQuizCompletionThreshold,
   quizCompletionThreshold,
   onQuizCompletionThresholdChange,
+  showReferenceAnswersToggle,
+  showReferenceAnswers,
+  onShowReferenceAnswersChange,
   onPreview,
   onSaveDraft,
   onPublish,
@@ -54,6 +57,10 @@ export default function LessonSettingsSidebar({
   showQuizCompletionThreshold: boolean;
   quizCompletionThreshold: number;
   onQuizCompletionThresholdChange: (value: number) => void;
+  /** Whether this lesson has any free_response (AI-graded) questions - the reference-answer toggle only makes sense then. */
+  showReferenceAnswersToggle: boolean;
+  showReferenceAnswers: boolean;
+  onShowReferenceAnswersChange: (value: boolean) => void;
   onPreview: () => void;
   onSaveDraft: () => void;
   onPublish: () => void;
@@ -162,6 +169,25 @@ export default function LessonSettingsSidebar({
             </div>
             <p className="mt-3 text-sm text-gray-500 leading-relaxed">
               Minimum quiz score required before students can mark this lesson complete.
+            </p>
+          </SectionBlock>
+        )}
+
+        {showReferenceAnswersToggle && (
+          <SectionBlock label="AI-graded reference answers">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showReferenceAnswers}
+                disabled={!lessonId}
+                onChange={(e) => onShowReferenceAnswersChange(e.target.checked)}
+                className="disabled:opacity-50"
+              />
+              <span>Show students the reference answer after grading</span>
+            </label>
+            <p className="mt-3 text-sm text-gray-500 leading-relaxed">
+              Off by default — students see their score and feedback but never the reference
+              answer for AI-graded (free response) questions unless you turn this on.
             </p>
           </SectionBlock>
         )}

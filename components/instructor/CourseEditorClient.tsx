@@ -17,14 +17,18 @@ import { formatRelativeTime } from "@/lib/instructor/format";
 import {
   addUnit as addUnitAction,
   deleteUnit as deleteUnitAction,
+  renameUnit as renameUnitAction,
   reorderUnits as reorderUnitsAction,
   addLesson as addLessonAction,
   deleteLesson as deleteLessonAction,
   reorderLessons as reorderLessonsAction,
+  moveLessonToUnit as moveLessonToUnitAction,
   updateLessonContent,
   updateLessonType,
   publishLesson as publishLessonAction,
+  publishAllLessons as publishAllLessonsAction,
   updateQuizCompletionThreshold,
+  updateShowReferenceAnswers,
 } from "@/lib/instructor/data/lessons";
 import { deleteCourse as deleteCourseAction } from "@/lib/instructor/data/courses";
 import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
@@ -37,6 +41,28 @@ function wordCountOf(html: string) {
 
 function moduleLabel(unit: Unit | undefined) {
   return unit ? `${unit.code} — ${unit.title}` : "";
+}
+
+function unitNumberFromCode(code: string): string {
+  return code.match(/(\d+)/)?.[1] ?? "0";
+}
+
+/** Keeps every unit's "Unit N" label and its lessons' "N.M" labels in sync with actual array order - reorders/deletes only change array position, so codes need recomputing alongside. */
+function withRenumberedUnitCodes(units: Unit[]): Unit[] {
+  return units.map((u, index) => {
+    const unitNumber = index + 1;
+    return {
+      ...u,
+      code: `Unit ${unitNumber}`,
+      lessons: u.lessons.map((l, lessonIndex) => ({ ...l, code: `${unitNumber}.${lessonIndex + 1}` })),
+    };
+  });
+}
+
+/** Same idea, scoped to one unit's own lessons (its own unit number doesn't change). */
+function withRenumberedLessonCodes(unit: Unit): Unit {
+  const unitNumber = unitNumberFromCode(unit.code);
+  return { ...unit, lessons: unit.lessons.map((l, index) => ({ ...l, code: `${unitNumber}.${index + 1}` })) };
 }
 
 const AUTOSAVE_DELAY_MS = 800;
@@ -158,7 +184,9 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
     setUnits((prev) =>
       prev.map((u) =>
-        u.id === unitId ? { ...u, lessons: u.lessons.filter((l) => l.id !== lessonId) } : u
+        u.id === unitId
+          ? withRenumberedLessonCodes({ ...u, lessons: u.lessons.filter((l) => l.id !== lessonId) })
+          : u
       )
     );
 
@@ -187,7 +215,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
 
     discardPendingSaveFor(unit.lessons.map((l) => l.id));
 
-    setUnits((prev) => prev.filter((u) => u.id !== unitId));
+    setUnits((prev) => withRenumberedUnitCodes(prev.filter((u) => u.id !== unitId)));
 
     if (unit.lessons.some((l) => l.id === selectedLessonId)) {
       const fallbackUnit = units.find((u) => u.id !== unitId);
@@ -205,6 +233,13 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     });
   };
 
+  const renameUnit = (unitId: string, title: string) => {
+    setUnits((prev) => prev.map((u) => (u.id === unitId ? { ...u, title } : u)));
+    startTransition(async () => {
+      await renameUnitAction(course.code, unitId, title);
+    });
+  };
+
   const reorderLessons = (unitId: string, draggedLessonId: string, targetLessonId: string) => {
     if (draggedLessonId === targetLessonId) return;
     let newOrderIds: string[] = [];
@@ -218,7 +253,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         const [moved] = lessons.splice(fromIndex, 1);
         lessons.splice(toIndex, 0, moved);
         newOrderIds = lessons.map((l) => l.id);
-        return { ...u, lessons };
+        return withRenumberedLessonCodes({ ...u, lessons });
       })
     );
     if (newOrderIds.length) {
@@ -228,10 +263,64 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     }
   };
 
+  const moveLessonToUnit = (
+    fromUnitId: string,
+    toUnitId: string,
+    lessonId: string,
+    targetLessonId: string | null
+  ) => {
+    if (fromUnitId === toUnitId) return;
+    let moved = false;
+    setUnits((prev) => {
+      const fromUnit = prev.find((u) => u.id === fromUnitId);
+      const lesson = fromUnit?.lessons.find((l) => l.id === lessonId);
+      if (!lesson) return prev;
+      moved = true;
+      return prev.map((u) => {
+        if (u.id === fromUnitId) {
+          return withRenumberedLessonCodes({ ...u, lessons: u.lessons.filter((l) => l.id !== lessonId) });
+        }
+        if (u.id === toUnitId) {
+          const lessons = [...u.lessons];
+          const insertIndex = targetLessonId
+            ? lessons.findIndex((l) => l.id === targetLessonId)
+            : lessons.length;
+          lessons.splice(insertIndex === -1 ? lessons.length : insertIndex, 0, lesson);
+          return withRenumberedLessonCodes({ ...u, lessons });
+        }
+        return u;
+      });
+    });
+    if (moved) {
+      startTransition(async () => {
+        await moveLessonToUnitAction(course.code, lessonId, fromUnitId, toUnitId, targetLessonId);
+      });
+    }
+  };
+
   const addUnit = async (title: string): Promise<string> => {
     const newUnit = await addUnitAction(course.code, title);
     setUnits((prev) => [...prev, newUnit]);
     return newUnit.id;
+  };
+
+  const changeUnitNumber = (unitId: string, newNumber: number) => {
+    let newOrderIds: string[] = [];
+    setUnits((prev) => {
+      const list = [...prev];
+      const fromIndex = list.findIndex((u) => u.id === unitId);
+      if (fromIndex === -1) return prev;
+      const clampedIndex = Math.min(Math.max(newNumber - 1, 0), list.length - 1);
+      const [moved] = list.splice(fromIndex, 1);
+      list.splice(clampedIndex, 0, moved);
+      newOrderIds = list.map((u) => u.id);
+      return withRenumberedUnitCodes(list);
+    });
+    if (newOrderIds.length) {
+      startTransition(async () => {
+        await reorderUnitsAction(course.code, newOrderIds);
+      });
+    }
   };
 
   const reorderUnits = (draggedUnitId: string, targetUnitId: string) => {
@@ -245,7 +334,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
       const [moved] = list.splice(fromIndex, 1);
       list.splice(toIndex, 0, moved);
       newOrderIds = list.map((u) => u.id);
-      return list;
+      return withRenumberedUnitCodes(list);
     });
     if (newOrderIds.length) {
       startTransition(async () => {
@@ -286,10 +375,41 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     });
   };
 
+  const publishAll = () => {
+    const unpublishedCount = units.reduce(
+      (sum, u) => sum + u.lessons.filter((l) => !l.isPublished).length,
+      0
+    );
+    if (unpublishedCount === 0) return;
+    if (
+      !window.confirm(
+        `Publish all ${unpublishedCount} unpublished lesson${unpublishedCount === 1 ? "" : "s"}? Students will be able to see them immediately.`
+      )
+    )
+      return;
+
+    flushPendingSave();
+    const now = new Date().toISOString();
+    setUnits((prev) =>
+      prev.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) => (l.isPublished ? l : { ...l, isPublished: true, updatedAt: now })),
+      }))
+    );
+    startTransition(async () => {
+      await publishAllLessonsAction(course.code);
+    });
+  };
+
   const selectedLessonHasQuizQuestions =
     selectedLesson?.type === "quiz" ||
     (selectedLesson?.type !== "external" &&
       (selectedLesson?.blocks.some((block) => (block.questions?.length ?? 0) > 0) ?? false));
+
+  const selectedLessonHasFreeResponseQuestions =
+    selectedLesson?.blocks.some((block) =>
+      block.questions?.some((q) => q.questionType === "free_response")
+    ) ?? false;
 
   const updateQuizCompletionThresholdForLesson = (threshold: number) => {
     if (!selectedLesson) return;
@@ -307,6 +427,21 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     });
   };
 
+  const updateShowReferenceAnswersForLesson = (show: boolean) => {
+    if (!selectedLesson) return;
+    setUnits((prev) =>
+      prev.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) =>
+          l.id === selectedLessonId ? { ...l, showReferenceAnswers: show } : l
+        ),
+      }))
+    );
+    startTransition(async () => {
+      await updateShowReferenceAnswers(course.code, selectedLessonId, show);
+    });
+  };
+
   return (
     <main className="h-screen bg-gray-50 text-black grid grid-cols-[1fr_3fr_1fr] overflow-hidden">
       <ContentSidebar
@@ -318,10 +453,14 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         onAddLesson={addLesson}
         onDeleteLesson={deleteLesson}
         onDeleteUnit={deleteUnit}
+        onRenameUnit={renameUnit}
+        onChangeUnitNumber={changeUnitNumber}
         onReorderLessons={reorderLessons}
+        onMoveLessonToUnit={moveLessonToUnit}
         onAddUnit={addUnit}
         onReorderUnits={reorderUnits}
         onDeleteCourse={deleteCourse}
+        onPublishAll={publishAll}
       />
 
       <div className="min-h-0 h-full overflow-hidden bg-white border-x border-gray-300">
@@ -450,6 +589,9 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         showQuizCompletionThreshold={selectedLessonHasQuizQuestions}
         quizCompletionThreshold={selectedLesson?.quizCompletionThreshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD}
         onQuizCompletionThresholdChange={updateQuizCompletionThresholdForLesson}
+        showReferenceAnswersToggle={selectedLessonHasFreeResponseQuestions}
+        showReferenceAnswers={selectedLesson?.showReferenceAnswers ?? false}
+        onShowReferenceAnswersChange={updateShowReferenceAnswersForLesson}
         onPreview={() =>
           window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
         }

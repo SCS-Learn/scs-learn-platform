@@ -56,6 +56,8 @@ export type QuizSubmissionStatus = {
   responses: Record<string, string>;
   /** Active quiz version index (0–9 when variants exist). */
   variantIndex: number;
+  /** Per-question grading — fraction 0..1 (partial credit for free_response) plus any LLM feedback. */
+  scores: Record<string, { fraction: number; feedback: string | null; feedbackRating?: "up" | "down" | null }>;
 };
 
 export type StudentLesson = {
@@ -71,6 +73,8 @@ export type StudentLesson = {
   quizSubmission: QuizSubmissionStatus | null;
   /** Minimum score (%) required to mark this quiz complete; only applies to quizzes. */
   quizCompletionThreshold: number;
+  /** Whether the instructor has enabled showing free_response (AI-graded) reference answers to students after submitting; off by default. */
+  showReferenceAnswers: boolean;
   /** ISO timestamp when the learner marked this lesson complete; null if not complete. */
   completedAt: string | null;
 };

@@ -20,10 +20,18 @@ export default function GoogleDriveImportModal({
 }: {
   courseCode: string;
   onClose: () => void;
-  onImportComplete: (result: { unitIds: string[]; lessonIds: string[] }) => void;
+  onImportComplete: (result: {
+    unitIds: string[];
+    lessonIds: string[];
+    youtubePlaylistWarning?: string | null;
+    cogniterraWired: number;
+    skippedAlreadyImportedCount: number;
+    failedUnitTitles: string[];
+  }) => void;
 }) {
   const [status, setStatus] = useState<Status>("input");
   const [folderUrl, setFolderUrl] = useState("");
+  const [playlistUrl, setPlaylistUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [preview, setPreview] = useState<{
     unitCount: number;
@@ -90,8 +98,13 @@ export default function GoogleDriveImportModal({
           }
         : undefined;
 
-      const result = await runDriveImportOrganize(courseCode, folderUrl, { cogniterra });
-      onImportComplete({ unitIds: result.unitIds, lessonIds: result.lessonIds });
+      const result = await runDriveImportOrganize(
+        courseCode,
+        folderUrl,
+        playlistUrl.trim() || undefined,
+        { cogniterra }
+      );
+      onImportComplete(result);
       onClose();
     } catch (error) {
       setErrorMessage(
@@ -167,6 +180,26 @@ export default function GoogleDriveImportModal({
               disabled={status === "scanning"}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-4 disabled:opacity-60"
             />
+
+            <label className="flex flex-col gap-1 mb-4">
+              <span className="text-xs font-bold text-gray-600">
+                YouTube playlist or channel link (optional)
+              </span>
+              <input
+                type="url"
+                value={playlistUrl}
+                onChange={(e) => setPlaylistUrl(e.target.value)}
+                placeholder="https://www.youtube.com/playlist?list=... or a channel/@handle link"
+                disabled={status === "scanning"}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm disabled:opacity-60"
+              />
+              <span className="text-xs text-gray-400">
+                If lectures live on YouTube instead of Drive, paste a playlist link here — or, if
+                lectures are split across one playlist per unit, paste the channel link instead
+                and AI checks all of its playlists. Either way, it matches each video to the
+                lecture topic it belongs to.
+              </span>
+            </label>
 
             <div className="mb-4">
               <CogniterraSetupFields

@@ -13,10 +13,27 @@ function decodeXmlEntities(text: string): string {
     .replace(/&amp;/g, "&");
 }
 
+// PowerPoint splits a single line into multiple <a:r>/<a:t> "runs" whenever
+// formatting changes mid-line (bold, italics, a baseline shift for a
+// subscript/superscript, autocorrect boundaries) - math notation like
+// "Pr(c1)" is exactly what triggers that, since the subscript digit is its
+// own run. Grouping by paragraph (<a:p>) and concatenating its runs restores
+// the original line instead of exploding it into one fragment per run;
+// <a:br/> still splits a paragraph into separate lines since it's an actual
+// manual line break, not a formatting boundary.
 function extractTextRuns(xml: string): string[] {
-  return [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)]
-    .map((match) => decodeXmlEntities(match[1]))
-    .filter((text) => text.trim().length > 0);
+  const lines: string[] = [];
+  for (const paragraphMatch of xml.matchAll(/<a:p>[\s\S]*?<\/a:p>/g)) {
+    const segments = paragraphMatch[0].split(/<a:br\b[^>]*(?:\/>|>[\s\S]*?<\/a:br>)/);
+    for (const segment of segments) {
+      const text = [...segment.matchAll(/<a:t>([^<]*)<\/a:t>/g)]
+        .map((match) => decodeXmlEntities(match[1]))
+        .join("")
+        .trim();
+      if (text.length > 0) lines.push(text);
+    }
+  }
+  return lines;
 }
 
 function slideNumber(path: string): number | null {

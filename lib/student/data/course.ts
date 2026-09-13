@@ -76,6 +76,7 @@ type LessonRow = {
   content_source: string;
   is_published: boolean;
   quiz_completion_threshold: number;
+  show_reference_answers: boolean;
   attachments: AttachmentRow[];
   lesson_blocks: LessonBlockRow[];
 };
@@ -103,7 +104,7 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, variants)))))";
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, variants)))))";
 
 function toQuestion(row: QuestionRow): StudentQuestion {
   const variants = parseVariants(row.variants);
@@ -264,6 +265,7 @@ function toLesson(
     lti,
     quizSubmission: reconcileQuizSubmission(scoredQuestions, quizSubmission),
     quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
+    showReferenceAnswers: row.show_reference_answers ?? false,
     completedAt,
   };
 }

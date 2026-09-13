@@ -92,32 +92,52 @@ async function contentBlocksForResolved(
 /**
  * Hands quiz/assignment/practice-problem source content to an LLM to build
  * structured questions (including free_response) that instructors can edit.
+ *
+ * `primary` is the problem-set file itself; `extras` are additional files
+ * grouped with it (typically a separate answer-key/solutions document) whose
+ * content is included so the model can match reference answers that live in
+ * a different file than the question they belong to.
  */
 export async function extractQuestionsFromDriveFile(
   course: { title: string; department: string },
   drive: drive_v3.Drive,
-  file: DriveEntry,
-  resolved: ResolvedFile,
+  primary: { file: DriveEntry; resolved: ResolvedFile },
+  extras: { file: DriveEntry; resolved: ResolvedFile }[],
   resourceKeyHeader: string | undefined
 ): Promise<ExtractedQuizQuestion[]> {
-  if (resolved.routing === "unsupported" || resolved.routing === "video") {
+  if (primary.resolved.routing === "unsupported" || primary.resolved.routing === "video") {
     console.warn(
-      `extractQuestionsFromDriveFile: cannot read "${file.name}" (routing=${resolved.routing})`
+      `extractQuestionsFromDriveFile: cannot read "${primary.file.name}" (routing=${primary.resolved.routing})`
     );
     return [];
   }
 
-  const blocks = await contentBlocksForResolved(drive, file, resolved, resourceKeyHeader);
+  const blocks = await contentBlocksForResolved(drive, primary.file, primary.resolved, resourceKeyHeader);
   if (blocks.length === 0) {
     console.warn(
-      `extractQuestionsFromDriveFile: no content blocks for "${file.name}" (routing=${resolved.routing})`
+      `extractQuestionsFromDriveFile: no content blocks for "${primary.file.name}" (routing=${primary.resolved.routing})`
     );
     return [];
   }
 
-  const built = await buildQuizQuestionsFromContent(course, file.name, blocks);
+  const allBlocks: ContentBlock[] = [
+    { type: "text", text: `--- Source file: "${primary.file.name}" (the problem set) ---` },
+    ...blocks,
+  ];
+
+  for (const extra of extras) {
+    if (extra.resolved.routing === "unsupported" || extra.resolved.routing === "video") continue;
+    const extraBlocks = await contentBlocksForResolved(drive, extra.file, extra.resolved, resourceKeyHeader);
+    if (extraBlocks.length === 0) continue;
+    allBlocks.push(
+      { type: "text", text: `--- Source file: "${extra.file.name}" (additional file — may be the answer key / solutions for the problem set above) ---` },
+      ...extraBlocks
+    );
+  }
+
+  const built = await buildQuizQuestionsFromContent(course, primary.file.name, allBlocks);
   console.log(
-    `extractQuestionsFromDriveFile: built ${built.length} question(s) from "${file.name}"`
+    `extractQuestionsFromDriveFile: built ${built.length} question(s) from "${primary.file.name}"${extras.length > 0 ? ` (+${extras.length} additional file(s))` : ""}`
   );
 
   return built.map((question) => ({

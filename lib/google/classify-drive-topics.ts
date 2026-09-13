@@ -28,12 +28,20 @@ export type TopicGroup = {
   videoFiles: DriveEntry[];
   slideFiles: DriveEntry[];
   notesFiles: DriveEntry[];
+  /** A lecture recording sourced from a YouTube playlist instead of Drive —
+   *  only ever set (post-classification) when videoFiles is empty. */
+  externalVideo?: { url: string; title: string } | null;
 };
 
 export type QuizLessonRef = {
   title: string;
   order: number;
   file: DriveEntry;
+  /** Additional files grouped with this quiz — e.g. a separate answer-key/solutions
+   *  document. Their content is fed to question extraction alongside the primary
+   *  file so reference answers can be matched across files; they still also
+   *  surface as Drive-link attachments. */
+  extraFiles: DriveEntry[];
 };
 
 export type UnitTopicClassification = {
@@ -89,7 +97,7 @@ export function classifyUnitIntoTopics(
     for (const file of eligibleFiles) {
       const role = roleByFileId.get(file.id)!;
       if (role === "quiz") {
-        quizzes.push({ title: cleanTitle(file.name), order: quizzes.length + 1, file });
+        quizzes.push({ title: cleanTitle(file.name), order: quizzes.length + 1, file, extraFiles: [] });
         continue;
       }
       if (role === "video" || isVideoPlaceholderName(file.name)) group.videoFiles.push(file);
@@ -117,7 +125,7 @@ export function classifyUnitIntoTopics(
     if (role === "skip") continue;
 
     if (role === "quiz") {
-      quizzes.push({ title: cleanTitle(file.name), order: quizzes.length + 1, file });
+      quizzes.push({ title: cleanTitle(file.name), order: quizzes.length + 1, file, extraFiles: [] });
       continue;
     }
 

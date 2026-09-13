@@ -25,18 +25,21 @@ export type QuestionInputProps = {
   answerKey?: string | null;
   response: string;
   submitted: boolean;
-  /** When set after submit, styles the student's response green (correct) or red (incorrect). */
-  feedback?: "correct" | "incorrect" | null;
+  /** When set after submit, styles the student's response green (correct), amber (partial credit), or red (incorrect). */
+  feedback?: "correct" | "partial" | "incorrect" | null;
   onChange: (value: string) => void;
 };
 
 function selectedChoiceClass(
   selected: boolean,
   submitted: boolean,
-  feedback?: "correct" | "incorrect" | null
+  feedback?: "correct" | "partial" | "incorrect" | null
 ): string {
   if (selected && submitted && feedback === "correct") {
     return "border-green-500 bg-green-50";
+  }
+  if (selected && submitted && feedback === "partial") {
+    return "border-amber-500 bg-amber-50";
   }
   if (selected && submitted && feedback === "incorrect") {
     return "border-red-500 bg-red-50";
@@ -47,11 +50,14 @@ function selectedChoiceClass(
   return "border-gray-200";
 }
 
-function textFieldClass(submitted: boolean, feedback?: "correct" | "incorrect" | null): string {
+function textFieldClass(submitted: boolean, feedback?: "correct" | "partial" | "incorrect" | null): string {
   const base =
     "w-full text-sm border px-3 py-2 outline-none disabled:bg-white disabled:text-gray-700";
   if (submitted && feedback === "correct") {
     return `${base} border-green-500 bg-green-50`;
+  }
+  if (submitted && feedback === "partial") {
+    return `${base} border-amber-500 bg-amber-50`;
   }
   if (submitted && feedback === "incorrect") {
     return `${base} border-red-500 bg-red-50`;
@@ -86,7 +92,7 @@ function TextField({
   onChange: (v: string) => void;
   placeholder?: string;
   hint?: string;
-  feedback?: "correct" | "incorrect" | null;
+  feedback?: "correct" | "partial" | "incorrect" | null;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -103,6 +109,31 @@ function TextField({
   );
 }
 
+function TextAreaField({
+  value,
+  disabled,
+  onChange,
+  placeholder,
+  feedback,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  feedback?: "correct" | "partial" | "incorrect" | null;
+}) {
+  return (
+    <textarea
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder ?? "Type your answer..."}
+      rows={5}
+      className={`${textFieldClass(disabled, feedback)} resize-y`}
+    />
+  );
+}
+
 function RadioChoices({
   questionId,
   choices,
@@ -115,7 +146,7 @@ function RadioChoices({
   choices: string[];
   response: string;
   submitted: boolean;
-  feedback?: "correct" | "incorrect" | null;
+  feedback?: "correct" | "partial" | "incorrect" | null;
   onChange: (value: string) => void;
 }) {
   return (
@@ -787,6 +818,8 @@ export default function QuestionInput(props: QuestionInputProps) {
       return <VectorInput {...props} />;
     case "slider":
       return <SliderInput {...props} />;
+    case "free_response":
+      return <TextAreaField value={response} disabled={submitted} feedback={feedback} onChange={onChange} placeholder="Write your answer..." />;
     case "keyword_scored":
       return <TextField value={response} disabled={submitted} feedback={feedback} onChange={onChange} hint="Include required keywords in your answer." />;
     case "short_answer":

@@ -60,6 +60,11 @@ export function isGradable(question: QuizQuestionFields): boolean {
   return question.answerKey !== null && isAutogradableQuestionType(question.questionType);
 }
 
+/** free_response questions are graded by an LLM against the reference answer, not by rule. */
+export function isLlmGradable(question: QuizQuestionFields): boolean {
+  return question.questionType === "free_response" && Boolean(question.answerKey?.trim());
+}
+
 function parseJsonStringArray(value: string): string[] | null {
   try {
     const parsed = JSON.parse(value) as unknown;

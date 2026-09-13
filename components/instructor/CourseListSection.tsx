@@ -19,9 +19,13 @@ function CreateCourseModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (code: string, importResult?: { unitIds: string[]; lessonIds: string[] }) => void;
+  onCreated: (
+    code: string,
+    importResult?: { unitIds: string[]; lessonIds: string[]; youtubePlaylistWarning?: string | null }
+  ) => void;
 }) {
   const [folderUrl, setFolderUrl] = useState("");
+  const [playlistUrl, setPlaylistUrl] = useState("");
   const [error, setError] = useState("");
   const [status, setStatus] = useState<CreateStatus>("input");
   const [preview, setPreview] = useState<{
@@ -79,15 +83,20 @@ function CreateCourseModal({
             cogniterraConsumerKey.trim() &&
             cogniterraSharedSecret.trim();
 
-          const importResult = await runDriveImportOrganize(result.code, folderUrl.trim(), {
-            cogniterra: shouldSaveCogniterra
-              ? {
-                  cogniterraCourseId: cogniterraCourseId.trim(),
-                  consumerKey: cogniterraConsumerKey.trim(),
-                  sharedSecret: cogniterraSharedSecret.trim(),
-                }
-              : undefined,
-          });
+          const importResult = await runDriveImportOrganize(
+            result.code,
+            folderUrl.trim(),
+            playlistUrl.trim() || undefined,
+            {
+              cogniterra: shouldSaveCogniterra
+                ? {
+                    cogniterraCourseId: cogniterraCourseId.trim(),
+                    consumerKey: cogniterraConsumerKey.trim(),
+                    sharedSecret: cogniterraSharedSecret.trim(),
+                  }
+                : undefined,
+            }
+          );
           onCreated(result.code, importResult);
         } catch (importErr) {
           const message =
@@ -191,6 +200,26 @@ function CreateCourseModal({
                 />
               </label>
 
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-bold text-gray-600">
+                  YouTube playlist or channel link (optional)
+                </span>
+                <input
+                  type="url"
+                  value={playlistUrl}
+                  onChange={(e) => setPlaylistUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/playlist?list=... or a channel/@handle link"
+                  disabled={status === "scanning"}
+                  className="text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-iron-gray disabled:opacity-60"
+                />
+                <span className="text-xs text-gray-400">
+                  If lectures live on YouTube instead of Drive, paste a playlist link here — or, if
+                  lectures are split across one playlist per unit, paste the channel link instead
+                  and AI checks all of its playlists. Either way, it matches each video to the
+                  lecture topic it belongs to.
+                </span>
+              </label>
+
               <CogniterraSetupFields
                 cogniterraCourseId={cogniterraCourseId}
                 consumerKey={cogniterraConsumerKey}
@@ -269,13 +298,14 @@ export default function CourseListSection({ courses: initialCourses }: { courses
 
   const handleCreated = (
     code: string,
-    importResult?: { unitIds: string[]; lessonIds: string[] }
+    importResult?: { unitIds: string[]; lessonIds: string[]; youtubePlaylistWarning?: string | null }
   ) => {
     setShowModal(false);
     if (importResult) {
-      window.alert(
-        `Imported ${importResult.unitIds.length} unit${importResult.unitIds.length === 1 ? "" : "s"} and ${importResult.lessonIds.length} lesson${importResult.lessonIds.length === 1 ? "" : "s"} from Google Drive. Review titles and types before publishing.`
-      );
+      const message = `Imported ${importResult.unitIds.length} unit${importResult.unitIds.length === 1 ? "" : "s"} and ${importResult.lessonIds.length} lesson${importResult.lessonIds.length === 1 ? "" : "s"} from Google Drive. Review titles and types before publishing.${
+        importResult.youtubePlaylistWarning ? `\n\nYouTube playlist: ${importResult.youtubePlaylistWarning}` : ""
+      }`;
+      window.alert(message);
     }
     router.push(`/instructor/${code}`);
   };

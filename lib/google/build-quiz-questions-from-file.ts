@@ -10,14 +10,16 @@ import {
 } from "@/lib/quiz/ordering";
 import {
   AUTOGRADABLE_QUESTION_TYPES,
+  isAutogradableQuestionType,
   type AutogradableQuestionType,
   type QuestionChoices,
+  type QuestionType,
 } from "@/lib/quiz/types";
 
 export type BuiltQuizQuestion = {
   position: number;
   promptText: string;
-  questionType: AutogradableQuestionType;
+  questionType: QuestionType;
   choices: QuestionChoices;
   answerKey: string | null;
   needsReview: boolean;
@@ -27,11 +29,13 @@ export type BuiltQuizQuestion = {
 type RawBuiltQuizQuestion = {
   position: number;
   promptText: string;
-  questionType: AutogradableQuestionType;
+  questionType: QuestionType;
   choicesJson: string;
   answerKey: string;
   needsReview: boolean;
 };
+
+const IMPORTABLE_QUESTION_TYPES: QuestionType[] = [...AUTOGRADABLE_QUESTION_TYPES, "free_response"];
 
 const QUESTIONS_SCHEMA = {
   type: "object",
@@ -45,7 +49,7 @@ const QUESTIONS_SCHEMA = {
           promptText: { type: "string" },
           questionType: {
             type: "string",
-            enum: AUTOGRADABLE_QUESTION_TYPES,
+            enum: IMPORTABLE_QUESTION_TYPES,
           },
           choicesJson: { type: "string" },
           answerKey: { type: "string" },
@@ -98,7 +102,21 @@ function isValidJson(value: string): boolean {
 
 function normalizeBuiltQuestion(raw: RawBuiltQuizQuestion): BuiltQuizQuestion | null {
   const { questionType, needsReview, promptText, position } = raw;
-  if (!(AUTOGRADABLE_QUESTION_TYPES as string[]).includes(questionType)) return null;
+
+  if (questionType === "free_response") {
+    const referenceAnswer = (raw.answerKey ?? "").trim();
+    if (!referenceAnswer) return null;
+    return {
+      position,
+      promptText,
+      questionType,
+      choices: null,
+      answerKey: referenceAnswer,
+      needsReview,
+    };
+  }
+
+  if (!isAutogradableQuestionType(questionType)) return null;
 
   let key = (raw.answerKey ?? "").trim();
   if (!key) return null;
@@ -202,7 +220,7 @@ function normalizeBuiltQuestion(raw: RawBuiltQuizQuestion): BuiltQuizQuestion | 
   };
 }
 
-const IMPORT_PROMPT = `Read the source and extract ONLY auto-gradable questions a student can answer interactively.
+const IMPORT_PROMPT = `Read the source and extract questions a student can answer interactively — either auto-gradable questions, or open-ended questions that come with a reference answer in the source.
 
 Use any of these questionType values — pick the best fit for each item's format:
 
@@ -240,21 +258,28 @@ Symbolic & math:
 - antiderivative: choicesJson = "null". answerKey = {"expression":"x^2 + C","allowConstant":true}.
 - interval_set_list: choicesJson = "null". answerKey = {"type":"interval","value":"(0,1)"}.
 
+Open-ended (only when a reference answer for that item is available somewhere in the source):
+- free_response: for essay, short-answer-explanation, proof, or derivation questions that are NOT auto-gradable. choicesJson = "null". answerKey = a complete, well-written model answer to the question itself.
+
 Rules:
 - choicesJson is ALWAYS a JSON-encoded string: use "null" when there is no config, or a JSON array/object as above.
 - answerKey is always a string (JSON-encoded when the type requires structured answers).
 - Every question MUST have a usable answerKey. If you cannot determine the answer, OMIT the question.
-- Do NOT invent free-response / essay / open-ended / prove-style questions.
-- promptText: full student-facing wording.
+- The source may span multiple files, each marked with a "--- Source file: ... ---" header — one is the problem set, others may be a separate answer key / solutions document. Match each question to its reference answer by problem number and wording across ALL provided files, not just the file the question text came from, before deciding an answer is unavailable.
+- For open-ended questions specifically: only extract them as free_response if a reference answer/solution for that exact item exists somewhere in the provided source(s). Do NOT invent or guess a reference answer that isn't there — if none exists in any provided file, OMIT the question entirely rather than fabricating one.
+- The free_response answerKey is shown to the student directly, as "the" answer — it is never TA-facing grading notes. If the source's reference material is written as grading instructions (e.g. "Award full credit if the student mentions X", "Look for Y and Z", a point-by-point rubric) rather than an actual answer, rewrite it into the direct model answer that rubric describes — do not copy rubric/grading language verbatim. If the source already gives a genuine model answer or worked solution, use it near-verbatim instead of rewriting it. Set needsReview = true whenever you had to rewrite rubric-style material into a direct answer, paraphrase, or condense — false when the source's own answer text is usable essentially as-is.
+- promptText, and the free_response answerKey: preserve meaningful source formatting as GitHub-flavored Markdown — fence code/pseudocode with triple backticks (add a language hint when known), render tabular data as a Markdown pipe table, keep paragraph breaks and lists. Do not flatten code or a table into a single run-on line of prose.
 - needsReview: true when you inferred the answer — false when verbatim from the source.
 - position: 1-based order matching the source.
 
-Empty "questions" is correct when no auto-gradable items exist.`;
+Empty "questions" is correct when no gradable items exist.`;
 
 /**
- * Uses an LLM to turn quiz/assignment source content into auto-gradable
- * question rows. Open-ended / free-response items are omitted — an empty
- * result means no auto-gradable questions were found.
+ * Uses an LLM to turn quiz/assignment source content into gradable
+ * question rows — either auto-gradable types, or free_response questions
+ * that come with a reference answer somewhere in the source. Open-ended
+ * items with no reference answer anywhere in the document are omitted; an
+ * empty result means no gradable questions were found at all.
  */
 export async function buildQuizQuestionsFromContent(
   course: { title: string; department: string },

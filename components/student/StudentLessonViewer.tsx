@@ -249,6 +249,7 @@ export default function StudentLessonViewer({
                 lessonId={lesson.id}
                 questions={questions}
                 initialSubmission={lesson.quizSubmission}
+                allowReferenceAnswers={lesson.showReferenceAnswers}
                 onSubmitted={(status) => onQuizSubmitted?.(lesson.id, status)}
                 onReset={() => onQuizReset?.(lesson.id)}
               />

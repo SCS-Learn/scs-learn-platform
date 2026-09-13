@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import RichText from "@/components/quiz/RichText";
 import {
   decodeMultipleSelectResponse,
   encodeMultipleSelectResponse,
@@ -47,13 +48,15 @@ import {
   QUESTION_CATEGORIES,
   QUESTION_TYPE_DROPDOWN_ORDER,
   QUESTION_TYPE_META,
+  isAutogradableQuestionType,
   type AutogradableQuestionType,
   type QuestionChoices,
+  type QuestionType,
 } from "@/lib/quiz/types";
 
 export type EditorState = {
   promptText: string;
-  questionType: AutogradableQuestionType;
+  questionType: QuestionType;
   choices: QuestionChoices;
   answerKey: string;
 };
@@ -86,8 +89,8 @@ const USES_JSON_ANSWER: AutogradableQuestionType[] = [
   "interval_set_list",
 ];
 
-function usesStringChoices(type: AutogradableQuestionType): boolean {
-  return USES_STRING_CHOICES.includes(type);
+function usesStringChoices(type: QuestionType): boolean {
+  return (USES_STRING_CHOICES as QuestionType[]).includes(type);
 }
 
 const PROMPT_PLACEHOLDERS: Partial<Record<AutogradableQuestionType, string>> = {
@@ -122,12 +125,14 @@ const ANSWER_HINTS: Partial<Record<AutogradableQuestionType, string>> = {
   interval_set_list: 'JSON with the expected interval, set, or list',
 };
 
-function promptPlaceholder(type: AutogradableQuestionType): string {
-  return PROMPT_PLACEHOLDERS[type] ?? "Enter the question text students will see";
+function promptPlaceholder(type: QuestionType): string {
+  return (
+    PROMPT_PLACEHOLDERS[type as AutogradableQuestionType] ?? "Enter the question text students will see"
+  );
 }
 
-function answerHint(type: AutogradableQuestionType): string | undefined {
-  return ANSWER_HINTS[type];
+function answerHint(type: QuestionType): string | undefined {
+  return ANSWER_HINTS[type as AutogradableQuestionType];
 }
 
 function AnswerKeyField({
@@ -136,20 +141,23 @@ function AnswerKeyField({
   hint,
   placeholder,
   multiline = false,
+  label = "Correct answer",
+  monospace = true,
 }: {
   value: string;
   onChange: (v: string) => void;
   hint?: string;
   placeholder?: string;
   multiline?: boolean;
+  label?: string;
+  monospace?: boolean;
 }) {
-  const className =
-    "w-full text-base border border-gray-200 px-4 py-2.5 outline-none focus:border-iron-gray font-mono";
+  const className = `w-full text-base border border-gray-200 px-4 py-2.5 outline-none focus:border-iron-gray ${monospace ? "font-mono" : ""}`;
 
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-        Correct answer
+        {label}
       </label>
       {multiline ? (
         <textarea
@@ -271,9 +279,7 @@ function StringChoicesEditor({
   );
 }
 
-export function createDefaultEditorState(
-  questionType: AutogradableQuestionType = "short_answer"
-): EditorState {
+export function createDefaultEditorState(questionType: QuestionType = "short_answer"): EditorState {
   return {
     promptText: "",
     questionType,
@@ -288,9 +294,9 @@ export function editorStateFromQuestion(question: {
   choices: QuestionChoices;
   answerKey: string | null;
 }): EditorState {
-  const type = QUESTION_TYPE_DROPDOWN_ORDER.includes(question.questionType as AutogradableQuestionType)
-    ? (question.questionType as AutogradableQuestionType)
-    : "short_answer";
+  const raw = question.questionType;
+  const type: QuestionType =
+    raw === "free_response" || isAutogradableQuestionType(raw) ? (raw as QuestionType) : "short_answer";
   return {
     promptText: question.promptText,
     questionType: type,
@@ -312,8 +318,12 @@ export function validateEditorState(state: EditorState): string | null {
     }
   }
 
-  let nextAnswer = answerKey.trim();
+  const nextAnswer = answerKey.trim();
   if (!nextAnswer) return "Answer key is required.";
+
+  if (questionType === "free_response") {
+    return null;
+  }
 
   if (usesStringChoices(questionType)) {
     const stringChoices = asStringChoices(choices) ?? [];
@@ -417,7 +427,7 @@ export function validateEditorState(state: EditorState): string | null {
     questionType === "equation_input"
   ) {
     if (!nextAnswer) return "Enter the correct expression.";
-  } else if (USES_JSON_ANSWER.includes(questionType)) {
+  } else if ((USES_JSON_ANSWER as QuestionType[]).includes(questionType)) {
     try {
       JSON.parse(nextAnswer);
     } catch {
@@ -432,8 +442,8 @@ export function QuestionTypeSelect({
   value,
   onChange,
 }: {
-  value: AutogradableQuestionType;
-  onChange: (type: AutogradableQuestionType) => void;
+  value: QuestionType;
+  onChange: (type: QuestionType) => void;
 }) {
   const commonSet = new Set(COMMON_QUESTION_TYPES);
   const moreTypes = QUESTION_TYPE_DROPDOWN_ORDER.filter((type) => !commonSet.has(type));
@@ -441,7 +451,7 @@ export function QuestionTypeSelect({
   return (
     <select
       value={value}
-      onChange={(e) => onChange(e.target.value as AutogradableQuestionType)}
+      onChange={(e) => onChange(e.target.value as QuestionType)}
       className="text-sm border border-gray-200 px-3 py-2 bg-white max-w-xs"
     >
       <optgroup label="Common">
@@ -465,6 +475,9 @@ export function QuestionTypeSelect({
           </optgroup>
         );
       })}
+      <optgroup label="Open-ended">
+        <option value="free_response">Free response (graded by AI)</option>
+      </optgroup>
     </select>
   );
 }
@@ -481,7 +494,7 @@ export function QuestionEditorFields({
   const { questionType, choices, answerKey } = state;
   const stringChoices = asStringChoices(choices);
 
-  const changeType = (next: AutogradableQuestionType) => {
+  const changeType = (next: QuestionType) => {
     onChange({
       questionType: next,
       choices: defaultChoicesForType(next),
@@ -504,6 +517,15 @@ export function QuestionEditorFields({
           className="w-full text-base border border-gray-200 px-4 py-3 outline-none focus:border-iron-gray"
           placeholder={promptPlaceholder(questionType)}
         />
+        <p className="text-xs text-gray-400">
+          Supports Markdown — fenced ``` code blocks and | tables render for students.
+        </p>
+        {state.promptText.trim() && (
+          <div className="border border-gray-100 bg-gray-50 px-3 py-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Preview</p>
+            <RichText>{state.promptText}</RichText>
+          </div>
+        )}
       </div>
 
       {questionType === "ordering" ? (
@@ -571,7 +593,7 @@ export function QuestionEditorFields({
         />
       ) : usesStringChoices(questionType) && stringChoices ? (
         <StringChoicesEditor
-          questionType={questionType}
+          questionType={questionType as AutogradableQuestionType}
           choices={stringChoices}
           answerKey={answerKey}
           questionId={questionId}
@@ -591,13 +613,31 @@ export function QuestionEditorFields({
           onChange={(k) => onChange({ answerKey: k })}
           placeholder="e.g. x^2 + 1"
         />
+      ) : questionType === "free_response" ? (
+        <div className="flex flex-col gap-2">
+          <AnswerKeyField
+            value={answerKey}
+            onChange={(k) => onChange({ answerKey: k })}
+            label="Reference answer"
+            placeholder="Write the actual answer a strong student would give — not grading notes."
+            hint="This is shown to students as the reference answer, so write the real answer itself (not 'award credit if...' rubric language) — Claude compares each student's response to it and gives partial credit. Markdown (code blocks, tables) is supported."
+            multiline
+            monospace={false}
+          />
+          {answerKey.trim() && (
+            <div className="border border-gray-100 bg-gray-50 px-3 py-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Preview</p>
+              <RichText>{answerKey}</RichText>
+            </div>
+          )}
+        </div>
       ) : (
         <AnswerKeyField
           value={answerKey}
           onChange={(k) => onChange({ answerKey: k })}
           placeholder={defaultAnswerKeyForType(questionType)}
           hint={answerHint(questionType)}
-          multiline={USES_JSON_ANSWER.includes(questionType)}
+          multiline={(USES_JSON_ANSWER as QuestionType[]).includes(questionType)}
         />
       )}
     </div>

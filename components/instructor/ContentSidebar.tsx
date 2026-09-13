@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   FolderInput,
+  UploadCloud,
 } from "lucide-react";
 import { type Unit } from "@/lib/instructor/mock-data";
 import GoogleDriveImportModal from "@/components/instructor/GoogleDriveImportModal";
@@ -79,10 +80,14 @@ export default function ContentSidebar({
   onAddLesson,
   onDeleteLesson,
   onDeleteUnit,
+  onRenameUnit,
+  onChangeUnitNumber,
   onReorderLessons,
+  onMoveLessonToUnit,
   onAddUnit,
   onReorderUnits,
   onDeleteCourse,
+  onPublishAll,
 }: {
   courseCode: string;
   courseTitle: string;
@@ -92,30 +97,87 @@ export default function ContentSidebar({
   onAddLesson: (unitId: string) => void;
   onDeleteLesson: (unitId: string, lessonId: string) => void;
   onDeleteUnit: (unitId: string) => void;
+  onRenameUnit: (unitId: string, title: string) => void;
+  onChangeUnitNumber: (unitId: string, newNumber: number) => void;
   onReorderLessons: (unitId: string, draggedLessonId: string, targetLessonId: string) => void;
+  onMoveLessonToUnit: (
+    fromUnitId: string,
+    toUnitId: string,
+    lessonId: string,
+    targetLessonId: string | null
+  ) => void;
   onAddUnit: (title: string) => Promise<string>;
   onReorderUnits: (draggedUnitId: string, targetUnitId: string) => void;
   onDeleteCourse: () => void;
+  onPublishAll: () => void;
 }) {
   const lessonCount = units.reduce((sum, u) => sum + u.lessons.length, 0);
+  const unpublishedCount = units.reduce(
+    (sum, u) => sum + u.lessons.filter((l) => !l.isPublished).length,
+    0
+  );
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const unit = units.find((u) => u.lessons.some((l) => l.id === selectedLessonId));
     return unit ? { [unit.id]: true } : {};
   });
   const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
+  const [draggingLessonUnitId, setDraggingLessonUnitId] = useState<string | null>(null);
   const [dragOverLessonId, setDragOverLessonId] = useState<string | null>(null);
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
   const [dragOverUnitId, setDragOverUnitId] = useState<string | null>(null);
   const [isAddUnitOpen, setIsAddUnitOpen] = useState(false);
   const [isDriveImportOpen, setIsDriveImportOpen] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingUnitNumberId, setEditingUnitNumberId] = useState<string | null>(null);
+  const [editingNumberValue, setEditingNumberValue] = useState("");
 
   const toggleUnit = (unitId: string) => {
     setExpanded((prev) => ({ ...prev, [unitId]: !prev[unitId] }));
   };
 
-  const handleDragStart = (e: DragEvent, lessonId: string) => {
+  const startEditingUnit = (unit: Unit) => {
+    setEditingUnitId(unit.id);
+    setEditingTitle(unit.title);
+  };
+
+  const commitEditingUnit = () => {
+    if (editingUnitId) {
+      const trimmed = editingTitle.trim();
+      if (trimmed) onRenameUnit(editingUnitId, trimmed);
+    }
+    setEditingUnitId(null);
+    setEditingTitle("");
+  };
+
+  const cancelEditingUnit = () => {
+    setEditingUnitId(null);
+    setEditingTitle("");
+  };
+
+  const startEditingUnitNumber = (unit: Unit) => {
+    setEditingUnitNumberId(unit.id);
+    setEditingNumberValue(unit.code.match(/(\d+)/)?.[1] ?? "");
+  };
+
+  const commitEditingUnitNumber = () => {
+    if (editingUnitNumberId) {
+      const parsed = Number.parseInt(editingNumberValue, 10);
+      if (Number.isFinite(parsed) && parsed > 0) onChangeUnitNumber(editingUnitNumberId, parsed);
+    }
+    setEditingUnitNumberId(null);
+    setEditingNumberValue("");
+  };
+
+  const cancelEditingUnitNumber = () => {
+    setEditingUnitNumberId(null);
+    setEditingNumberValue("");
+  };
+
+  const handleDragStart = (e: DragEvent, unitId: string, lessonId: string) => {
     setDraggingLessonId(lessonId);
+    setDraggingLessonUnitId(unitId);
     e.dataTransfer.effectAllowed = "move";
   };
 
@@ -126,8 +188,13 @@ export default function ContentSidebar({
 
   const handleDrop = (e: DragEvent, unitId: string, lessonId: string) => {
     e.preventDefault();
-    if (draggingLessonId) onReorderLessons(unitId, draggingLessonId, lessonId);
+    if (draggingLessonId && draggingLessonUnitId && draggingLessonUnitId !== unitId) {
+      onMoveLessonToUnit(draggingLessonUnitId, unitId, draggingLessonId, lessonId);
+    } else if (draggingLessonId) {
+      onReorderLessons(unitId, draggingLessonId, lessonId);
+    }
     setDraggingLessonId(null);
+    setDraggingLessonUnitId(null);
     setDragOverLessonId(null);
   };
 
@@ -143,7 +210,14 @@ export default function ContentSidebar({
 
   const handleUnitDrop = (e: DragEvent, unitId: string) => {
     e.preventDefault();
-    if (draggingUnitId) onReorderUnits(draggingUnitId, unitId);
+    if (draggingLessonId && draggingLessonUnitId && draggingLessonUnitId !== unitId) {
+      onMoveLessonToUnit(draggingLessonUnitId, unitId, draggingLessonId, null);
+      setExpanded((prev) => ({ ...prev, [unitId]: true }));
+    } else if (draggingUnitId) {
+      onReorderUnits(draggingUnitId, unitId);
+    }
+    setDraggingLessonId(null);
+    setDraggingLessonUnitId(null);
     setDraggingUnitId(null);
     setDragOverUnitId(null);
   };
@@ -193,7 +267,9 @@ export default function ContentSidebar({
       <div className="flex-1 overflow-y-auto py-2">
         {units.map((unit) => {
           const isOpen = !!expanded[unit.id];
-          const isUnitDragOver = dragOverUnitId === unit.id && draggingUnitId !== unit.id;
+          const isUnitDragOver =
+            dragOverUnitId === unit.id &&
+            (draggingUnitId ? draggingUnitId !== unit.id : draggingLessonUnitId !== unit.id);
           return (
             <div key={unit.id} className="mb-1">
               <div
@@ -214,9 +290,61 @@ export default function ContentSidebar({
                   {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </span>
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-bold leading-tight truncate">
-                    {unit.code} — {unit.title}
-                  </p>
+                  {editingUnitId === unit.id ? (
+                    <input
+                      autoFocus
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={commitEditingUnit}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEditingUnit();
+                        if (e.key === "Escape") cancelEditingUnit();
+                      }}
+                      className="w-full text-sm font-bold leading-tight bg-white border border-black px-1 -mx-1 outline-none"
+                    />
+                  ) : (
+                    <p className="text-sm font-bold leading-tight truncate">
+                      {editingUnitNumberId === unit.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min={1}
+                          value={editingNumberValue}
+                          onChange={(e) => setEditingNumberValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onBlur={commitEditingUnitNumber}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitEditingUnitNumber();
+                            if (e.key === "Escape") cancelEditingUnitNumber();
+                          }}
+                          className="w-12 text-sm font-bold bg-white border border-black px-1 outline-none"
+                        />
+                      ) : (
+                        <span
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            startEditingUnitNumber(unit);
+                          }}
+                          className="cursor-text"
+                          title="Double-click to change this unit's number"
+                        >
+                          {unit.code}
+                        </span>
+                      )}
+                      {" — "}
+                      <span
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          startEditingUnit(unit);
+                        }}
+                        className="cursor-text"
+                        title="Double-click to rename"
+                      >
+                        {unit.title}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -252,7 +380,7 @@ export default function ContentSidebar({
                       <div
                         key={lesson.id}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, lesson.id)}
+                        onDragStart={(e) => handleDragStart(e, unit.id, lesson.id)}
                         onDragOver={(e) => handleDragOver(e, lesson.id)}
                         onDragLeave={() =>
                           setDragOverLessonId((prev) => (prev === lesson.id ? null : prev))
@@ -260,6 +388,7 @@ export default function ContentSidebar({
                         onDrop={(e) => handleDrop(e, unit.id, lesson.id)}
                         onDragEnd={() => {
                           setDraggingLessonId(null);
+                          setDraggingLessonUnitId(null);
                           setDragOverLessonId(null);
                         }}
                         className={`group flex items-center gap-1.5 pl-8 pr-3 py-2.5 cursor-pointer border-t-2 ${
@@ -308,6 +437,16 @@ export default function ContentSidebar({
       </div>
 
       <div className="p-3 border-t border-gray-100 flex flex-col gap-2">
+        {unpublishedCount > 0 && (
+          <button
+            type="button"
+            onClick={onPublishAll}
+            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50"
+          >
+            <UploadCloud size={15} />
+            Publish all ({unpublishedCount} unpublished)
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setIsAddUnitOpen(true)}
@@ -333,12 +472,25 @@ export default function ContentSidebar({
         <GoogleDriveImportModal
           courseCode={courseCode}
           onClose={() => setIsDriveImportOpen(false)}
-          onImportComplete={({ unitIds, lessonIds }) => {
-            window.alert(
-              `Imported ${unitIds.length} unit${unitIds.length === 1 ? "" : "s"} and ${lessonIds.length} lesson${
-                lessonIds.length === 1 ? "" : "s"
-              } from Google Drive. Review titles and types before publishing.`
-            );
+          onImportComplete={({
+            unitIds,
+            lessonIds,
+            youtubePlaylistWarning,
+            skippedAlreadyImportedCount,
+            failedUnitTitles,
+          }) => {
+            const message = `Imported ${unitIds.length} unit${unitIds.length === 1 ? "" : "s"} and ${lessonIds.length} lesson${
+              lessonIds.length === 1 ? "" : "s"
+            } from Google Drive. Review titles and types before publishing.${
+              skippedAlreadyImportedCount > 0
+                ? `\n\nSkipped ${skippedAlreadyImportedCount} file${skippedAlreadyImportedCount === 1 ? "" : "s"} already imported into this course.`
+                : ""
+            }${
+              failedUnitTitles.length > 0
+                ? `\n\n${failedUnitTitles.length} unit${failedUnitTitles.length === 1 ? "" : "s"} failed to import and were skipped (likely a transient error) — re-run import to retry: ${failedUnitTitles.join(", ")}`
+                : ""
+            }${youtubePlaylistWarning ? `\n\nYouTube playlist: ${youtubePlaylistWarning}` : ""}`;
+            window.alert(message);
             window.location.reload();
           }}
         />

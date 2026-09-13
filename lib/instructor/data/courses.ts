@@ -57,6 +57,7 @@ type LessonRow = {
   content_source: string;
   is_published: boolean;
   quiz_completion_threshold: number;
+  show_reference_answers: boolean;
   updated_at: string;
   attachments: AttachmentRow[];
   lesson_blocks: LessonBlockRow[];
@@ -148,6 +149,7 @@ function toLessonItem(row: LessonRow): LessonItem {
     blocks,
     isPublished: row.is_published,
     quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
+    showReferenceAnswers: row.show_reference_answers ?? false,
     updatedAt: row.updated_at,
     attachments: visibleAttachments,
     ltiLinkId: null,
@@ -175,7 +177,7 @@ function toInstructorCourse(row: CourseRow): InstructorCourse {
 }
 
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
+  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
   const supabase = await createClient();

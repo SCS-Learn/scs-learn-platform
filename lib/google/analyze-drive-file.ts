@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSourceContentBlock, type FileContentSource } from "@/lib/google/file-content-source";
+import { truncateSourceForClassification } from "@/lib/google/truncate-source-for-classification";
 
 export type DriveFileCategory =
   | "lecture"
@@ -73,13 +74,17 @@ const ANALYSIS_SCHEMA = {
  * is metadata only, never transcription: the organize path embeds the whole
  * original file as-is after using these summaries for AI course structuring,
  * and the atomizer path's own fine-grained atoms come from extractFileAtoms
- * instead.
+ * instead. Only reads the file's opening pages/slides (see
+ * truncateSourceForClassification) - title/category/topic are reliably
+ * decidable from the start of a file, so there's no need to pay to read the
+ * whole thing just to classify it.
  */
 export async function analyzeDriveFileContent(
   course: { title: string; department: string },
   source: FileContentSource
 ): Promise<DriveFileAnalysis | null> {
   const client = new Anthropic();
+  const classificationSource = await truncateSourceForClassification(source);
 
   const response = await client.messages.create({
     model: "claude-opus-5",
@@ -89,10 +94,10 @@ export async function analyzeDriveFileContent(
       {
         role: "user",
         content: [
-          buildSourceContentBlock(source),
+          buildSourceContentBlock(classificationSource),
           {
             type: "text",
-            text: `This is one file from the Drive folder for the course "${course.title}" (${course.department}). Read it and report on what it actually is:
+            text: `This is the beginning of one file from the Drive folder for the course "${course.title}" (${course.department}) - you may only be seeing its opening pages/slides, not the whole thing, but that's enough to identify what it is. Report on what it actually is:
 
 - "title": a short, specific, descriptive title for this as a course lesson or quiz - based on what it actually covers, not the filename.
 - "category": categorize what this file actually IS, by reading its real content - not the filename. Pick exactly one: "lecture" (a lecture's own slide deck or narrated content), "slides" (a slide deck that supplements a lecture rather than being the lecture itself), "assignment" (a larger, standalone graded deliverable - a project, essay, lab report, or a multi-topic/multi-week assignment - not a routine problem set tied to one specific lecture), "homework" (a routine graded problem set tied directly to a specific lecture/topic, e.g. a weekly homework or problem set due shortly after that lecture), "practice_problems" (ungraded practice questions/exercises), "reading" (a reading/text document), "reference" (reference material - cheat sheets, primers, background notes), "administrative" (syllabus, schedule, roster, grading policy - not instructional content), or "other" (anything else). When a graded deliverable could plausibly be either, prefer "homework" unless it is clearly a bigger, standalone project-style deliverable - don't force "assignment" just because a file is graded.

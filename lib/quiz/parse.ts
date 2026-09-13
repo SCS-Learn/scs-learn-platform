@@ -1,4 +1,4 @@
-import type { AutogradableQuestionType, QuestionChoices } from "@/lib/quiz/types";
+import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
 
 export function parseJson<T>(value: string | null | undefined): T | null {
   if (!value) return null;
@@ -54,7 +54,7 @@ export function resolveMultipleChoiceOptions(choices: QuestionChoices): string[]
   return null;
 }
 
-export function defaultChoicesForType(type: AutogradableQuestionType): QuestionChoices {
+export function defaultChoicesForType(type: QuestionType): QuestionChoices {
   switch (type) {
     case "true_false":
       return ["True", "False"];
@@ -111,7 +111,7 @@ export function defaultChoicesForType(type: AutogradableQuestionType): QuestionC
   }
 }
 
-export function defaultAnswerKeyForType(type: AutogradableQuestionType): string {
+export function defaultAnswerKeyForType(type: QuestionType): string {
   switch (type) {
     case "multiple_choice":
     case "true_false":

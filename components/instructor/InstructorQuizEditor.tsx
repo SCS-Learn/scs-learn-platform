@@ -198,7 +198,7 @@ export default function InstructorQuizEditor({
           <p className="text-base text-gray-500">
             {canManageQuestions
               ? "No questions yet. Click Add question to create one."
-              : "No auto-gradable questions were found in this file. Source attachments remain in the lesson settings panel."}
+              : "No gradable questions were found in this file. Source attachments remain in the lesson settings panel."}
           </p>
         ) : (
           questions.map((question, index) => (
