@@ -44,11 +44,29 @@ export type LaunchingUser = {
 // identity the tool creates its own account against. Once real login lands,
 // return auth.uid() here and existing stub launches will look like a different
 // person to the tool. That is fine now and would not be fine after launch.
-export async function getLaunchingUser(): Promise<LaunchingUser> {
-  return {
+//
+// Named stub identities for testing LTI launches as different real people
+// (e.g. accounts with different Cogniterra access levels) until real login
+// exists. Only one is active per request - there's no session to pick from -
+// chosen by LTI_TEST_LEARNER, which must match a key below; unset or
+// unrecognized falls back to "scslearn". Set it in .env.local to switch:
+//   LTI_TEST_LEARNER=compeau
+const STUB_LEARNERS: Record<string, LaunchingUser> = {
+  scslearn: {
     id: "stub-learner-0001",
     name: "SCS Learn Test Learner",
     email: "scslearnscslearn@gmail.com",
     role: "Learner",
-  };
+  },
+  compeau: {
+    id: "stub-learner-0002",
+    name: "Phillip Compeau",
+    email: "phcompeau@gmail.com",
+    role: "Learner",
+  },
+};
+
+export async function getLaunchingUser(): Promise<LaunchingUser> {
+  const key = process.env.LTI_TEST_LEARNER ?? "scslearn";
+  return STUB_LEARNERS[key] ?? STUB_LEARNERS.scslearn;
 }
