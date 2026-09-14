@@ -33,6 +33,8 @@ export type LtiStatus = {
   pointsPossible: number;
   score: number | null;
   reportedAt: string | null;
+  /** Direct (non-LTI) browsable URL for the same activity - see cogniterraLessonUrl. Fallback link shown alongside the LTI iframe since Cogniterra's LTI deep-link doesn't reliably land on the right lesson. */
+  directUrl: string | null;
 };
 
 /** A pulled Autolab score for the current stub learner, joined onto its lesson — see lib/autolab/grades.ts for the sync side. */

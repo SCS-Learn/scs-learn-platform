@@ -10,9 +10,11 @@ import {
   Trash2,
   FolderInput,
   UploadCloud,
+  RefreshCw,
 } from "lucide-react";
 import { type Unit } from "@/lib/instructor/mock-data";
 import GoogleDriveImportModal from "@/components/instructor/GoogleDriveImportModal";
+import { syncCogniterraAssignments } from "@/lib/instructor/data/cogniterra";
 
 function AddUnitModal({
   onCreate,
@@ -128,6 +130,7 @@ export default function ContentSidebar({
   const [dragOverUnitId, setDragOverUnitId] = useState<string | null>(null);
   const [isAddUnitOpen, setIsAddUnitOpen] = useState(false);
   const [isDriveImportOpen, setIsDriveImportOpen] = useState(false);
+  const [isSyncingCogniterra, setIsSyncingCogniterra] = useState(false);
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingUnitNumberId, setEditingUnitNumberId] = useState<string | null>(null);
@@ -231,6 +234,29 @@ export default function ContentSidebar({
     setIsAddUnitOpen(false);
     const newId = await onAddUnit(title);
     setExpanded((prev) => ({ ...prev, [newId]: true }));
+  };
+
+  const handleSyncCogniterra = async () => {
+    setIsSyncingCogniterra(true);
+    try {
+      const { placed, warning } = await syncCogniterraAssignments(courseCode);
+      if (warning) {
+        window.alert(warning);
+      } else if (placed === 0) {
+        window.alert("No new Cogniterra assignments to place — everything's already wired up.");
+      } else {
+        window.alert(
+          `Placed ${placed} Cogniterra assignment${placed === 1 ? "" : "s"} into the course by topic.`
+        );
+        window.location.reload();
+      }
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Couldn't sync Cogniterra assignments."
+      );
+    } finally {
+      setIsSyncingCogniterra(false);
+    }
   };
 
   return (
@@ -461,6 +487,16 @@ export default function ContentSidebar({
         >
           <FolderInput size={15} />
           Import from Google Drive
+        </button>
+        <button
+          type="button"
+          onClick={handleSyncCogniterra}
+          disabled={isSyncingCogniterra}
+          title="Places any Cogniterra assignment that isn't wired to a lesson yet into the right unit by topic — safe to re-run any time, already-wired assignments are skipped."
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw size={15} className={isSyncingCogniterra ? "animate-spin" : ""} />
+          {isSyncingCogniterra ? "Syncing Cogniterra…" : "Sync Cogniterra assignments"}
         </button>
       </div>
 

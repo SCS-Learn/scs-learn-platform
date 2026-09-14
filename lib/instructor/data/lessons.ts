@@ -258,6 +258,7 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     showReferenceAnswers: false,
     attachments: [],
     ltiLinkId: null,
+    ltiDirectUrl: null,
     updatedAt: newLesson.updated_at,
   };
 }
@@ -319,6 +320,7 @@ export async function addLessonFromImport(
     showReferenceAnswers: false,
     attachments: [],
     ltiLinkId: null,
+    ltiDirectUrl: null,
     updatedAt: newLesson.updated_at,
   };
 }

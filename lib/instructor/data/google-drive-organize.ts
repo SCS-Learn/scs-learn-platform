@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getDriveClient, parseDriveFolderUrl } from "@/lib/google/drive-client";
 import {
   buildDriveImportTree,
@@ -30,6 +31,7 @@ import { analyzeDriveFileContent, quizLessonCategory, type DriveFileAnalysis } f
 import {
   saveCogniterraCourseConfig,
   wireExternalLessonsToCogniterra,
+  syncCogniterraAssignments,
   getCogniterraCourseConfig,
   type CogniterraSetupInput,
 } from "@/lib/instructor/data/cogniterra";
@@ -963,7 +965,78 @@ function moveFinalReviewUnitsToEnd(units: OrganizeUnitForPersist[]): OrganizeUni
   return finalReview.length > 0 ? [...regular, ...finalReview] : units;
 }
 
+// A run "stuck" longer than this (a crashed/killed server process, most
+// plausibly) never wedges a course closed forever - the next attempt is
+// allowed to take over rather than requiring manual DB surgery.
+const IMPORT_LOCK_STALE_MS = 30 * 60 * 1000;
+
+/**
+ * Claims the per-course import lock via a single conditional UPDATE - atomic
+ * at the Postgres level, so two concurrent calls can't both see the lock as
+ * free. Returns false when another run already holds it (and it isn't
+ * stale), in which case the caller must not proceed.
+ *
+ * This exists because closing the "Import from Google Drive" dialog (or
+ * clicking Import again) does not actually cancel an import already in
+ * flight - a Server Action keeps running server-side regardless of whether
+ * the component that called it is still mounted. Without this lock, that
+ * produces two runs racing over the same Drive folder, each unaware of the
+ * units/lessons the other is concurrently creating - which is exactly how a
+ * course previously ended up with two overlapping copies of ~13 units.
+ */
+async function acquireImportLock(courseId: string): Promise<boolean> {
+  const supabase = createServiceClient();
+  const staleCutoff = new Date(Date.now() - IMPORT_LOCK_STALE_MS).toISOString();
+  const { data, error } = await supabase
+    .from("courses")
+    .update({ import_lock_started_at: new Date().toISOString() })
+    .eq("id", courseId)
+    .or(`import_lock_started_at.is.null,import_lock_started_at.lt.${staleCutoff}`)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+async function releaseImportLock(courseId: string): Promise<void> {
+  const supabase = createServiceClient();
+  await supabase.from("courses").update({ import_lock_started_at: null }).eq("id", courseId);
+}
+
 export async function runDriveImportOrganize(
+  courseCode: string,
+  folderUrl: string,
+  youtubePlaylistUrl?: string,
+  options?: { cogniterra?: CogniterraSetupInput }
+): Promise<{
+  unitIds: string[];
+  lessonIds: string[];
+  youtubePlaylistWarning?: string | null;
+  cogniterraWired: number;
+  skippedAlreadyImportedCount: number;
+  failedUnitTitles: string[];
+}> {
+  const lockSupabase = await createClient();
+  const { data: lockCourse, error: lockCourseError } = await lockSupabase
+    .from("courses")
+    .select("id")
+    .eq("code", courseCode)
+    .single();
+  if (lockCourseError || !lockCourse) throw new Error("Unknown course code");
+
+  if (!(await acquireImportLock(lockCourse.id))) {
+    throw new Error(
+      "An import is already running for this course - wait for it to finish before starting another. (If it's been stuck for more than 30 minutes, try again - the lock clears itself.)"
+    );
+  }
+
+  try {
+    return await runDriveImportOrganizeLocked(courseCode, folderUrl, youtubePlaylistUrl, options);
+  } finally {
+    await releaseImportLock(lockCourse.id);
+  }
+}
+
+async function runDriveImportOrganizeLocked(
   courseCode: string,
   folderUrl: string,
   youtubePlaylistUrl?: string,
@@ -1309,19 +1382,42 @@ export async function runDriveImportOrganize(
     unitIds.push(newUnit.id);
   }
 
-  const { wired: cogniterraWired } = await wireExternalLessonsToCogniterra(
+  const { wired: explicitCogniterraWired } = await wireExternalLessonsToCogniterra(
     courseCode,
     externalAssignments
   );
-  if (cogniterraWired > 0) {
+  if (explicitCogniterraWired > 0) {
     console.log(
-      `runDriveImportOrganize: wired ${cogniterraWired} external lesson(s) to Cogniterra`
+      `runDriveImportOrganize: wired ${explicitCogniterraWired} external lesson(s) to Cogniterra`
     );
   } else if (externalAssignments.length > 0) {
     console.warn(
       `runDriveImportOrganize: ${externalAssignments.length} external assignment(s) but none wired to Cogniterra (is cogniterra config saved?)`
     );
   }
+
+  // Gap-fill: place any Cogniterra assignment that has no Drive file at all
+  // (e.g. this course's Drive folder is pure lecture slides) directly into
+  // the unit structure by topic. Runs after the explicit-file wiring above so
+  // an assignment already wired to a specific Drive-derived lesson is never
+  // also given a second, redundant lesson here.
+  let gapFilledCogniterra = 0;
+  try {
+    const { placed, warning } = await syncCogniterraAssignments(courseCode);
+    gapFilledCogniterra = placed;
+    if (placed > 0) {
+      console.log(`runDriveImportOrganize: placed ${placed} Cogniterra assignment(s) with no Drive file`);
+    }
+    if (warning) {
+      console.warn(`runDriveImportOrganize: syncCogniterraAssignments warning: ${warning}`);
+    }
+  } catch (error) {
+    console.warn(
+      "runDriveImportOrganize: syncCogniterraAssignments failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
+  const cogniterraWired = explicitCogniterraWired + gapFilledCogniterra;
 
   revalidatePath(`/instructor/${courseCode}`);
   return {

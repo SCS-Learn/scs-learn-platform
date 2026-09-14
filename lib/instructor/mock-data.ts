@@ -47,6 +47,8 @@ export type LessonItem = {
   attachments: Attachment[];
   /** Present when this lesson is linked to Cogniterra (or another LTI tool). */
   ltiLinkId: string | null;
+  /** Direct (non-LTI) browsable URL for the same activity - see cogniterraLessonUrl. Fallback link shown alongside the LTI iframe since Cogniterra's LTI deep-link doesn't reliably land on the right lesson. */
+  ltiDirectUrl: string | null;
 };
 
 export type Unit = {

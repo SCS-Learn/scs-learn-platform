@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
+import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-progress";
 import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
 import { reconcileQuizSubmission } from "@/lib/quiz/grading";
@@ -129,6 +130,7 @@ type LtiLinkRow = {
   lesson_id: string;
   title: string;
   points_possible: number;
+  custom_params: { lesson?: string } | null;
   lti_results: LtiScoreRow[] | null;
 };
 
@@ -140,6 +142,8 @@ function toLtiStatus(link: LtiLinkRow, learnerId: string): LtiStatus {
     pointsPossible: Number(link.points_possible),
     score: scoreRow?.score ?? null,
     reportedAt: scoreRow?.reported_at ?? null,
+    // Fallback link alongside the LTI iframe - see cogniterraLessonUrl.
+    directUrl: link.custom_params?.lesson ? cogniterraLessonUrl(link.custom_params.lesson) : null,
   };
 }
 
@@ -153,7 +157,9 @@ async function fetchLtiStatusByLessonId(
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("lti_links")
-      .select("id, lesson_id, title, points_possible, lti_results(platform_user_id, score, reported_at)")
+      .select(
+        "id, lesson_id, title, points_possible, custom_params, lti_results(platform_user_id, score, reported_at)"
+      )
       .in("lesson_id", lessonIds);
     if (error) throw new Error(error.message);
 
