@@ -20,6 +20,16 @@ export type ExternalActivityProps = {
   // LTI: the signed-launch route for this link. Autolab: the assessment URL.
   url: string;
   openInNewTab?: boolean;
+  /**
+   * LTI only: a direct, non-LTI link to the same activity. Cogniterra's LTI
+   * launch doesn't reliably honor its own custom_lesson deep-link param (it
+   * lands on the course's first lesson regardless of which assignment was
+   * launched) - shown alongside the iframe as a working way to actually reach
+   * the right content until that's resolved on Cogniterra's end. Grades still
+   * only arrive via the LTI iframe, so this is a fallback for navigation, not
+   * a replacement.
+   */
+  directUrl?: string | null;
   initialScore?: number | null;
   pointsPossible?: number;
   /** Hide the activity title when a parent already shows the lesson title. */
@@ -44,6 +54,7 @@ export default function ExternalActivity({
   kind,
   url,
   openInNewTab = false,
+  directUrl = null,
   initialScore = null,
   pointsPossible = 100,
   hideTitle = false,
@@ -116,6 +127,20 @@ export default function ExternalActivity({
             <span className="text-sm font-medium text-stone-700">{scoreLabel}</span>
           ) : null}
         </header>
+      ) : null}
+
+      {kind === "lti" && directUrl ? (
+        <p className="shrink-0 text-xs text-stone-500">
+          Not loading the right assignment?{" "}
+          <a
+            href={directUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-stone-700 underline hover:text-stone-900"
+          >
+            Open it directly on Cogniterra ↗
+          </a>
+        </p>
       ) : null}
 
       {kind === "lti" && !openInNewTab ? (

@@ -15,11 +15,13 @@ export default function InstructorExternalLessonPane({
   lessonId,
   lessonTitle,
   ltiLinkId,
+  ltiDirectUrl,
   blocks,
 }: {
   lessonId: string;
   lessonTitle: string;
   ltiLinkId: string | null;
+  ltiDirectUrl: string | null;
   blocks: LessonBlockView[];
 }) {
   const writeupBlock = useMemo(
@@ -85,6 +87,7 @@ export default function InstructorExternalLessonPane({
               title={lessonTitle}
               kind="lti"
               url={`/api/lti/launch/${ltiLinkId}`}
+              directUrl={ltiDirectUrl}
               hideTitle
               fillAvailableHeight
             />

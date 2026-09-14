@@ -195,6 +195,7 @@ export default function StudentLessonViewer({
                   title={lesson.lti.title}
                   kind="lti"
                   url={`/api/lti/launch/${lesson.lti.linkId}`}
+                  directUrl={lesson.lti.directUrl}
                   initialScore={lesson.lti.score}
                   pointsPossible={lesson.lti.pointsPossible}
                   hideTitle

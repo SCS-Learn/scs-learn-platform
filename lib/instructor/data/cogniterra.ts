@@ -6,8 +6,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { fetchCogniterraLessons } from "@/lib/cogniterra/client";
 import {
   matchAssignmentsToCogniterraLessons,
+  placeCogniterraLessons,
   type DriveAssignmentForMatch,
+  type CogniterraExistingUnit,
 } from "@/lib/cogniterra/match-lessons";
+import { addUnitFromImport, addLessonFromImport } from "@/lib/instructor/data/lessons";
 
 const COGNITERRA_LAUNCH_URL =
   process.env.COGNITERRA_LAUNCH_URL ?? "https://cogniterra.org/lti/";
@@ -189,8 +192,13 @@ export async function wireExternalLessonsToCogniterra(
 
   for (const assignment of assignments) {
     const match = matches.find((m) => m.lessonId === assignment.lessonId);
+    // course is required even for a specific-lesson launch - verified against
+    // the live server that custom_lesson alone fails with "Missing LTI Key"
+    // on a private course (Cogniterra can't resolve which course's
+    // credentials apply from the lesson id alone); course + lesson together
+    // succeeds.
     const customParams = match
-      ? { lesson: String(match.cogniterraLessonId) }
+      ? { course: String(config.cogniterra_course_id), lesson: String(match.cogniterraLessonId) }
       : { course: String(config.cogniterra_course_id) };
 
     if (!match) {
@@ -228,6 +236,159 @@ export async function wireExternalLessonsToCogniterra(
   revalidatePath(`/instructor/${courseCode}`);
   revalidatePath(`/student/${courseCode}`);
   return { wired, skipped };
+}
+
+/**
+ * Gap-fills Cogniterra assignments that have no corresponding Drive file at
+ * all — the counterpart to attachYoutubePlaylistVideos, but for graded
+ * assignments instead of lecture videos. Reads the course's CURRENT persisted
+ * units/lessons/lti_links straight from the database rather than anything
+ * built up during a single Drive import run, so it can be re-run any time
+ * (right after a fresh import, minutes later, after a code change to this
+ * matcher, whatever) without deleting and recreating the course:
+ * every already-wired Cogniterra lesson id is looked up fresh each call and
+ * excluded, so re-running only ever fills in what's still missing.
+ */
+export async function syncCogniterraAssignments(
+  courseCode: string
+): Promise<{ placed: number; warning: string | null }> {
+  const supabase = createServiceClient();
+
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id, title, department")
+    .eq("code", courseCode)
+    .single();
+  if (courseError || !course) throw new Error("Unknown course code");
+
+  const { data: config, error: configError } = await supabase
+    .from("cogniterra_course_config")
+    .select("cogniterra_course_id, tool_id")
+    .eq("course_id", course.id)
+    .maybeSingle();
+  if (configError) throw new Error(configError.message);
+  if (!config) return { placed: 0, warning: null };
+
+  const cogniterraLessons = await fetchCogniterraLessons(config.cogniterra_course_id).catch((error) => {
+    console.warn(
+      `syncCogniterraAssignments: could not list Cogniterra lessons for course ${config.cogniterra_course_id}:`,
+      error instanceof Error ? error.message : error
+    );
+    return null;
+  });
+  if (!cogniterraLessons) {
+    return { placed: 0, warning: "Couldn't reach Cogniterra to list that course's lessons — try again shortly." };
+  }
+  if (cogniterraLessons.length === 0) return { placed: 0, warning: null };
+
+  const { data: units, error: unitsError } = await supabase
+    .from("units")
+    .select("id, title, position")
+    .eq("course_id", course.id)
+    .order("position");
+  if (unitsError) throw new Error(unitsError.message);
+  const unitIds = (units ?? []).map((u) => u.id as string);
+
+  const { data: lessons } = unitIds.length
+    ? await supabase.from("lessons").select("id, unit_id, position").in("unit_id", unitIds)
+    : { data: [] as { id: string; unit_id: string; position: number }[] };
+
+  const lessonIds = (lessons ?? []).map((l) => l.id as string);
+  const { data: links } = lessonIds.length
+    ? await supabase.from("lti_links").select("lesson_id, custom_params").in("lesson_id", lessonIds)
+    : { data: [] as { lesson_id: string; custom_params: unknown }[] };
+
+  // Any Cogniterra lesson id already backing some lesson in this course —
+  // whether wired just now by wireExternalLessonsToCogniterra above, or by a
+  // previous run of this same function — must never be placed again.
+  const alreadyWiredCogniterraIds = new Set<number>();
+  for (const link of links ?? []) {
+    const raw = (link.custom_params as { lesson?: string | number } | null)?.lesson;
+    const n = raw != null ? Number(raw) : NaN;
+    if (Number.isFinite(n)) alreadyWiredCogniterraIds.add(n);
+  }
+
+  const candidates = cogniterraLessons.filter((l) => !alreadyWiredCogniterraIds.has(l.id));
+  if (candidates.length === 0) return { placed: 0, warning: null };
+
+  const existingUnitsForPlacement: CogniterraExistingUnit[] = (units ?? []).map((u) => ({
+    id: u.id as string,
+    title: u.title as string,
+  }));
+
+  let result;
+  try {
+    result = await placeCogniterraLessons(
+      { title: course.title, department: course.department },
+      candidates,
+      existingUnitsForPlacement
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not place Cogniterra assignments into the course.";
+    console.error("syncCogniterraAssignments: placement failed:", message);
+    return { placed: 0, warning: message };
+  }
+
+  const usedNewUnitKeys = new Set(result.placements.map((p) => p.unitRef));
+  const unitIdByRef = new Map<string, string>(existingUnitsForPlacement.map((u) => [u.id, u.id]));
+  for (const nu of result.newUnits) {
+    if (!usedNewUnitKeys.has(nu.key)) continue; // declared but never actually used
+    const created = await addUnitFromImport(courseCode, nu.title, "");
+    unitIdByRef.set(nu.key, created.id);
+  }
+
+  // New lessons always land at the end of their unit — same rule organize
+  // import already uses for quizzes relative to topics.
+  const nextPositionByUnit = new Map<string, number>();
+  for (const lesson of lessons ?? []) {
+    const unitId = lesson.unit_id as string;
+    const current = nextPositionByUnit.get(unitId) ?? 0;
+    nextPositionByUnit.set(unitId, Math.max(current, (lesson.position as number) ?? 0));
+  }
+
+  const lessonById = new Map(candidates.map((l) => [l.id, l]));
+  let placed = 0;
+  for (const placement of result.placements) {
+    const unitId = unitIdByRef.get(placement.unitRef);
+    const cogLesson = lessonById.get(placement.cogniterraLessonId);
+    if (!unitId || !cogLesson) continue;
+
+    const position = (nextPositionByUnit.get(unitId) ?? 0) + 1;
+    nextPositionByUnit.set(unitId, position);
+
+    const newLesson = await addLessonFromImport(unitId, {
+      title: cogLesson.title,
+      type: "external",
+      position,
+      sourceDriveFileId: null,
+      contentSource: "blocks",
+    });
+
+    const { error: linkError } = await supabase.from("lti_links").upsert(
+      {
+        lesson_id: newLesson.id,
+        tool_id: config.tool_id,
+        title: cogLesson.title,
+        // course is required alongside lesson - see the comment in
+        // wireExternalLessonsToCogniterra above.
+        custom_params: { course: String(config.cogniterra_course_id), lesson: String(cogLesson.id) },
+        points_possible: 100,
+      },
+      { onConflict: "lesson_id" }
+    );
+    if (linkError) {
+      console.warn(`syncCogniterraAssignments: failed to link lesson ${newLesson.id}:`, linkError.message);
+      continue;
+    }
+    placed += 1;
+  }
+
+  if (placed > 0) {
+    revalidatePath(`/instructor/${courseCode}`);
+    revalidatePath(`/student/${courseCode}`);
+  }
+  return { placed, warning: null };
 }
 
 /** Returns env-based defaults for the import modal (demo / dev convenience). */

@@ -48,7 +48,7 @@ export async function getLaunchingUser(): Promise<LaunchingUser> {
   return {
     id: "stub-learner-0001",
     name: "SCS Learn Test Learner",
-    email: "uttansh4321@gmail.com",
+    email: "scslearnscslearn@gmail.com",
     role: "Learner",
   };
 }

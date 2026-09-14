@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import type {
   InstructorCourse,
   Unit,
@@ -153,6 +154,7 @@ function toLessonItem(row: LessonRow): LessonItem {
     updatedAt: row.updated_at,
     attachments: visibleAttachments,
     ltiLinkId: null,
+    ltiDirectUrl: null,
   };
 }
 
@@ -209,10 +211,19 @@ export async function getCourseWithContent(courseCode: string): Promise<Instruct
   try {
     const { data: links, error: linkError } = await supabase
       .from("lti_links")
-      .select("id, lesson_id")
+      .select("id, lesson_id, custom_params")
       .in("lesson_id", lessonIds);
     if (linkError) throw linkError;
     const linkIdByLesson = new Map((links ?? []).map((link) => [link.lesson_id, link.id]));
+    // Fallback link alongside the LTI iframe - see cogniterraLessonUrl.
+    const directUrlByLesson = new Map(
+      (links ?? [])
+        .map((link) => {
+          const cogniterraLessonId = (link.custom_params as { lesson?: string } | null)?.lesson;
+          return cogniterraLessonId ? ([link.lesson_id, cogniterraLessonUrl(cogniterraLessonId)] as const) : null;
+        })
+        .filter((entry): entry is readonly [string, string] => entry !== null)
+    );
     return {
       ...course,
       units: course.units.map((unit) => ({
@@ -220,6 +231,7 @@ export async function getCourseWithContent(courseCode: string): Promise<Instruct
         lessons: unit.lessons.map((lesson) => ({
           ...lesson,
           ltiLinkId: linkIdByLesson.get(lesson.id) ?? null,
+          ltiDirectUrl: directUrlByLesson.get(lesson.id) ?? null,
         })),
       })),
     };

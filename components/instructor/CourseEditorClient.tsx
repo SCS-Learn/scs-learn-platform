@@ -471,6 +471,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
               lessonId={selectedLesson.id}
               lessonTitle={selectedLesson.title}
               ltiLinkId={selectedLesson.ltiLinkId}
+              ltiDirectUrl={selectedLesson.ltiDirectUrl}
               blocks={selectedLesson.blocks}
             />
           ) : (

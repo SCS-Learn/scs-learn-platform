@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { getDriveImportPreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
 import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
+import { getCogniterraOAuthConnectionStatus } from "@/lib/instructor/data/cogniterra-oauth";
 import {
   getCogniterraCourseConfig,
   getCogniterraEnvDefaults,
@@ -41,6 +42,7 @@ export default function GoogleDriveImportModal({
   } | null>(null);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [cogniterraOAuthConnected, setCogniterraOAuthConnected] = useState<boolean | null>(null);
   const [cogniterraCourseId, setCogniterraCourseId] = useState("");
   const [cogniterraConsumerKey, setCogniterraConsumerKey] = useState("");
   const [cogniterraSharedSecret, setCogniterraSharedSecret] = useState("");
@@ -49,6 +51,7 @@ export default function GoogleDriveImportModal({
   useEffect(() => {
     void getDriveShareEmail().then(setShareEmail);
     void getGoogleOAuthConnectionStatus().then(setGoogleConnected);
+    void getCogniterraOAuthConnectionStatus().then(setCogniterraOAuthConnected);
     void getCogniterraCourseConfig(courseCode).then((config) => {
       if (config) {
         setExistingCogniterra(config.cogniterraCourseId);
@@ -116,8 +119,19 @@ export default function GoogleDriveImportModal({
     }
   };
 
+  // Once a scan/import request is in flight, it keeps running server-side
+  // regardless of whether this dialog is still on screen - dismissing it here
+  // (via a backdrop click) doesn't cancel anything, it just hides the only
+  // feedback the run is still happening. Block dismissal during those two
+  // statuses so a stray click can't produce the false impression that the
+  // import stopped when it's actually still writing to the course.
+  const isBusy = status === "scanning" || status === "importing";
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+      onClick={isBusy ? undefined : onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -200,6 +214,21 @@ export default function GoogleDriveImportModal({
                 lecture topic it belongs to.
               </span>
             </label>
+
+            {cogniterraOAuthConnected === false && (
+              <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2 mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-blue-700">
+                  Connect your Cogniterra account so a private course&apos;s assignments can be listed
+                  and matched automatically, instead of only linking the whole course.
+                </p>
+                <a
+                  href={`/api/cogniterra/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  className="shrink-0 text-xs font-bold text-black border border-black px-3 py-1.5 rounded hover:bg-gray-50"
+                >
+                  Connect Cogniterra
+                </a>
+              </div>
+            )}
 
             <div className="mb-4">
               <CogniterraSetupFields
