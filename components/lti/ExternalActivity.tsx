@@ -5,9 +5,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Renders an external activity inside a lesson. Two shapes, because the two
 // tools behave differently:
 //
-// Cogniterra (LTI 1.1): iframe pointed at our own signed-launch route, which
-// posts itself to Cogniterra. Grades arrive on their own through the outcomes
-// endpoint, so there is nothing to poll and nothing for the learner to do.
+// Cogniterra (LTI 1.1): a visible iframe pointed at the DIRECT (non-LTI)
+// lesson URL when we have one - Cogniterra's LTI launch doesn't honor its own
+// custom_lesson deep-link param (verified: it lands on the course's first
+// lesson regardless of which assignment was launched), while the same lesson
+// id opens correctly when visited directly. The LTI launch itself still
+// fires, in a hidden iframe the learner never sees, purely so Cogniterra
+// registers this resource_link_id/sourcedid and reports a grade against it
+// through the outcomes endpoint the normal way - confirmed working against
+// real launches (lti_results already shows distinct scores per resource
+// link) even though the LTI iframe's own content never showed the right
+// lesson. Falls back to showing the LTI iframe directly when there's no
+// directUrl (e.g. a course-level-only link with no specific lesson match).
 //
 // Autolab: a link out, plus a manual "check my score" pull. Autolab enforces
 // its own SSO and sets SameSite cookies, so a cross-origin iframe is unreliable
@@ -21,13 +30,11 @@ export type ExternalActivityProps = {
   url: string;
   openInNewTab?: boolean;
   /**
-   * LTI only: a direct, non-LTI link to the same activity. Cogniterra's LTI
-   * launch doesn't reliably honor its own custom_lesson deep-link param (it
-   * lands on the course's first lesson regardless of which assignment was
-   * launched) - shown alongside the iframe as a working way to actually reach
-   * the right content until that's resolved on Cogniterra's end. Grades still
-   * only arrive via the LTI iframe, so this is a fallback for navigation, not
-   * a replacement.
+   * LTI only: a direct, non-LTI URL to the same activity - see the file-level
+   * comment. When present, this is what's actually shown (the LTI launch
+   * still fires in the background for grading). Null falls back to showing
+   * the LTI iframe itself (e.g. a course-level-only link with no specific
+   * lesson match).
    */
   directUrl?: string | null;
   initialScore?: number | null;
@@ -130,20 +137,37 @@ export default function ExternalActivity({
       ) : null}
 
       {kind === "lti" && directUrl ? (
-        <p className="shrink-0 text-xs text-stone-500">
-          Not loading the right assignment?{" "}
-          <a
-            href={directUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-stone-700 underline hover:text-stone-900"
-          >
-            Open it directly on Cogniterra ↗
-          </a>
-        </p>
-      ) : null}
-
-      {kind === "lti" && !openInNewTab ? (
+        <>
+          {/* Fires the LTI launch so Cogniterra registers this resource link
+              and reports a grade against it - never shown to the learner,
+              who never needs to see its (currently wrong) landing page. */}
+          <iframe src={url} title="" aria-hidden="true" className="hidden" tabIndex={-1} />
+          <iframe
+            ref={frameRef}
+            src={directUrl}
+            title={title}
+            className={
+              fillAvailableHeight
+                ? "min-h-0 w-full flex-1 border border-stone-200 bg-white"
+                : "h-[calc(100vh-10rem)] min-h-[32rem] w-full border border-stone-200 bg-white"
+            }
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+            allow="clipboard-write"
+          />
+          <p className="shrink-0 text-xs text-stone-500">
+            Not loading?{" "}
+            <a
+              href={directUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-stone-700 underline hover:text-stone-900"
+            >
+              Open in a new tab ↗
+            </a>{" "}
+            (some browsers block Cogniterra's sign-in inside an embedded page).
+          </p>
+        </>
+      ) : kind === "lti" && !openInNewTab ? (
         <iframe
           ref={frameRef}
           src={url}
