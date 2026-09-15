@@ -8,6 +8,8 @@ export type QuestionView = {
   choices: QuestionChoices;
   answerKey: string | null;
   questionType: string;
+  /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
+  points: number;
   needsReview: boolean;
 };
 

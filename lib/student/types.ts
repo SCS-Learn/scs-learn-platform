@@ -10,6 +10,8 @@ export type StudentQuestion = {
   /** Used client-side for instant grading — never shown until the learner submits. */
   answerKey: string | null;
   questionType: QuestionType;
+  /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
+  points: number;
   /** Full rotation pool (length 10) when generated; empty/absent = no rotation. */
   variants?: QuestionVariant[];
 };

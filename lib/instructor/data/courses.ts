@@ -32,6 +32,7 @@ type QuestionRow = {
   choices: QuestionChoices;
   answer_key: string | null;
   question_type: string;
+  points: number;
   needs_review: boolean;
 };
 
@@ -92,6 +93,7 @@ function toQuestionView(row: QuestionRow): QuestionView {
     choices: row.choices,
     answerKey: row.answer_key,
     questionType: row.question_type,
+    points: row.points,
     needsReview: row.needs_review,
   };
 }
@@ -179,7 +181,7 @@ function toInstructorCourse(row: CourseRow): InstructorCourse {
 }
 
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, needs_review)))))";
+  "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, points, needs_review)))))";
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
   const supabase = await createClient();

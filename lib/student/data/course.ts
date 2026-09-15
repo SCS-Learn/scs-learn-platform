@@ -27,6 +27,7 @@ type QuestionRow = {
   choices: QuestionChoices;
   answer_key: string | null;
   question_type: string;
+  points: number;
   variants?: unknown;
 };
 
@@ -105,7 +106,7 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, variants)))))";
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, points, variants)))))";
 
 function toQuestion(row: QuestionRow): StudentQuestion {
   const variants = parseVariants(row.variants);
@@ -115,6 +116,7 @@ function toQuestion(row: QuestionRow): StudentQuestion {
     choices: row.choices,
     answerKey: row.answer_key,
     questionType: row.question_type as StudentQuestion["questionType"],
+    points: row.points,
     ...(variants.length > 0 ? { variants } : {}),
   };
 }

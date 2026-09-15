@@ -174,7 +174,7 @@ export default function LessonSettingsSidebar({
         )}
 
         {showReferenceAnswersToggle && (
-          <SectionBlock label="AI-graded reference answers">
+          <SectionBlock label="Correct answers">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -183,11 +183,12 @@ export default function LessonSettingsSidebar({
                 onChange={(e) => onShowReferenceAnswersChange(e.target.checked)}
                 className="disabled:opacity-50"
               />
-              <span>Show students the reference answer after grading</span>
+              <span>Show students the correct answer after grading</span>
             </label>
             <p className="mt-3 text-sm text-gray-500 leading-relaxed">
-              Off by default — students see their score and feedback but never the reference
-              answer for AI-graded (free response) questions unless you turn this on.
+              Off by default — students see their score and feedback but never which option (or
+              reference answer, for AI-graded free response questions) was correct unless you
+              turn this on.
             </p>
           </SectionBlock>
         )}

@@ -42,7 +42,7 @@ export default function QuizBlock({
   initialSubmission: QuizSubmissionStatus | null;
   /** Instructor preview — grades the same way as a real submission, but does not persist. */
   previewMode?: boolean;
-  /** Real students only: whether the instructor has enabled showing free_response reference answers for this quiz. Ignored in previewMode, which always allows revealing via the click-to-show button. */
+  /** Real students only: whether the instructor has enabled showing correct answers (and free_response reference answers) after grading for this quiz. Ignored in previewMode, which always shows them. */
   allowReferenceAnswers?: boolean;
   onSubmitted?: (status: QuizSubmissionStatus) => void;
   onReset?: () => void;
@@ -166,7 +166,8 @@ export default function QuizBlock({
       {submitted && (
         <div className="flex items-center gap-4 pb-2 border-b border-gray-100">
           <p className="text-sm font-bold">
-            Score: {formatPoints(correctCount)} / {submission?.gradableCount ?? gradableQuestions.length}
+            Score: {formatPoints(correctCount)} /{" "}
+            {submission?.gradableCount ?? gradableQuestions.reduce((sum, q) => sum + q.points, 0)}
             {submission && submission.gradableCount > 0 ? ` (${submission.scorePercent}%)` : ""}
           </p>
           <button
@@ -205,7 +206,9 @@ export default function QuizBlock({
         return (
           <div key={`${question.id}-v${variantIndex}`} className={`border p-4 ${borderClass}`}>
             <div className="flex items-start justify-between gap-2 mb-2">
-              <p className="text-xs text-gray-400">Question {index + 1}</p>
+              <p className="text-xs text-gray-400">
+                Question {index + 1} · {question.points} {question.points === 1 ? "point" : "points"}
+              </p>
               {feedbackState === "correct" && <CheckCircle2 size={16} className="text-green-600" />}
               {feedbackState === "partial" && <MinusCircle size={16} className="text-amber-600" />}
               {feedbackState === "incorrect" && <XCircle size={16} className="text-red-500" />}
@@ -261,11 +264,15 @@ export default function QuizBlock({
                 </button>
               </div>
             )}
-            {graded && feedbackState !== "correct" && question.answerKey && !isFreeResponse && (
-              <div className="text-xs text-gray-600 mt-2">
-                <span className="font-medium">Correct answer:</span> {formatCorrectAnswer(question)}
-              </div>
-            )}
+            {graded &&
+              feedbackState !== "correct" &&
+              question.answerKey &&
+              !isFreeResponse &&
+              (previewMode || allowReferenceAnswers) && (
+                <div className="text-xs text-gray-600 mt-2">
+                  <span className="font-medium">Correct answer:</span> {formatCorrectAnswer(question)}
+                </div>
+              )}
             {graded && feedbackState !== "correct" && question.answerKey && isFreeResponse && previewMode && (
               revealedAnswers.has(question.id) ? (
                 <div className="text-xs text-gray-600 mt-2">

@@ -22,6 +22,8 @@ export type BuiltQuizQuestion = {
   questionType: QuestionType;
   choices: QuestionChoices;
   answerKey: string | null;
+  /** Weight toward the quiz's 100-point total, assigned by difficulty — see redistributePointsToTotal. */
+  points: number;
   needsReview: boolean;
 };
 
@@ -32,6 +34,7 @@ type RawBuiltQuizQuestion = {
   questionType: QuestionType;
   choicesJson: string;
   answerKey: string;
+  points: number;
   needsReview: boolean;
 };
 
@@ -53,6 +56,7 @@ const QUESTIONS_SCHEMA = {
           },
           choicesJson: { type: "string" },
           answerKey: { type: "string" },
+          points: { type: "integer" },
           needsReview: { type: "boolean" },
         },
         required: [
@@ -61,6 +65,7 @@ const QUESTIONS_SCHEMA = {
           "questionType",
           "choicesJson",
           "answerKey",
+          "points",
           "needsReview",
         ],
         additionalProperties: false,
@@ -100,8 +105,15 @@ function isValidJson(value: string): boolean {
   }
 }
 
+/** Raw LLM points can be non-integer/out-of-range garbage; the actual 100-point total gets enforced afterward by redistributePointsToTotal regardless. */
+function sanitizePoints(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  return Math.round(raw);
+}
+
 function normalizeBuiltQuestion(raw: RawBuiltQuizQuestion): BuiltQuizQuestion | null {
   const { questionType, needsReview, promptText, position } = raw;
+  const points = sanitizePoints(raw.points);
 
   if (questionType === "free_response") {
     const referenceAnswer = (raw.answerKey ?? "").trim();
@@ -112,6 +124,7 @@ function normalizeBuiltQuestion(raw: RawBuiltQuizQuestion): BuiltQuizQuestion | 
       questionType,
       choices: null,
       answerKey: referenceAnswer,
+      points,
       needsReview,
     };
   }
@@ -216,8 +229,55 @@ function normalizeBuiltQuestion(raw: RawBuiltQuizQuestion): BuiltQuizQuestion | 
     questionType,
     choices,
     answerKey: key,
+    points,
     needsReview,
   };
+}
+
+/**
+ * The LLM assigns points per question in one pass over the whole file, but
+ * some questions can still be dropped afterward (invalid answer key, etc.),
+ * and its numbers are never trusted to add up exactly. Rescales whatever
+ * survived proportionally to the target total, then fixes the rounding
+ * remainder onto the highest-point (hardest) questions first so the total
+ * lands exactly on 100 without flattening the difficulty weighting.
+ */
+export function redistributePointsToTotal<T extends { points: number }>(
+  questions: T[],
+  total = 100
+): T[] {
+  if (questions.length === 0) return questions;
+
+  const rawSum = questions.reduce((sum, q) => sum + q.points, 0);
+  const scale = rawSum > 0 ? total / rawSum : total / questions.length;
+
+  const scaled = questions.map((q) => ({
+    ...q,
+    points: rawSum > 0 ? Math.max(1, Math.round(q.points * scale)) : Math.max(1, Math.round(scale)),
+  }));
+
+  let drift = total - scaled.reduce((sum, q) => sum + q.points, 0);
+  if (drift === 0) return scaled;
+
+  // Order by current points descending (hardest/highest-weighted first) so a
+  // remainder or overshoot correction concentrates on those rather than
+  // diluting the easiest questions' already-small weight.
+  const order = [...scaled.keys()].sort((a, b) => scaled[b]!.points - scaled[a]!.points);
+  // Bounded rather than `while (drift !== 0)`: if there are more questions
+  // than `total` points, every question can hit the points>0 floor before
+  // drift reaches zero, which would otherwise spin forever.
+  for (let i = 0; drift !== 0 && i < order.length * Math.abs(drift) + order.length; i += 1) {
+    const idx = order[i % order.length]!;
+    if (drift > 0) {
+      scaled[idx]!.points += 1;
+      drift -= 1;
+    } else if (scaled[idx]!.points > 0) {
+      scaled[idx]!.points -= 1;
+      drift += 1;
+    }
+  }
+
+  return scaled;
 }
 
 const IMPORT_PROMPT = `Read the source and extract questions a student can answer interactively — either auto-gradable questions, or open-ended questions that come with a reference answer in the source.
@@ -262,6 +322,7 @@ Open-ended (only when a reference answer for that item is available somewhere in
 - free_response: for essay, short-answer-explanation, proof, or derivation questions that are NOT auto-gradable. choicesJson = "null". answerKey = a complete, well-written model answer to the question itself.
 
 Rules:
+- points: every question in this file is worth some share of the quiz's 100-point total. Assign each question a point value (positive integer) that reflects how difficult it is RELATIVE TO THE OTHERS in this same file - a quick recall/definition question is worth fewer points than a multi-step derivation, proof, or question requiring synthesis of several concepts. Do not just split evenly; a set of otherwise-similar questions with one clear standout in difficulty should have that one weighted noticeably higher. Your point values do not need to sum to exactly 100 - they get rescaled proportionally afterward - but get the RELATIVE weighting right, since that ratio is what survives the rescale.
 - choicesJson is ALWAYS a JSON-encoded string: use "null" when there is no config, or a JSON array/object as above.
 - answerKey is always a string (JSON-encoded when the type requires structured answers).
 - Every question MUST have a usable answerKey. If you cannot determine the answer, OMIT the question.
@@ -319,9 +380,11 @@ export async function buildQuizQuestionsFromContent(
   }
 
   const parsed = JSON.parse(textBlock.text) as { questions: RawBuiltQuizQuestion[] };
-  return (parsed.questions ?? [])
+  const built = (parsed.questions ?? [])
     .filter((q) => q.promptText?.trim())
     .sort((a, b) => a.position - b.position)
     .map(normalizeBuiltQuestion)
     .filter((q): q is BuiltQuizQuestion => q !== null);
+
+  return redistributePointsToTotal(built);
 }

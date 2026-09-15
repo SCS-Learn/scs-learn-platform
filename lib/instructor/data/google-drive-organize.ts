@@ -623,6 +623,7 @@ async function populateQuizLesson(
       choices: question.choices,
       answerKey: question.answerKey,
       questionType: question.questionType,
+      points: question.points,
       sourceSlideOrPageIndex: question.sourceSlideOrPageIndex,
       needsReview: question.needsReview,
     });

@@ -60,6 +60,8 @@ export type Question = {
   choices: QuestionChoices;
   answerKey: string | null;
   questionType: QuestionType;
+  /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
+  points: number;
   sourceSlideOrPageIndex: number | null;
   needsReview: boolean;
 };
@@ -73,6 +75,7 @@ export async function addQuestion(
     choices?: QuestionChoices;
     answerKey?: string | null;
     questionType?: QuestionType;
+    points?: number;
     sourceSlideOrPageIndex?: number | null;
     needsReview?: boolean;
   }
@@ -88,11 +91,12 @@ export async function addQuestion(
       choices: patch.choices ?? null,
       answer_key: patch.answerKey ?? null,
       question_type: patch.questionType ?? "unknown",
+      points: patch.points ?? 0,
       source_slide_or_page_index: patch.sourceSlideOrPageIndex ?? null,
       needs_review: patch.needsReview ?? false,
     })
     .select(
-      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, source_slide_or_page_index, needs_review"
+      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, points, source_slide_or_page_index, needs_review"
     )
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to create question");
@@ -106,6 +110,7 @@ export async function addQuestion(
     choices: data.choices,
     answerKey: data.answer_key,
     questionType: data.question_type,
+    points: data.points,
     sourceSlideOrPageIndex: data.source_slide_or_page_index,
     needsReview: data.needs_review,
   };
@@ -149,6 +154,7 @@ export async function updateQuestion(
     choices: QuestionChoices;
     answerKey: string | null;
     questionType: QuestionType;
+    points: number;
     needsReview?: boolean;
   }
 ): Promise<Question> {
@@ -160,11 +166,12 @@ export async function updateQuestion(
       choices: patch.choices,
       answer_key: patch.answerKey,
       question_type: patch.questionType,
+      points: patch.points,
       needs_review: patch.needsReview ?? false,
     })
     .eq("id", questionId)
     .select(
-      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, source_slide_or_page_index, needs_review"
+      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, points, source_slide_or_page_index, needs_review"
     )
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to update question");
@@ -188,6 +195,7 @@ export async function updateQuestion(
     choices: data.choices,
     answerKey: data.answer_key,
     questionType: data.question_type,
+    points: data.points,
     sourceSlideOrPageIndex: data.source_slide_or_page_index,
     needsReview: data.needs_review,
   };
@@ -198,7 +206,7 @@ export async function getQuestionsForGroup(questionGroupId: string): Promise<Que
   const { data, error } = await supabase
     .from("questions")
     .select(
-      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, source_slide_or_page_index, needs_review"
+      "id, question_group_id, position, prompt_text, prompt_source, choices, answer_key, question_type, points, source_slide_or_page_index, needs_review"
     )
     .eq("question_group_id", questionGroupId)
     .order("position");
@@ -213,6 +221,7 @@ export async function getQuestionsForGroup(questionGroupId: string): Promise<Que
     choices: row.choices,
     answerKey: row.answer_key,
     questionType: row.question_type,
+    points: row.points,
     sourceSlideOrPageIndex: row.source_slide_or_page_index,
     needsReview: row.needs_review,
   }));

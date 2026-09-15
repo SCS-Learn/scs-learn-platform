@@ -59,6 +59,8 @@ export type EditorState = {
   questionType: QuestionType;
   choices: QuestionChoices;
   answerKey: string;
+  /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
+  points: number;
 };
 
 const USES_STRING_CHOICES: AutogradableQuestionType[] = [
@@ -285,6 +287,7 @@ export function createDefaultEditorState(questionType: QuestionType = "short_ans
     questionType,
     choices: defaultChoicesForType(questionType),
     answerKey: defaultAnswerKeyForType(questionType),
+    points: 0,
   };
 }
 
@@ -293,6 +296,7 @@ export function editorStateFromQuestion(question: {
   questionType: string;
   choices: QuestionChoices;
   answerKey: string | null;
+  points: number;
 }): EditorState {
   const raw = question.questionType;
   const type: QuestionType =
@@ -302,6 +306,7 @@ export function editorStateFromQuestion(question: {
     questionType: type,
     choices: question.choices ?? defaultChoicesForType(type),
     answerKey: question.answerKey ?? defaultAnswerKeyForType(type),
+    points: question.points,
   };
 }
 
@@ -316,6 +321,10 @@ export function validateEditorState(state: EditorState): string | null {
     } else {
       return "Question text is required.";
     }
+  }
+
+  if (!Number.isFinite(state.points) || state.points <= 0 || state.points > 100) {
+    return "Points must be between 1 and 100.";
   }
 
   const nextAnswer = answerKey.trim();
@@ -504,7 +513,22 @@ export function QuestionEditorFields({
 
   return (
     <div className="flex flex-col gap-5">
-      <QuestionTypeSelect value={questionType} onChange={changeType} />
+      <div className="flex items-end gap-4">
+        <div className="flex-1">
+          <QuestionTypeSelect value={questionType} onChange={changeType} />
+        </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Points</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={state.points}
+            onChange={(e) => onChange({ points: Number.parseInt(e.target.value, 10) || 0 })}
+            className="w-24 text-base border border-gray-200 px-3 py-2 outline-none focus:border-iron-gray"
+          />
+        </label>
+      </div>
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-semibold text-gray-500 uppercase tracking-wide">

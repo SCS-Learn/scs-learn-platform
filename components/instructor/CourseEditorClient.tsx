@@ -406,11 +406,6 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
     (selectedLesson?.type !== "external" &&
       (selectedLesson?.blocks.some((block) => (block.questions?.length ?? 0) > 0) ?? false));
 
-  const selectedLessonHasFreeResponseQuestions =
-    selectedLesson?.blocks.some((block) =>
-      block.questions?.some((q) => q.questionType === "free_response")
-    ) ?? false;
-
   const updateQuizCompletionThresholdForLesson = (threshold: number) => {
     if (!selectedLesson) return;
     const clamped = Math.min(100, Math.max(0, Math.round(threshold)));
@@ -590,7 +585,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         showQuizCompletionThreshold={selectedLessonHasQuizQuestions}
         quizCompletionThreshold={selectedLesson?.quizCompletionThreshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD}
         onQuizCompletionThresholdChange={updateQuizCompletionThresholdForLesson}
-        showReferenceAnswersToggle={selectedLessonHasFreeResponseQuestions}
+        showReferenceAnswersToggle={selectedLessonHasQuizQuestions}
         showReferenceAnswers={selectedLesson?.showReferenceAnswers ?? false}
         onShowReferenceAnswersChange={updateShowReferenceAnswersForLesson}
         onPreview={() =>

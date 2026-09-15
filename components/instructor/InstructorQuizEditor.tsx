@@ -22,6 +22,7 @@ function toQuestionView(question: Question): QuestionView {
     choices: question.choices,
     answerKey: question.answerKey,
     questionType: question.questionType,
+    points: question.points,
     needsReview: question.needsReview,
   };
 }
@@ -59,6 +60,7 @@ function QuestionEditorCard({
           questionType: state.questionType,
           choices: state.choices,
           answerKey: state.answerKey.trim(),
+          points: state.points,
           needsReview: false,
         });
         onSaved(toQuestionView(updated));
@@ -164,11 +166,18 @@ export default function InstructorQuizEditor({
   };
 
   const canManageQuestions = Boolean(questionGroupId);
+  const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
 
   return (
     <div className="topic-lesson min-h-full flex flex-col">
-      <div className="px-8 pt-8 pb-4">
+      <div className="px-8 pt-8 pb-4 flex items-baseline justify-between gap-4">
         <h1 className="topic-lesson-title">{lessonTitle}</h1>
+        {questions.length > 0 && (
+          <p className={`text-sm font-semibold ${totalPoints === 100 ? "text-gray-500" : "text-amber-700"}`}>
+            Total: {totalPoints} / 100 points
+            {totalPoints !== 100 && " — adjust question points so this quiz adds up to 100"}
+          </p>
+        )}
       </div>
 
       <div className="w-full bg-gray-50 border-y border-gray-200 px-8 py-6 text-base text-gray-600 leading-relaxed">
