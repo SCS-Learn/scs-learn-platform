@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentLessonViewer from "@/components/student/StudentLessonViewer";
 import type { StudentCourse, QuizSubmissionStatus } from "@/lib/student/types";
@@ -32,10 +33,26 @@ export default function StudentCourseClient({
   course: StudentCourse;
   initialLessonId?: string;
 }) {
+  const pathname = usePathname();
   const firstLessonId = course.units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
-  const [selectedLessonId, setSelectedLessonId] = useState(initialLessonId || firstLessonId);
+  const [selectedLessonId, setSelectedLessonIdState] = useState(initialLessonId || firstLessonId);
   const [quizStatusByLessonId, setQuizStatusByLessonId] = useState(initialQuizStatusByLessonId(course));
   const [completedByLessonId, setCompletedByLessonId] = useState(initialCompletedByLessonId(course));
+
+  // Keeps ?lesson=<id> in the address bar in sync with what's on screen, via
+  // the native History API rather than router.replace - a router navigation
+  // would re-run the page's server component (re-fetching the whole course)
+  // on every lesson click just to update the URL. This way a refresh lands
+  // back on the same lesson without any extra round trip on every click.
+  const selectLesson = useCallback(
+    (lessonId: string) => {
+      setSelectedLessonIdState(lessonId);
+      const params = new URLSearchParams(window.location.search);
+      params.set("lesson", lessonId);
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    },
+    [pathname]
+  );
 
   const unitsWithProgress = useMemo(
     () =>
@@ -60,7 +77,7 @@ export default function StudentCourseClient({
         courseTitle={course.title}
         units={unitsWithProgress}
         selectedLessonId={selectedLessonId}
-        onSelectLesson={setSelectedLessonId}
+        onSelectLesson={selectLesson}
       />
 
       <div className="flex-1 min-w-0 min-h-0 h-full overflow-hidden">
