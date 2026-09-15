@@ -117,7 +117,8 @@ export default function ExternalActivity({
       ? `${sync.score} / ${pointsPossible}`
       : null;
 
-  const showHeader = !hideTitle || scoreLabel !== null;
+  const showDirectLink = kind === "lti" && Boolean(directUrl);
+  const showHeader = !hideTitle || scoreLabel !== null || showDirectLink;
 
   return (
     <section
@@ -127,12 +128,27 @@ export default function ExternalActivity({
         <header className="flex shrink-0 items-baseline justify-between gap-4">
           {!hideTitle ? (
             <h2 className="text-lg font-medium text-stone-800">{title}</h2>
-          ) : (
+          ) : scoreLabel ? (
             <span className="text-sm text-stone-500">Score</span>
+          ) : (
+            <span />
           )}
-          {scoreLabel ? (
-            <span className="text-sm font-medium text-stone-700">{scoreLabel}</span>
-          ) : null}
+          <span className="flex items-baseline gap-4">
+            {scoreLabel ? (
+              <span className="text-sm font-medium text-stone-700">{scoreLabel}</span>
+            ) : null}
+            {showDirectLink ? (
+              <a
+                href={directUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Some browsers block Cogniterra's sign-in inside an embedded page - use this if the activity below doesn't load."
+                className="text-sm font-medium text-stone-700 underline hover:text-stone-900 whitespace-nowrap"
+              >
+                Open in Cogniterra ↗
+              </a>
+            ) : null}
+          </span>
         </header>
       ) : null}
 
@@ -154,18 +170,6 @@ export default function ExternalActivity({
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
             allow="clipboard-write"
           />
-          <p className="shrink-0 text-xs text-stone-500">
-            Not loading?{" "}
-            <a
-              href={directUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-stone-700 underline hover:text-stone-900"
-            >
-              Open in a new tab ↗
-            </a>{" "}
-            (some browsers block Cogniterra's sign-in inside an embedded page).
-          </p>
         </>
       ) : kind === "lti" && !openInNewTab ? (
         <iframe
