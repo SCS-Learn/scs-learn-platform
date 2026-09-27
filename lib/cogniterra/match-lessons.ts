@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logAnthropicUsage } from "@/lib/anthropic/usage";
 import type { CogniterraLesson } from "@/lib/cogniterra/client";
 
 export type DriveAssignmentForMatch = {
@@ -48,7 +49,7 @@ export async function matchAssignmentsToCogniterraLessons(
 
   const client = new Anthropic();
   const response = await client.messages.create({
-    model: "claude-opus-5",
+    model: "claude-opus-5-5",
     max_tokens: 8000,
     output_config: { format: { type: "json_schema", schema: MATCH_SCHEMA } },
     messages: [
@@ -71,6 +72,8 @@ ${JSON.stringify(cogniterraLessons, null, 2)}`,
       },
     ],
   });
+
+  logAnthropicUsage("cogniterra-match", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -175,7 +178,7 @@ async function placeCogniterraLessonGroup(
 
   const response = await client.messages.create(
     {
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: PLACEMENT_SCHEMA } },
       messages: [
@@ -187,6 +190,8 @@ async function placeCogniterraLessonGroup(
     },
     { timeout: 3 * 60 * 1000 }
   );
+
+  logAnthropicUsage("cogniterra-placement", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

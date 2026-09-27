@@ -27,6 +27,8 @@ import { placeYoutubeVideos, type YoutubeExistingUnit } from "@/lib/google/place
 import { isQuizFilename } from "@/lib/google/file-role";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analysisFromFilename } from "@/lib/google/analysis-from-filename";
+import { driveErrorMessage } from "@/lib/google/drive-error";
+import { classifyOrganizeFromStructure } from "@/lib/google/classify-organize-from-structure";
 import { analyzeDriveFileContent, quizLessonCategory, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
 import {
   saveCogniterraCourseConfig,
@@ -112,14 +114,6 @@ async function alreadyImportedCourseContent(
 
 function cleanFilenameTitle(name: string): string {
   return name.replace(/\.[a-zA-Z0-9]+$/, "").replace(/[_-]+/g, " ").trim();
-}
-
-function driveErrorMessage(error: unknown): string {
-  const code = (error as { code?: number })?.code;
-  if (code === 404 || code === 403) {
-    return "Couldn't open that folder - make sure it's shared as \"Anyone with the link\" and try again.";
-  }
-  return "Couldn't reach Google Drive for that link.";
 }
 
 const MAX_IMAGES_PER_FILE = 36;
@@ -257,6 +251,16 @@ function contentSourceFromResolved(resolved: ResolvedFile): FileContentSource | 
 }
 
 /**
+ * Dev switch: build the course from Drive folder structure and filenames only,
+ * making zero Claude calls, so the import/persistence/UI path can be exercised
+ * for free. Produces a structurally plausible but unintelligent course - never
+ * set this where a real course is being imported.
+ */
+function skipImportAi(): boolean {
+  return process.env.DRIVE_IMPORT_SKIP_AI === "1";
+}
+
+/**
  * Content-derived analysis for AI structuring. Falls back to filename metadata
  * when the file can't be read (native video, unsupported mime, API failure).
  */
@@ -267,6 +271,8 @@ async function analyzeResolvedForOrganize(
   resolved: ResolvedFile,
   resourceKeyHeader: string | undefined
 ): Promise<DriveFileAnalysis> {
+  if (skipImportAi()) return analysisFromFilename(file.name, true);
+
   let source = contentSourceFromResolved(resolved);
 
   if (!source && resolved.routing === "google_slides") {
@@ -832,6 +838,10 @@ async function attachYoutubePlaylistVideos(
     eu.topics.forEach((et, ti) => topicByExistingId.set(et.id, units[ui]!.topics[ti]!));
   });
 
+  if (skipImportAi()) {
+    return "DRIVE_IMPORT_SKIP_AI is set - playlist videos were not placed into the course.";
+  }
+
   let result;
   try {
     result = await placeYoutubeVideos(course, videos, existingUnits);
@@ -1053,6 +1063,12 @@ async function runDriveImportOrganizeLocked(
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
+  if (skipImportAi()) {
+    console.warn(
+      "runDriveImportOrganize: DRIVE_IMPORT_SKIP_AI=1 - building this course from folder structure and filenames only. No Claude calls, no quizzes, no playlist placement."
+    );
+  }
+
   const supabase = await createClient();
   const { data: course, error: courseError } = await supabase
     .from("courses")
@@ -1198,7 +1214,9 @@ async function runDriveImportOrganizeLocked(
 
   if (classifiableCount > 0) {
     const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
-    const classification = await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
+    const classification = skipImportAi()
+      ? classifyOrganizeFromStructure(filteredTree, filteredAnalysis)
+      : await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
     unclassified = classification.unclassified;
 
     // Prefer model duplicates; fold in basename-detected pairs the model missed.
