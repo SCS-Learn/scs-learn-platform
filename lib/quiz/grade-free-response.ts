@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logAnthropicUsage } from "@/lib/anthropic/usage";
 
 export type FreeResponseGradingItem = {
   questionId: string;
@@ -60,7 +61,7 @@ export async function gradeFreeResponseBatch(
 
   const response = await client.messages.create(
     {
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: RESULTS_SCHEMA } },
       messages: [
@@ -72,6 +73,8 @@ export async function gradeFreeResponseBatch(
     },
     { timeout: 2 * 60 * 1000 }
   );
+
+  logAnthropicUsage("grade-free-response", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

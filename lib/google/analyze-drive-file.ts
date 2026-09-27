@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logAnthropicUsage } from "@/lib/anthropic/usage";
 import { buildSourceContentBlock, type FileContentSource } from "@/lib/google/file-content-source";
 import { truncateSourceForClassification } from "@/lib/google/truncate-source-for-classification";
 
@@ -87,7 +88,7 @@ export async function analyzeDriveFileContent(
   const classificationSource = await truncateSourceForClassification(source);
 
   const response = await client.messages.create({
-    model: "claude-opus-5",
+    model: "claude-opus-5-5",
     max_tokens: 2000,
     output_config: { format: { type: "json_schema", schema: ANALYSIS_SCHEMA } },
     messages: [
@@ -109,6 +110,8 @@ export async function analyzeDriveFileContent(
       },
     ],
   }, { timeout: 3 * 60 * 1000 }); // shouldn't legitimately take longer than this - if it does, fall back to a filename-only lesson rather than block the whole import
+
+  logAnthropicUsage("analyze-file", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") return null;
