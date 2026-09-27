@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logAnthropicUsage } from "@/lib/anthropic/usage";
 import type { DriveEntry, DriveImportTree } from "@/lib/google/drive-traversal";
 import type { DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
 import type { DriveDuplicate } from "@/lib/google/classify-drive-content";
@@ -125,7 +126,7 @@ async function classifyOrganizeGrouping(
 ): Promise<OrganizeGroupingPlan> {
   const response = await client.messages.create(
     {
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 16000,
       output_config: { format: { type: "json_schema", schema: GROUPING_SCHEMA } },
       messages: [
@@ -153,6 +154,8 @@ ${JSON.stringify(files, null, 2)}`,
     },
     { timeout: 5 * 60 * 1000 }
   );
+
+  logAnthropicUsage("organize-units", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -244,7 +247,7 @@ async function classifyOrganizeUnitLessons(
 ): Promise<OrganizeUnitLessonsPlan> {
   const response = await client.messages.create(
     {
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 16000,
       output_config: { format: { type: "json_schema", schema: UNIT_LESSONS_SCHEMA } },
       messages: [
@@ -276,6 +279,8 @@ ${JSON.stringify(files, null, 2)}`,
     },
     { timeout: 3 * 60 * 1000 }
   );
+
+  logAnthropicUsage("organize-unit-lessons", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

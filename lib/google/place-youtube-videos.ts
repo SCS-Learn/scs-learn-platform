@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logAnthropicUsage } from "@/lib/anthropic/usage";
 import type { YoutubePlaylistVideo } from "@/lib/google/youtube-playlist";
 
 export type YoutubeExistingTopic = { id: string; title: string; hasVideo: boolean };
@@ -119,7 +120,7 @@ async function placeVideoGroup(
 
   const response = await client.messages.create(
     {
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: PLACEMENT_SCHEMA } },
       messages: [
@@ -131,6 +132,8 @@ async function placeVideoGroup(
     },
     { timeout: 3 * 60 * 1000 }
   );
+
+  logAnthropicUsage("youtube-placement", response);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

@@ -245,8 +245,17 @@ function CreateCourseModal({
               </div>
             )}
             {googleConnected === true && (
-              <p className="text-xs text-green-700 mb-4">
-                Google Drive connected — paste a link to any folder your account can see.
+              <p className="text-xs text-green-700 mb-4 flex items-center justify-between gap-3">
+                <span>Google Drive connected — paste a link to any folder your account can see.</span>
+                {/* Connected only means a refresh token is stored, not that it still works - Google
+                    expires them after 7 days while the consent screen is in Testing. Without this
+                    link an expired token leaves the page showing "connected" and no way to fix it. */}
+                <a
+                  href={`/api/google/oauth/start?return_to=${encodeURIComponent("/instructor")}`}
+                  className="shrink-0 underline hover:no-underline"
+                >
+                  Reconnect
+                </a>
               </p>
             )}
             {googleConnected === false && (

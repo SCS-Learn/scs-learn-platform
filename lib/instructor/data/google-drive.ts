@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, getServiceAccountEmail, parseDriveFolderUrl } from "@/lib/google/drive-client";
 import { buildDriveImportTree } from "@/lib/google/drive-traversal";
 import { parseCourseFolderName } from "@/lib/google/parse-course-folder-name";
+import { driveErrorMessage } from "@/lib/google/drive-error";
 import { classifyDriveImport } from "@/lib/google/classify-drive-content";
 import { downloadDriveFileAsPdfBase64 } from "@/lib/google/download-drive-file";
 import { analyzeDriveFileContent, type DriveFileAnalysis } from "@/lib/google/analyze-drive-file";
@@ -180,14 +181,6 @@ async function extractAtomsInBatches(
 /** Null when only GOOGLE_API_KEY is configured - "Anyone with the link" is then the only option. */
 export async function getDriveShareEmail(): Promise<string | null> {
   return getServiceAccountEmail();
-}
-
-function driveErrorMessage(error: unknown): string {
-  const code = (error as { code?: number })?.code;
-  if (code === 404 || code === 403) {
-    return "Couldn't open that folder - make sure it's shared as \"Anyone with the link\" and try again.";
-  }
-  return "Couldn't reach Google Drive for that link.";
 }
 
 export async function getDriveImportPreview(
