@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Open_Sans, Source_Serif_4 } from "next/font/google";
+import { Bricolage_Grotesque, Inter, Open_Sans } from "next/font/google";
 import "./globals.css";
 
 const openSans = Open_Sans({
@@ -7,9 +7,13 @@ const openSans = Open_Sans({
   subsets: ["latin"],
 });
 
-const sourceSerif = Source_Serif_4({
+const bricolage = Bricolage_Grotesque({
   variable: "--font-heading",
-  weight: ["400", "700"],
+  subsets: ["latin"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -26,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${openSans.variable} ${sourceSerif.variable} h-full antialiased`}
+      className={`${openSans.variable} ${bricolage.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
