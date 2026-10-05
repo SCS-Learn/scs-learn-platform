@@ -141,7 +141,7 @@ export async function saveCogniterraCourseConfig(
   );
   if (configError) throw new Error(configError.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
 }
 
 export async function wireExternalLessonsToCogniterra(
@@ -233,8 +233,8 @@ export async function wireExternalLessonsToCogniterra(
     wired += 1;
   }
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
   return { wired, skipped };
 }
 
@@ -385,8 +385,8 @@ export async function syncCogniterraAssignments(
   }
 
   if (placed > 0) {
-    revalidatePath(`/instructor/${courseCode}`);
-    revalidatePath(`/student/${courseCode}`);
+    revalidatePath(`/instructor/${courseCode}`, "layout");
+    revalidatePath(`/student/${courseCode}`, "layout");
   }
   return { placed, warning: null };
 }

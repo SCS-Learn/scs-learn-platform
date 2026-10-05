@@ -1,18 +1,14 @@
 import Link from "next/link";
-import { BookOpen, CircleHelp, Layers, Play } from "lucide-react";
+import { ArrowRight, BookOpen, CircleHelp, Layers } from "lucide-react";
 import type { StudentCourseSummary } from "@/lib/student/types";
 
-function resumeHref(course: StudentCourseSummary) {
-  if (!course.resumeLessonId) return `/student/${course.code}`;
-  return `/student/${course.code}?lesson=${course.resumeLessonId}`;
-}
-
 export default function StudentCourseCard({ course }: { course: StudentCourseSummary }) {
-  const hasStarted = course.percentComplete > 0;
-  const buttonLabel = hasStarted ? "Resume from where you left off" : "Start course";
-
   return (
-    <article className="border border-gray-200 bg-white p-5 flex flex-col gap-4 hover:border-black hover:shadow-sm transition">
+    <Link
+      href={`/student/${course.code}`}
+      aria-label={`Open ${course.title}`}
+      className="border border-gray-200 bg-white p-5 flex flex-col gap-4 hover:border-black hover:shadow-sm transition"
+    >
       <div>
         <div className="flex items-start justify-between gap-3 mb-1">
           <p className="text-xs font-bold text-primary tracking-wide">{course.code}</p>
@@ -63,13 +59,10 @@ export default function StudentCourseCard({ course }: { course: StudentCourseSum
         </div>
       </div>
 
-      <Link
-        href={resumeHref(course)}
-        className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-primary text-white py-2.5 hover:bg-primary/90 transition"
-      >
-        <Play size={14} />
-        {buttonLabel}
-      </Link>
-    </article>
+      <span className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-primary text-white py-2.5">
+        Go to course
+        <ArrowRight size={14} />
+      </span>
+    </Link>
   );
 }

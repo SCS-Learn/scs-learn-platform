@@ -1197,7 +1197,7 @@ async function runDriveImportOrganizeLocked(
   // source to build the course from instead - otherwise plannedUnits starts
   // empty and attachYoutubePlaylistVideos below builds it from scratch.
   if (classifiableCount === 0 && !trimmedPlaylistUrl) {
-    revalidatePath(`/instructor/${courseCode}`);
+    revalidatePath(`/instructor/${courseCode}`, "layout");
     return {
       unitIds: [],
       lessonIds: [],
@@ -1438,7 +1438,7 @@ async function runDriveImportOrganizeLocked(
   }
   const cogniterraWired = explicitCogniterraWired + gapFilledCogniterra;
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   return {
     unitIds,
     lessonIds,

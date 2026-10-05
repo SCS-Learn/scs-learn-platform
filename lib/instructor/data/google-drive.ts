@@ -501,6 +501,6 @@ export async function runDriveImport(
     }
   }
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   return { unitIds, lessonIds };
 }

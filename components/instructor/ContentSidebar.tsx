@@ -263,11 +263,11 @@ export default function ContentSidebar({
     <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border border-gray-300">
       <div className="px-3 py-4 border-b border-gray-100 flex flex-col text-left">
         <Link
-          href="/instructor"
+          href={`/instructor/${courseCode}`}
           className="inline-flex items-center justify-center gap-1.5 w-full text-base font-bold bg-white text-black border border-black px-4 py-3 hover:bg-gray-50"
         >
           <ArrowLeft size={16} />
-          Dashboard
+          Course dashboard
         </Link>
         <div className="mt-6 w-full min-w-0 pl-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0">

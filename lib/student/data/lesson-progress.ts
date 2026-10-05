@@ -142,7 +142,7 @@ export async function markLessonComplete(courseCode: string, lessonId: string): 
     throw new Error(error?.message ?? "Failed to mark lesson complete");
   }
 
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`, "layout");
   revalidatePath("/student");
   return data.completed_at as string;
 }
@@ -157,6 +157,6 @@ export async function unmarkLessonComplete(courseCode: string, lessonId: string)
     .eq("platform_user_id", learner.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`, "layout");
   revalidatePath("/student");
 }

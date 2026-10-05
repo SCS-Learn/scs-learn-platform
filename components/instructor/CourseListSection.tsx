@@ -316,7 +316,7 @@ export default function CourseListSection({ courses: initialCourses }: { courses
       }`;
       window.alert(message);
     }
-    router.push(`/instructor/${code}`);
+    router.push(`/instructor/${code}/edit`);
   };
 
   const handleDelete = (course: InstructorCourse) => {

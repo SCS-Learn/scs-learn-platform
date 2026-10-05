@@ -109,7 +109,7 @@ export async function addUnit(courseCode: string, title: string): Promise<Unit> 
     .single();
   if (error || !newUnit) throw new Error(error?.message ?? "Failed to create unit");
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   return { id: newUnit.id, code: newUnit.code, title: newUnit.title, lessons: [] };
 }
 
@@ -156,8 +156,8 @@ export async function renameUnit(courseCode: string, unitId: string, title: stri
   const { error } = await supabase.from("units").update({ title }).eq("id", unitId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }
 
 export async function deleteUnit(courseCode: string, unitId: string) {
@@ -174,7 +174,7 @@ export async function deleteUnit(courseCode: string, unitId: string) {
 
   await renumberUnitsAndCascadeLessons(supabase, unit.course_id);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   revalidatePath("/instructor");
 }
 
@@ -206,7 +206,7 @@ export async function reorderUnits(courseCode: string, orderedUnitIds: string[])
   const failedLesson = lessonResults.find((r) => r.error);
   if (failedLesson?.error) throw new Error(failedLesson.error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
 }
 
 export async function addLesson(courseCode: string, unitId: string): Promise<LessonItem> {
@@ -242,7 +242,7 @@ export async function addLesson(courseCode: string, unitId: string): Promise<Les
     .single();
   if (error || !newLesson) throw new Error(error?.message ?? "Failed to create lesson");
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   revalidatePath("/instructor");
   return {
     id: newLesson.id,
@@ -339,7 +339,7 @@ export async function deleteLesson(courseCode: string, lessonId: string) {
 
   await renumberLessonsInUnit(supabase, lesson.unit_id);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
   revalidatePath("/instructor");
 }
 
@@ -369,7 +369,7 @@ export async function reorderLessons(
   const failed = results.find((r) => r.error);
   if (failed?.error) throw new Error(failed.error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
 }
 
 /**
@@ -429,7 +429,7 @@ export async function moveLessonToUnit(
 
   await renumberLessonsInUnit(supabase, fromUnitId);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
 }
 
 export async function updateQuizCompletionThreshold(
@@ -451,8 +451,8 @@ export async function updateQuizCompletionThreshold(
     .eq("id", lessonId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }
 
 /** Whether students see the free_response (AI-graded) reference answer after submitting this quiz - off by default. */
@@ -471,8 +471,8 @@ export async function updateShowReferenceAnswers(
     .eq("id", lessonId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }
 
 export async function updateLessonContent(
@@ -506,8 +506,8 @@ export async function updateLessonType(
     .eq("id", lessonId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }
 
 export async function publishLesson(courseCode: string, lessonId: string) {
@@ -518,7 +518,7 @@ export async function publishLesson(courseCode: string, lessonId: string) {
     .eq("id", lessonId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
 }
 
 /** Publishes every not-yet-published lesson in the course in one go. */
@@ -548,6 +548,6 @@ export async function publishAllLessons(courseCode: string) {
     .eq("is_published", false);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }

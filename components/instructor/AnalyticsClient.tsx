@@ -44,7 +44,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
 
   return (
     <main className="min-h-screen bg-gray-50 text-black">
-      <InstructorHeader backHref={`/instructor/${course.code}`} backLabel="Back to editor" />
+      <InstructorHeader backHref={`/instructor/${course.code}`} backLabel="Back to course" />
 
       <div className="w-[70%] mx-auto px-6 py-10">
         <p className="text-xs font-bold text-iron-gray tracking-wide mb-1">

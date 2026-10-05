@@ -64,7 +64,8 @@ export async function postAnnouncement(input: { courseCode: string; message: str
   });
   if (error) throw new Error(error.message);
 
-  revalidatePath("/instructor");
+  revalidatePath("/instructor", "layout");
+  revalidatePath("/student", "layout");
 }
 
 export async function deleteAnnouncement(id: string) {
@@ -72,5 +73,6 @@ export async function deleteAnnouncement(id: string) {
   const { error } = await supabase.from("announcements").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/instructor");
+  revalidatePath("/instructor", "layout");
+  revalidatePath("/student", "layout");
 }

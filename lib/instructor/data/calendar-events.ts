@@ -95,7 +95,8 @@ export async function addCalendarEvent(input: {
   });
   if (error) throw new Error(error.message);
 
-  revalidatePath("/instructor");
+  revalidatePath("/instructor", "layout");
+  revalidatePath("/student", "layout");
 }
 
 export async function deleteCalendarEvent(id: string) {
@@ -103,5 +104,6 @@ export async function deleteCalendarEvent(id: string) {
   const { error } = await supabase.from("calendar_events").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/instructor");
+  revalidatePath("/instructor", "layout");
+  revalidatePath("/student", "layout");
 }

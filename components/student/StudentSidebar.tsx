@@ -31,11 +31,11 @@ export default function StudentSidebar({
     <aside className="w-80 shrink-0 h-full min-h-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
       <div className="px-6 py-6 border-b border-gray-100 flex flex-col gap-5">
         <Link
-          href="/student"
+          href={`/student/${courseCode}`}
           className="inline-flex items-center justify-center gap-2 w-full text-sm font-bold bg-white text-black border border-black px-5 py-3 hover:bg-gray-50"
         >
           <ArrowLeft size={16} />
-          My courses
+          Course home
         </Link>
 
         <div className="min-w-0">

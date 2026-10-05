@@ -154,7 +154,7 @@ export default function GoogleDriveImportModal({
                   exactly as Google Slides sees them (backgrounds, layout, and all).
                 </p>
                 <a
-                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}/edit`)}`}
                   className="shrink-0 text-xs font-bold text-black border border-black px-3 py-1.5 rounded hover:bg-gray-50"
                 >
                   Connect Google Drive
@@ -165,7 +165,7 @@ export default function GoogleDriveImportModal({
               <p className="text-xs text-green-700 mb-4 flex items-center justify-between gap-3">
                 <span>Google Drive connected — private folders and pixel-accurate slide rendering are available.</span>
                 <a
-                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  href={`/api/google/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}/edit`)}`}
                   className="shrink-0 underline hover:no-underline"
                 >
                   Switch account
@@ -222,7 +222,7 @@ export default function GoogleDriveImportModal({
                   and matched automatically, instead of only linking the whole course.
                 </p>
                 <a
-                  href={`/api/cogniterra/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}`)}`}
+                  href={`/api/cogniterra/oauth/start?return_to=${encodeURIComponent(`/instructor/${courseCode}/edit`)}`}
                   className="shrink-0 text-xs font-bold text-black border border-black px-3 py-1.5 rounded hover:bg-gray-50"
                 >
                   Connect Cogniterra

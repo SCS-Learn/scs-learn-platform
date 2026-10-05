@@ -154,7 +154,7 @@ export async function submitQuiz(
     if (responsesError) throw new Error(responsesError.message);
   }
 
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/student/${courseCode}`, "layout");
 
   return {
     submittedAt: submission.submitted_at as string,

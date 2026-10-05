@@ -18,7 +18,7 @@ export default function CourseCard({
       <Link
         href={`/instructor/${course.code}`}
         className="absolute inset-0 z-0"
-        aria-label={`Open ${course.title} editor`}
+        aria-label={`Open ${course.title} dashboard`}
       />
 
       {onDelete && (
@@ -56,7 +56,7 @@ export default function CourseCard({
 
         <div className="mt-auto flex gap-2 pointer-events-auto">
         <Link
-          href={`/instructor/${course.code}`}
+          href={`/instructor/${course.code}/edit`}
           className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black py-2.5 hover:bg-gray-50 transition"
         >
           <Pencil size={14} />

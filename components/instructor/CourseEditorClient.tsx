@@ -589,7 +589,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         showReferenceAnswers={selectedLesson?.showReferenceAnswers ?? false}
         onShowReferenceAnswersChange={updateShowReferenceAnswersForLesson}
         onPreview={() =>
-          window.open(`/student/${course.code}?lesson=${selectedLessonId}`, "_blank", "noopener")
+          window.open(`/student/${course.code}/learn?lesson=${selectedLessonId}`, "_blank", "noopener")
         }
         onSaveDraft={flushPendingSave}
         onPublish={publish}

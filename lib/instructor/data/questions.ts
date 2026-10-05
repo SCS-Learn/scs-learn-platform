@@ -183,8 +183,8 @@ export async function updateQuestion(
     answerKey: patch.answerKey,
   });
 
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 
   return {
     id: data.id,
@@ -263,8 +263,8 @@ async function renumberQuestionsInGroup(
 }
 
 function revalidateQuizPaths(courseCode: string) {
-  revalidatePath(`/instructor/${courseCode}`);
-  revalidatePath(`/student/${courseCode}`);
+  revalidatePath(`/instructor/${courseCode}`, "layout");
+  revalidatePath(`/student/${courseCode}`, "layout");
 }
 
 export async function createQuestionInGroup(

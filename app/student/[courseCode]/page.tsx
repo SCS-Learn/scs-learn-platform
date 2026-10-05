@@ -1,21 +1,32 @@
 import { notFound } from "next/navigation";
-import StudentCourseClient from "@/components/student/StudentCourseClient";
+import StudentCourseDashboard from "@/components/student/StudentCourseDashboard";
 import { getStudentCourse } from "@/lib/student/data/course";
+import { getCourseAnnouncements, getCourseUpcomingEvents } from "@/lib/student/data/course-dashboard";
+import { getLaunchingUser } from "@/lib/lti/config";
 
-export default async function StudentCoursePage({
+export default async function StudentCourseDashboardPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ courseCode: string }>;
-  searchParams: Promise<{ lesson?: string }>;
 }) {
   const { courseCode } = await params;
-  const { lesson } = await searchParams;
-  const course = await getStudentCourse(courseCode);
+  const [course, learner, announcements, events] = await Promise.all([
+    getStudentCourse(courseCode),
+    getLaunchingUser(),
+    getCourseAnnouncements(courseCode),
+    getCourseUpcomingEvents(courseCode),
+  ]);
 
   if (!course) {
     notFound();
   }
 
-  return <StudentCourseClient course={course} initialLessonId={lesson} />;
+  return (
+    <StudentCourseDashboard
+      course={course}
+      learnerName={learner.name}
+      announcements={announcements}
+      events={events}
+    />
+  );
 }
