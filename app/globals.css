@@ -3,23 +3,66 @@
 
 @import "tailwindcss";
 
+@custom-variant short (@media (min-width: 64rem) and (max-height: 52rem));
+
 :root {
   --background: #ffffff;
   --foreground: #000000;
   --color-primary: #c41230;
+  --color-primary-dark: #9e0e26;
   --color-iron-gray: #6d6e71;
   --color-steel-gray: #e0e0e0;
+  --color-gray-light: #f2f2f2;
+  --color-gray-medium: #948f8f;
 }
 
 @theme inline {
   --font-sans: var(--font-body);
   --font-serif: var(--font-heading);
+  --font-text: var(--font-inter);
+  --font-display: var(--font-heading);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
   --color-iron-gray: var(--color-iron-gray);
   --color-steel-gray: var(--color-steel-gray);
+  --color-gray-light: var(--color-gray-light);
+  --color-gray-medium: var(--color-gray-medium);
+
+  --color-scots-rose: #ef3a47;
+  --color-gold-thread: #fdb515;
+  --color-green-thread: #009647;
+  --color-teal-thread: #008f91;
+  --color-blue-thread: #043673;
+  --color-sky-blue: #007bc0;
+
+  --color-machinery-tan: #bcb49e;
+  --color-brick-beige: #e4dac4;
+  --color-hornbostel-teal: #1f4c4c;
+  --color-palladian-green: #719f94;
+  --color-weaver-blue: #182c4b;
+  --color-skibo-red: #941120;
+
+  --animate-marquee: marquee 60s linear infinite;
+
+  @keyframes marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading), system-ui, sans-serif;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -198,7 +241,7 @@ body {
 .course-notes-content h2,
 .course-notes-content h3,
 .course-notes-content h4 {
-  font-family: var(--font-serif), Georgia, serif;
+  font-family: var(--font-serif), system-ui, sans-serif;
   font-weight: 700;
   color: #111827;
   letter-spacing: -0.01em;
