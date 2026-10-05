@@ -1,13 +1,14 @@
 import StudentHeader from "@/components/student/StudentHeader";
 import StudentCourseCard from "@/components/student/StudentCourseCard";
 import { listStudentCourses } from "@/lib/student/data/course";
+import { getLaunchingUser } from "@/lib/lti/config";
 
 export default async function StudentDashboardPage() {
-  const courses = await listStudentCourses();
+  const [courses, learner] = await Promise.all([listStudentCourses(), getLaunchingUser()]);
 
   return (
     <main className="min-h-screen bg-gray-50 text-black">
-      <StudentHeader />
+      <StudentHeader learnerName={learner.name} />
 
       <div className="px-6 py-8">
         <p className="text-xs font-bold text-primary tracking-wide mb-1">MY COURSES</p>

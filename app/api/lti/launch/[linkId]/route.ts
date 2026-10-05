@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLaunchingUser, platformBaseUrl } from "@/lib/lti/config";
+import { getCurrentLearner, platformBaseUrl } from "@/lib/lti/config";
 import { buildLaunchParams, renderAutoSubmitForm } from "@/lib/lti/launch";
 import { getLink, upsertResultForLaunch } from "@/lib/lti/tools";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -47,7 +47,10 @@ export async function GET(
     );
   }
 
-  const user = await getLaunchingUser();
+  const user = await getCurrentLearner();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  }
   const result = await upsertResultForLaunch(link.id, user.id);
   const context = await getLessonContext(link.lessonId);
   const baseUrl = await platformBaseUrl();

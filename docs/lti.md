@@ -100,6 +100,12 @@ signature" with no other diagnostic.
    Cogniterra. Cogniterra suppresses both otherwise, which shows up as anonymous
    learners on its side. This is the `send_learner_identity` column.
 
+   Learners never sign in to Cogniterra themselves: the launch creates and
+   enrolls their account. Each one is sent as `<user id>@lti.learn.cs.cmu.edu`
+   rather than their real email, because Cogniterra stops a launch at its own
+   login page whenever the email already has a regular Cogniterra account (see
+   `cogniterraLaunchEmail` in `lib/lti/launch.ts`).
+
 4. **Register the tool** in Supabase:
 
    ```sql

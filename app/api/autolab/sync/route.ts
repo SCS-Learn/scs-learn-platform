@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AutolabAuthError, AutolabNotConfiguredError } from "@/lib/autolab/client";
 import { getAutolabLinkForLesson, syncLearnerScore } from "@/lib/autolab/grades";
-import { getLaunchingUser } from "@/lib/lti/config";
+import { getCurrentLearner } from "@/lib/lti/config";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No Autolab assessment on this lesson" }, { status: 404 });
   }
 
-  const user = await getLaunchingUser();
+  const user = await getCurrentLearner();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  }
 
   try {
     const outcome = await syncLearnerScore({

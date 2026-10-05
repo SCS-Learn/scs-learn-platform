@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, User } from "lucide-react";
+import { ArrowLeft, LogOut, User } from "lucide-react";
+import { signOut } from "@/lib/auth/actions";
 
 export default function StudentHeader({
   backHref,
@@ -22,15 +23,23 @@ export default function StudentHeader({
         </span>
       </div>
 
-      {backHref && (
-        <Link
-          href={backHref}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black"
-        >
-          <ArrowLeft size={15} />
-          {backLabel ?? "Back"}
-        </Link>
-      )}
+      <div className="flex items-center gap-4">
+        {backHref && (
+          <Link
+            href={backHref}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black"
+          >
+            <ArrowLeft size={15} />
+            {backLabel ?? "Back"}
+          </Link>
+        )}
+        <form action={signOut}>
+          <button type="submit" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black">
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </form>
+      </div>
     </header>
   );
 }

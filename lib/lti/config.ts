@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 // Identity this platform presents to external tools. tool_consumer_instance_guid
 // is meant to be stable forever: tools key their user records off it, so
@@ -36,19 +38,32 @@ export type LaunchingUser = {
   role: "Learner" | "Instructor";
 };
 
-// Auth is stubbed platform-wide (see lib/instructor/data/current-instructor.ts),
-// so there is no session to read a learner off. This is the one place LTI
-// depends on that, and it is where a real session lookup drops in.
-//
-// The id matters more than it looks: it becomes lti user_id, which is the
-// identity the tool creates its own account against. Once real login lands,
-// return auth.uid() here and existing stub launches will look like a different
-// person to the tool. That is fine now and would not be fine after launch.
-export async function getLaunchingUser(): Promise<LaunchingUser> {
+// The signed-in Supabase Auth user. Its id becomes lti user_id - the identity
+// Cogniterra creates its own account against - and the platform_user_id every
+// learner-keyed table (lesson_completions, quiz_submissions, lti_results,
+// autolab_scores) is keyed by, so each learner gets their own Cogniterra
+// account and their own progress. Null when nobody is signed in.
+export async function getCurrentLearner(): Promise<LaunchingUser | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return null;
+
+  const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
   return {
-    id: "stub-learner-0001",
-    name: "SCS Learn Test Learner",
-    email: "scslearnscslearn@gmail.com",
+    id: user.id,
+    name: fullName || user.email.split("@")[0],
+    email: user.email,
     role: "Learner",
   };
+}
+
+// For learner-only pages and server actions. proxy.ts already bounces
+// signed-out requests on /student/*, so this redirect is the backstop for an
+// action whose session expired between page load and submit.
+export async function getLaunchingUser(): Promise<LaunchingUser> {
+  const learner = await getCurrentLearner();
+  if (!learner) redirect("/login");
+  return learner;
 }

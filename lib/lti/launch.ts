@@ -16,6 +16,23 @@ export type LaunchContext = {
   courseTitle: string;
 };
 
+// Cogniterra provisions LTI learners by email, and refuses to sign a launch
+// into an email that already has a regular Cogniterra account: it redirects
+// to its own /login to confirm ownership first (verified 2026-10-05 against
+// cogniterra.org/lti/). That page lands in the hidden launch iframe where no
+// one sees it, so the launch never completes and every lesson 403s - for
+// exactly the learners who already use Cogniterra. A platform-scoped address
+// per learner means Cogniterra always creates its own fresh account for them,
+// with no Cogniterra login ever. The real name still goes through, and grades
+// don't depend on email. Derived from the stable user id, so it must not
+// change format once learners exist: a new address is a new Cogniterra
+// account with none of their progress.
+export const COGNITERRA_LAUNCH_EMAIL_DOMAIN = "lti.learn.cs.cmu.edu";
+
+export function cogniterraLaunchEmail(userId: string): string {
+  return `${userId}@${COGNITERRA_LAUNCH_EMAIL_DOMAIN}`;
+}
+
 export function buildLaunchParams(args: {
   link: LtiLink;
   user: LaunchingUser;
@@ -60,7 +77,8 @@ export function buildLaunchParams(args: {
 
   if (link.tool.sendLearnerIdentity) {
     params.lis_person_name_full = user.name;
-    params.lis_person_contact_email_primary = user.email;
+    params.lis_person_contact_email_primary =
+      link.tool.vendor === "cogniterra" ? cogniterraLaunchEmail(user.id) : user.email;
   }
 
   // Custom parameters arrive at the tool prefixed with custom_. Cogniterra
