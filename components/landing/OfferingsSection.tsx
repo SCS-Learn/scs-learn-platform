@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Container from "./ui/Container";
 import { heading2, sectionPadding } from "./ui/typography";
+import { SCS_LEARN_YOUTUBE_URL } from "./links";
+import YouTubeIcon from "./ui/YouTubeIcon";
 
 type Offering = {
   title: string;
@@ -18,7 +20,7 @@ const OFFERINGS: Offering[] = [
     title: "Watch full lectures on YouTube",
     description: "Free and open, whenever you want to learn - every lecture, from the professors who teach it.",
     cta: "Start watching",
-    href: null,
+    href: SCS_LEARN_YOUTUBE_URL,
     image: "/landing/courses/classroom.jpg",
     wide: true,
   },
@@ -50,21 +52,29 @@ export default function OfferingsSection() {
   return (
     <section className={`bg-white text-black ${sectionPadding}`}>
       <Container>
-        <h2 className={`${heading2} mb-10`}>Ready for more?</h2>
+        <h2 className={`${heading2} reveal mb-10`}>Ready for more?</h2>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {OFFERINGS.map(({ title, description, cta, href, image, color, wide }) => {
-            const className = `group relative isolate flex min-h-[18rem] flex-col justify-end overflow-hidden p-8 text-white md:min-h-[20rem] md:p-10 ${
+          {OFFERINGS.map(({ title, description, cta, href, image, color, wide }, i) => {
+            const isYouTube = href === SCS_LEARN_YOUTUBE_URL;
+            const className = `reveal group relative isolate flex min-h-[18rem] flex-col justify-end overflow-hidden p-8 text-white md:min-h-[20rem] md:p-10 ${
               wide ? "md:col-span-2" : ""
             } ${image ? "bg-black" : color}`;
             const content = (
               <>
                 {image && (
                   <>
-                    <Image src={image} alt="" fill sizes="(min-width: 48rem) 66vw, 100vw" className="-z-20 object-cover" />
+                    <Image
+                      src={image}
+                      alt=""
+                      fill
+                      sizes="(min-width: 48rem) 66vw, 100vw"
+                      className="-z-20 object-cover transition-transform duration-[3s] ease-out group-hover:scale-110"
+                    />
                     <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/55 to-black/30" />
                   </>
                 )}
+                {isYouTube && <YouTubeIcon className="mb-4 h-9 w-9 text-white" />}
                 <h3 className="max-w-md text-balance font-brand text-[1.875rem] font-semibold leading-[1.15] xl:text-[2.25rem]">
                   {title}
                 </h3>
@@ -80,11 +90,18 @@ export default function OfferingsSection() {
               </>
             );
             return href ? (
-              <a key={title} href={href} className={className}>
+              <a
+                key={title}
+                href={href}
+                target={isYouTube ? "_blank" : undefined}
+                rel={isYouTube ? "noopener noreferrer" : undefined}
+                className={className}
+                style={{ "--reveal-delay": `${i * 100}ms` } as React.CSSProperties}
+              >
                 {content}
               </a>
             ) : (
-              <div key={title} className={className}>
+              <div key={title} className={className} style={{ "--reveal-delay": `${i * 100}ms` } as React.CSSProperties}>
                 {content}
               </div>
             );

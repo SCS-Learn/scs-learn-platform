@@ -37,8 +37,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // suppressHydrationWarning: the landing page's inline script adds
+    // .reveal-ready to <html> before hydration (see app/page.tsx). Only covers
+    // this element's own attributes, not its children.
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${openSans.variable} ${bricolage.variable} ${inter.variable} ${sourceSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

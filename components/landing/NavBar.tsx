@@ -29,16 +29,16 @@ export default function NavBar() {
         <div className="flex items-center gap-5 sm:gap-7">
           <nav className="hidden md:flex items-center gap-7">
             {LINKS.map(({ label, href }) => (
-              <a key={label} href={href} className="text-[15px] hover:underline underline-offset-4">
+              <a key={label} href={href} className="link-swipe text-[15px] font-bold">
                 {label}
               </a>
             ))}
-            <Link href="/instructor" className="text-[15px] hover:underline underline-offset-4">
+            <Link href="/instructor" className="link-swipe text-[15px] font-bold">
               For instructors
             </Link>
           </nav>
           <Link
-            href="/student"
+            href="/login"
             className="border border-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-white hover:text-black"
           >
             Sign in

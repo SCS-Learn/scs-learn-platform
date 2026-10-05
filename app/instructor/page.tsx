@@ -3,13 +3,13 @@ import CourseListSection from "@/components/instructor/CourseListSection";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import { getAnnouncements } from "@/lib/instructor/data/announcements";
 import { getInstructorCourseList } from "@/lib/instructor/data/courses";
-import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
+import { requireInstructor } from "@/lib/instructor/data/current-instructor";
 
 export default async function InstructorDashboardPage() {
   const [announcements, courses, instructor] = await Promise.all([
     getAnnouncements(),
     getInstructorCourseList(),
-    getCurrentInstructor(),
+    requireInstructor(),
   ]);
 
   return (

@@ -149,11 +149,11 @@ export default function BuildSection() {
   return (
     <section className={`bg-white text-black ${sectionPadding}`}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-12 lg:px-16">
-        <h2 className={`${heading2} max-w-3xl`}>You&apos;ll learn how to build, and have the project to prove it.</h2>
+        <h2 className={`${heading2} max-w-3xl reveal`}>You&apos;ll learn how to build, and have the project to prove it.</h2>
 
         <div className="mt-12 flex flex-col gap-14 lg:mt-16 lg:gap-20">
           {FEATURES.map(({ eyebrow, text, panel, graphic }, i) => (
-            <div key={eyebrow} className="grid grid-cols-1 items-center gap-10 md:grid-cols-12 md:gap-16">
+            <div key={eyebrow} className="reveal grid grid-cols-1 items-center gap-10 md:grid-cols-12 md:gap-16">
               <div className="md:col-span-5">
                 <p className={eyebrowStyle}>{eyebrow}</p>
                 <p className="mt-3 text-balance font-brand text-[1.75rem] font-semibold leading-[1.2] md:text-[2rem]">
@@ -163,11 +163,11 @@ export default function BuildSection() {
 
               <div
                 aria-hidden
-                className={`relative flex h-[22rem] justify-center overflow-hidden px-6 pt-10 md:col-span-7 md:h-[25rem] ${panel} ${
+                className={`group/panel relative flex h-[22rem] justify-center overflow-hidden px-6 pt-10 md:col-span-7 md:h-[25rem] ${panel} ${
                   i % 2 === 1 ? "md:order-first" : ""
                 }`}
               >
-                <div className="h-full w-full max-w-sm overflow-hidden border border-gray-200 border-b-0 bg-white p-7 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)]">
+                <div className="h-full w-full max-w-sm overflow-hidden border border-gray-200 border-b-0 bg-white p-7 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)] transition-transform duration-500 ease-out group-hover/panel:-translate-y-3">
                   {graphic}
                 </div>
               </div>

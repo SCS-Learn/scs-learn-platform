@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { displayNameFor, getSessionUser } from "@/lib/auth/session";
 
 // Identity this platform presents to external tools. tool_consumer_instance_guid
 // is meant to be stable forever: tools key their user records off it, so
@@ -44,16 +44,11 @@ export type LaunchingUser = {
 // autolab_scores) is keyed by, so each learner gets their own Cogniterra
 // account and their own progress. Null when nobody is signed in.
 export async function getCurrentLearner(): Promise<LaunchingUser | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user || !user.email) return null;
-
-  const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
   return {
     id: user.id,
-    name: fullName || user.email.split("@")[0],
+    name: displayNameFor(user),
     email: user.email,
     role: "Learner",
   };

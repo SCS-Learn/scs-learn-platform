@@ -47,6 +47,22 @@
   --color-skibo-red: #941120;
 
   --animate-marquee: marquee 60s linear infinite;
+  /* cmu.edu's motion: the hero background fades in, content fades up 3rem. */
+  --animate-fade-in: fade-in 1s ease-in both;
+  --animate-fade-in-up: fade-in-up 0.6s ease-out both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(3rem);
+    }
+  }
 
   @keyframes marquee {
     to {
@@ -436,4 +452,43 @@ body {
   border: none;
   border-top: 1px solid #e5e7eb;
   margin: 2.5rem 0;
+}
+
+/* Landing page motion, modeled on cmu.edu ------------------------------- */
+
+/* Scroll reveal: .reveal elements fade up once they enter the viewport.
+   Hidden only after the inline script in app/page.tsx sets .reveal-ready on
+   <html>, so the page is fully visible without JavaScript, and ScrollReveal
+   (components/landing/ScrollReveal.tsx) flips data-revealed to play it. */
+.reveal-ready .reveal {
+  animation: fade-in-up 0.6s ease-out both;
+  animation-delay: var(--reveal-delay, 0ms);
+  animation-play-state: paused;
+}
+
+.reveal-ready .reveal[data-revealed] {
+  animation-play-state: running;
+}
+
+/* Link underline that swipes in from the left on hover (cmu.edu's .link-underline-swipe). */
+.link-swipe {
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+  padding-bottom: 2px;
+  transition: background-size 0.2s ease;
+}
+
+.link-swipe:hover,
+.link-swipe:focus-visible {
+  background-size: 100% 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-ready .reveal {
+    animation: none;
+  }
+
+  .animate-fade-in,
+  .animate-fade-in-up {
+    animation: none;
+  }
 }

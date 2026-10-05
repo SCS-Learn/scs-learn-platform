@@ -7,13 +7,13 @@ import { NextResponse, type NextRequest } from "next/server";
  * 1. Refresh the learner's Supabase session cookie. Server Components can't
  *    write cookies, so without this an expired access token is never
  *    rotated and the learner gets silently signed out mid-course.
- * 2. Gate learner-only routes. Every learner-keyed row (lesson_completions,
- *    quiz_submissions, lti_results, autolab_scores) is keyed by the signed-in
- *    user's id, and that same id is the LTI user_id Cogniterra creates its
- *    account against - so there is no anonymous fallback to drop through to.
- *
- * Instructor routes are deliberately not gated yet: instructor auth is still
- * the single stub in lib/instructor/data/current-instructor.ts.
+ * 2. Require a signed-in user on every app route. Learner-keyed rows
+ *    (lesson_completions, quiz_submissions, lti_results, autolab_scores) are
+ *    keyed by the user's id - the same id Cogniterra creates its account
+ *    against - so there is no anonymous fallback. Instructor routes need a
+ *    session too; whether that session is an *instructor* is checked one level
+ *    down by requireInstructor() (lib/instructor/data/current-instructor.ts),
+ *    which every instructor page and server action calls.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -55,5 +55,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/student/:path*", "/api/lti/launch/:path*", "/api/autolab/sync"],
+  matcher: [
+    "/student/:path*",
+    "/instructor/:path*",
+    "/instructor-access",
+    "/account",
+    "/dashboard",
+    "/api/lti/launch/:path*",
+    "/api/autolab/sync",
+  ],
 };

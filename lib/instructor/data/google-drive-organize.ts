@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCourseInstructor } from "@/lib/instructor/data/current-instructor";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -1026,6 +1028,7 @@ export async function runDriveImportOrganize(
   skippedAlreadyImportedCount: number;
   failedUnitTitles: string[];
 }> {
+  await requireCourseInstructor(courseCode);
   const lockSupabase = await createClient();
   const { data: lockCourse, error: lockCourseError } = await lockSupabase
     .from("courses")

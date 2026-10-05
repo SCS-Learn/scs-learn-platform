@@ -1,6 +1,6 @@
 import { google, type drive_v3, type slides_v1 } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { getCurrentInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 
 /**
  * Per-instructor Google OAuth ("Connect Google Drive") - lets the app read
@@ -43,14 +43,16 @@ export function createOAuth2Client(): InstanceType<typeof google.auth.OAuth2> | 
 
 type StoredCredential = { refreshToken: string; scope: string };
 
-/** Reads the single stub instructor's stored refresh token via the service-role client. Returns null if OAuth was never connected, or the admin client isn't configured. */
+/** Reads the signed-in instructor's stored refresh token via the service-role client. Returns null if OAuth was never connected, or the admin client isn't configured. */
 export async function getOAuthCredentials(): Promise<StoredCredential | null> {
+  const instructor = await getCurrentInstructor();
+  if (!instructor) return null;
   const admin = createAdminClient();
   if (!admin) return null;
   const { data, error } = await admin
     .from("instructor_google_credentials")
     .select("refresh_token, scope")
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID)
+    .eq("instructor_id", instructor.id)
     .maybeSingle();
   if (error || !data) return null;
   return { refreshToken: data.refresh_token as string, scope: data.scope as string };
@@ -64,7 +66,7 @@ export async function saveOAuthCredentials(refreshToken: string, scope: string):
   }
   const { error } = await admin.from("instructor_google_credentials").upsert(
     {
-      instructor_id: CURRENT_INSTRUCTOR_ID,
+      instructor_id: (await requireInstructor()).id,
       refresh_token: refreshToken,
       scope,
       updated_at: new Date().toISOString(),

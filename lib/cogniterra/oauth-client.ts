@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { getCurrentInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 
 /**
  * Per-instructor Cogniterra OAuth ("Connect Cogniterra"). Cogniterra's public
@@ -82,14 +82,16 @@ export async function exchangeCogniterraCode(code: string): Promise<TokenRespons
   return requestToken({ grant_type: "authorization_code", code, redirect_uri: redirectUri });
 }
 
-/** Reads the single stub instructor's stored refresh token. Null if never connected or the admin client isn't configured. */
+/** Reads the signed-in instructor's stored refresh token. Null if never connected or the admin client isn't configured. */
 export async function getCogniterraOAuthCredentials(): Promise<{ refreshToken: string } | null> {
+  const instructor = await getCurrentInstructor();
+  if (!instructor) return null;
   const admin = createAdminClient();
   if (!admin) return null;
   const { data, error } = await admin
     .from("instructor_cogniterra_credentials")
     .select("refresh_token")
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID)
+    .eq("instructor_id", instructor.id)
     .maybeSingle();
   if (error || !data) return null;
   return { refreshToken: data.refresh_token as string };
@@ -101,7 +103,7 @@ export async function saveCogniterraOAuthCredentials(refreshToken: string): Prom
   if (!admin) throw new Error("Supabase admin client not configured - set SUPABASE_SERVICE_ROLE_KEY");
   const { error } = await admin.from("instructor_cogniterra_credentials").upsert(
     {
-      instructor_id: CURRENT_INSTRUCTOR_ID,
+      instructor_id: (await requireInstructor()).id,
       refresh_token: refreshToken,
       updated_at: new Date().toISOString(),
     },

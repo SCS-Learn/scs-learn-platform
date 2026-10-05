@@ -17,10 +17,14 @@ export default function StudentHeader({
         <Link href="/student" className="text-lg font-serif font-bold">
           SCS <span className="text-primary">Learn</span>
         </Link>
-        <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 rounded px-2 py-1">
+        <Link
+          href="/account"
+          title="Account"
+          className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 rounded px-2 py-1 hover:bg-gray-200 hover:text-black"
+        >
           <User size={12} />
           {learnerName ?? "Student"}
-        </span>
+        </Link>
       </div>
 
       <div className="flex items-center gap-4">

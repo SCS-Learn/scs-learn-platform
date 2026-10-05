@@ -44,9 +44,9 @@ export default function FaqSection() {
     <section id="faq" className={`scroll-mt-4 bg-black text-white ${sectionPadding}`}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-12 lg:px-16">
         <div className="mx-auto w-full max-w-5xl">
-          <h2 className={heading2}>Got questions?</h2>
+          <h2 className={`${heading2} reveal`}>Got questions?</h2>
 
-          <div className="mt-10 border-t border-white/15 lg:mt-12">
+          <div className="reveal mt-10 border-t border-white/15 lg:mt-12">
             {FAQS.map((faq, i) => {
               const isOpen = openIndex === i;
               return (
@@ -72,7 +72,7 @@ export default function FaqSection() {
                     </span>
                   </button>
                   {isOpen && (
-                    <p className="max-w-4xl pb-7 text-base leading-relaxed text-white/70 md:text-lg">{faq.answer}</p>
+                    <p className="max-w-4xl animate-fade-in pb-7 [animation-duration:300ms] text-base leading-relaxed text-white/70 md:text-lg">{faq.answer}</p>
                   )}
                 </div>
               );

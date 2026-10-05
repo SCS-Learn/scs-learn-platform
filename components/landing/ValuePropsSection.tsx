@@ -25,8 +25,8 @@ export default function ValuePropsSection() {
   return (
     <section className="bg-black text-white py-16 md:py-20">
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-10 px-4 sm:px-6 md:grid-cols-3 md:gap-10 md:px-12 lg:px-16">
-        {FEATURES.map(({ icon: Icon, title, description }) => (
-          <div key={title}>
+        {FEATURES.map(({ icon: Icon, title, description }, i) => (
+          <div key={title} className="reveal" style={{ "--reveal-delay": `${i * 120}ms` } as React.CSSProperties}>
             <div className="flex h-12 w-12 items-center justify-center bg-primary">
               <Icon strokeWidth={1.75} className="h-6 w-6 text-white" />
             </div>

@@ -26,7 +26,7 @@ export default function CourseCarousel({ courses }: { courses: CarouselCourse[] 
                   alt=""
                   fill
                   sizes="(min-width: 96rem) 22vw, (min-width: 64rem) 28vw, (min-width: 48rem) 38vw, (min-width: 40rem) 55vw, 78vw"
-                  className="-z-20 object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                  className="-z-20 object-cover transition-transform duration-[3s] ease-out group-hover:scale-110"
                 />
                 <div
                   aria-hidden

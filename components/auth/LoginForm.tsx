@@ -8,10 +8,13 @@ export default function LoginForm({
   next,
   initialError,
   devInstant = false,
+  showName = true,
 }: {
   next: string;
   initialError?: string;
   devInstant?: boolean;
+  /** Instructors' names come from their instructors row, so the instructor variant skips the field. */
+  showName?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<MagicLinkState, FormData>(sendMagicLink, {
     status: "idle",
@@ -43,21 +46,23 @@ export default function LoginForm({
           required
           autoComplete="email"
           placeholder="you@example.com"
-          className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          className="mt-1 w-full border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
         />
       </label>
-      <label className="block">
-        <span className="text-xs font-bold text-gray-600">
-          Name <span className="font-normal text-gray-400">(first sign-in only)</span>
-        </span>
-        <input
-          name="name"
-          type="text"
-          autoComplete="name"
-          placeholder="Ada Lovelace"
-          className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-        />
-      </label>
+      {showName && (
+        <label className="block">
+          <span className="text-xs font-bold text-gray-600">
+            Name <span className="font-normal text-gray-400">(first sign-in only)</span>
+          </span>
+          <input
+            name="name"
+            type="text"
+            autoComplete="name"
+            placeholder="Ada Lovelace"
+            className="mt-1 w-full border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          />
+        </label>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {devInstant && (
         <p className="text-xs text-gray-500">Dev mode: signs in as any email instantly, no email sent.</p>
@@ -65,7 +70,7 @@ export default function LoginForm({
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+        className="w-full bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
       >
         {pending ? (devInstant ? "Signing in…" : "Sending…") : devInstant ? "Sign in" : "Email me a sign-in link"}
       </button>

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -41,6 +43,7 @@ async function getCourseId(courseCode: string): Promise<string> {
 export async function getCogniterraCourseConfig(
   courseCode: string
 ): Promise<CogniterraCourseConfig | null> {
+  await requireCourseInstructor(courseCode);
   try {
     const supabase = await createClient();
     const courseId = await getCourseId(courseCode);
@@ -67,6 +70,7 @@ export async function saveCogniterraCourseConfig(
   courseCode: string,
   input: CogniterraSetupInput
 ): Promise<void> {
+  await requireCourseInstructor(courseCode);
   const courseId = await getCourseId(courseCode);
   const supabase = createServiceClient();
 
@@ -148,6 +152,7 @@ export async function wireExternalLessonsToCogniterra(
   courseCode: string,
   assignments: DriveAssignmentForMatch[]
 ): Promise<{ wired: number; skipped: number }> {
+  await requireCourseInstructor(courseCode);
   if (assignments.length === 0) {
     return { wired: 0, skipped: 0 };
   }
@@ -252,6 +257,7 @@ export async function wireExternalLessonsToCogniterra(
 export async function syncCogniterraAssignments(
   courseCode: string
 ): Promise<{ placed: number; warning: string | null }> {
+  await requireCourseInstructor(courseCode);
   const supabase = createServiceClient();
 
   const { data: course, error: courseError } = await supabase
@@ -393,6 +399,7 @@ export async function syncCogniterraAssignments(
 
 /** Returns env-based defaults for the import modal (demo / dev convenience). */
 export async function getCogniterraEnvDefaults(): Promise<Partial<CogniterraSetupInput>> {
+  await requireInstructor();
   return {
     cogniterraCourseId: process.env.COGNITERRA_COURSE_ID ?? "",
     consumerKey: process.env.COGNITERRA_CONSUMER_KEY ?? "",

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, GraduationCap } from "lucide-react";
+import { ArrowLeft, GraduationCap, LogOut, UserRound } from "lucide-react";
+import { signOut } from "@/lib/auth/actions";
 
 export default function InstructorHeader({
   backHref,
@@ -20,15 +21,27 @@ export default function InstructorHeader({
         </span>
       </div>
 
-      {backHref && (
-        <Link
-          href={backHref}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black"
-        >
-          <ArrowLeft size={15} />
-          {backLabel ?? "Back"}
+      <div className="flex items-center gap-4">
+        {backHref && (
+          <Link
+            href={backHref}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black"
+          >
+            <ArrowLeft size={15} />
+            {backLabel ?? "Back"}
+          </Link>
+        )}
+        <Link href="/account" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black">
+          <UserRound size={15} />
+          Account
         </Link>
-      )}
+        <form action={signOut}>
+          <button type="submit" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-black">
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </form>
+      </div>
     </header>
   );
 }

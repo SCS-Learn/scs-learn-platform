@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getDriveClient, getServiceAccountEmail, parseDriveFolderUrl } from "@/lib/google/drive-client";
@@ -180,12 +182,14 @@ async function extractAtomsInBatches(
 
 /** Null when only GOOGLE_API_KEY is configured - "Anyone with the link" is then the only option. */
 export async function getDriveShareEmail(): Promise<string | null> {
+  await requireInstructor();
   return getServiceAccountEmail();
 }
 
 export async function getDriveImportPreview(
   folderUrl: string
 ): Promise<{ unitCount: number; lessonCount: number; isFlat: boolean; fileCount: number }> {
+  await requireInstructor();
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const drive = await getDriveClient();
   try {
@@ -210,6 +214,7 @@ export async function getDriveFolderCoursePreview(folderUrl: string): Promise<{
   folderName: string;
   fileCount: number;
 }> {
+  await requireInstructor();
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const drive = await getDriveClient();
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
@@ -243,6 +248,7 @@ export async function runDriveImport(
   courseCode: string,
   folderUrl: string
 ): Promise<{ unitIds: string[]; lessonIds: string[] }> {
+  await requireCourseInstructor(courseCode);
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
 
