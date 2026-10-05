@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 import { getCogniterraAuthorizeUrl } from "@/lib/cogniterra/oauth-client";
 import { STATE_COOKIE, RETURN_TO_COOKIE, DEFAULT_RETURN_TO } from "@/lib/cogniterra/oauth-start-state";
 
@@ -13,6 +14,12 @@ const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:300
  * send them back to the same course editor instead of a generic dashboard.
  */
 export async function GET(request: NextRequest) {
+  // Stores credentials against the signed-in instructor, so only an
+  // instructor may start or finish the flow.
+  if (!(await getCurrentInstructor())) {
+    return NextResponse.redirect(new URL("/login?next=/instructor", SITE_URL()));
+  }
+
   const returnTo = new URL(request.url).searchParams.get("return_to") || DEFAULT_RETURN_TO;
 
   const state = randomUUID();

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { requireInstructor } from "@/lib/instructor/data/current-instructor";
 import type { CalendarEvent, CalendarEventScope, CalendarEventType } from "@/lib/instructor/mock-data";
 
 type CalendarEventRow = {
@@ -36,12 +36,13 @@ function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
 // never another instructor's course-specific events. Computed server-side
 // instead of the old client-side `.filter()`.
 export async function getVisibleCalendarEvents(): Promise<CalendarEvent[]> {
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
   const { data: ownCourses, error: coursesError } = await supabase
     .from("courses")
     .select("id")
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID);
+    .eq("instructor_id", instructorId);
   if (coursesError) throw new Error(coursesError.message);
 
   const ownCourseIds = (ownCourses ?? []).map((c) => c.id);
@@ -69,6 +70,7 @@ export async function addCalendarEvent(input: {
   scope: CalendarEventScope;
   courseCode?: string;
 }) {
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
   let courseId: string | null = null;
@@ -91,7 +93,7 @@ export async function addCalendarEvent(input: {
     description: input.description,
     scope: input.scope,
     course_id: courseId,
-    host_instructor_id: CURRENT_INSTRUCTOR_ID,
+    host_instructor_id: instructorId,
   });
   if (error) throw new Error(error.message);
 
@@ -100,6 +102,7 @@ export async function addCalendarEvent(input: {
 }
 
 export async function deleteCalendarEvent(id: string) {
+  await requireInstructor();
   const supabase = await createClient();
   const { error } = await supabase.from("calendar_events").delete().eq("id", id);
   if (error) throw new Error(error.message);

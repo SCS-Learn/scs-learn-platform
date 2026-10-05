@@ -1,62 +1,74 @@
-import { Camera, AtSign, Link2, Play } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 import Container from "./ui/Container";
+import YouTubeIcon from "./ui/YouTubeIcon";
+import { SCS_LEARN_YOUTUBE_URL } from "./links";
 
 const COLUMNS = [
   {
-    title: "Courses",
-    links: ["Catalog", "Schedule", "Instructors", "Certificates"],
+    title: "Learn",
+    links: [
+      { label: "Courses", href: "#courses" },
+      { label: "How it works", href: "#how-it-works" },
+      { label: "FAQ", href: "#faq" },
+      { label: "Lectures on YouTube", href: SCS_LEARN_YOUTUBE_URL },
+    ],
   },
   {
-    title: "Company",
-    links: ["About", "Careers", "Press", "Contact"],
+    title: "Students",
+    links: [
+      { label: "Sign in", href: "/login" },
+      { label: "My courses", href: "/student" },
+    ],
   },
   {
-    title: "Resources",
-    links: ["FAQ", "Help Center", "Blog", "Community"],
-  },
-  {
-    title: "Legal",
-    links: ["Terms", "Privacy", "Accessibility", "Cookie Policy"],
+    title: "Instructors",
+    links: [
+      { label: "Instructor sign in", href: "/login?next=/instructor" },
+      { label: "Instructor dashboard", href: "/instructor" },
+    ],
   },
 ];
 
-const SOCIALS = [AtSign, Link2, Play, Camera];
-
+// cmu.edu's footer: the official mark beside plain link columns.
 export default function Footer() {
   return (
     <footer className="bg-white text-black">
-      <Container className="py-16">
-        <div className="flex flex-col md:flex-row justify-between gap-12 mb-16">
-          <div className="flex flex-col gap-4 max-w-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-20 h-20 bg-primary text-white font-serif font-bold flex flex-col justify-center leading-[1.15] text-[0.5rem] px-1.5 shrink-0 whitespace-nowrap">
-                <span>Carnegie</span>
-                <span>Mellon</span>
-                <span>University</span>
-              </div>
-              <p className="text-primary font-semibold">SCS Learn</p>
-            </div>
-            <div className="flex gap-3">
-              {SOCIALS.map((Icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="w-8 h-8 rounded-full border border-steel-gray flex items-center justify-center hover:bg-gray-light"
-                >
-                  <Icon size={14} />
-                </a>
-              ))}
-            </div>
+      <Container className="py-14">
+        <div className="flex flex-col gap-12 md:flex-row md:justify-between">
+          <div className="flex flex-col gap-5">
+            <Image src="/brand/scs-learn-icon-red.png" alt="SCS Learn" width={88} height={88} className="h-22 w-22" />
+            <Image
+              src="/brand/scs-unitmark-color.png"
+              alt="Carnegie Mellon University School of Computer Science"
+              width={3833}
+              height={686}
+              className="h-10 w-auto"
+            />
+            <a
+              href={SCS_LEARN_YOUTUBE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="SCS Learn on YouTube"
+              className="flex h-9 w-9 items-center justify-center border border-steel-gray text-black transition-colors hover:border-primary hover:bg-primary hover:text-white"
+            >
+              <YouTubeIcon className="h-4 w-4" />
+            </a>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 flex-1">
+          <div className="grid flex-1 grid-cols-2 gap-8 sm:grid-cols-3 md:max-w-xl">
             {COLUMNS.map((col) => (
               <div key={col.title} className="flex flex-col gap-3">
-                <h3 className="font-semibold text-sm">{col.title}</h3>
+                <h3 className="font-sans text-sm font-bold">{col.title}</h3>
                 {col.links.map((link) => (
-                  <a key={link} href="#" className="text-sm text-iron-gray hover:text-black">
-                    {link}
-                  </a>
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    {...(link.href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="link-swipe self-start text-sm text-iron-gray hover:text-black"
+                  >
+                    {link.label}
+                  </Link>
                 ))}
               </div>
             ))}
@@ -64,7 +76,7 @@ export default function Footer() {
         </div>
       </Container>
 
-      <div className="bg-white text-black text-xs text-center border-t border-steel-gray px-6 py-4">
+      <div className="border-t border-steel-gray px-6 py-4 text-center text-xs text-iron-gray">
         © {new Date().getFullYear()} Carnegie Mellon University. All rights reserved.
       </div>
     </footer>

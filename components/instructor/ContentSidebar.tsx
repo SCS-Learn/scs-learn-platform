@@ -50,7 +50,7 @@ function AddUnitModal({
             if (e.key === "Escape") onClose();
           }}
           placeholder="Untitled unit"
-          className="w-full text-sm border border-steel-gray rounded px-3 py-2 mb-4 outline-none focus:border-iron-gray"
+          className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 mb-4 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         />
         <div className="flex justify-end gap-2">
           <button
@@ -63,7 +63,7 @@ function AddUnitModal({
           <button
             type="button"
             onClick={submit}
-            className="text-sm font-bold text-black border border-black px-4 py-2 rounded hover:bg-gray-50"
+            className="text-sm font-semibold rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
           >
             Create unit
           </button>
@@ -260,18 +260,18 @@ export default function ContentSidebar({
   };
 
   return (
-    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border border-gray-300">
+    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden border-r border-gray-200">
       <div className="px-3 py-4 border-b border-gray-100 flex flex-col text-left">
         <Link
           href={`/instructor/${courseCode}`}
-          className="inline-flex items-center justify-center gap-1.5 w-full text-base font-bold bg-white text-black border border-black px-4 py-3 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 self-start pl-1.5 text-xs font-semibold text-gray-500 hover:text-black"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={14} />
           Course dashboard
         </Link>
-        <div className="mt-6 w-full min-w-0 pl-1.5 flex items-start justify-between gap-2">
+        <div className="mt-3 w-full min-w-0 pl-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-lg font-bold truncate">{courseTitle}</p>
+            <p className="font-serif text-lg font-semibold truncate">{courseTitle}</p>
             <p className="text-sm text-gray-400 mt-0.5">
               {courseCode}
               <span className="mx-1.5 text-gray-300">·</span>
@@ -309,7 +309,7 @@ export default function ContentSidebar({
                 onDrop={(e) => handleUnitDrop(e, unit.id)}
                 onDragEnd={handleUnitDragEnd}
                 className={`group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-50 border-t-2 cursor-pointer ${
-                  isUnitDragOver ? "border-black" : "border-transparent"
+                  isUnitDragOver ? "border-primary" : "border-transparent"
                 } ${draggingUnitId === unit.id ? "opacity-40" : ""}`}
               >
                 <span className="shrink-0 text-gray-400" aria-hidden="true">
@@ -327,7 +327,7 @@ export default function ContentSidebar({
                         if (e.key === "Enter") commitEditingUnit();
                         if (e.key === "Escape") cancelEditingUnit();
                       }}
-                      className="w-full text-sm font-bold leading-tight bg-white border border-black px-1 -mx-1 outline-none"
+                      className="w-full text-sm font-bold leading-tight bg-white border border-primary rounded px-1 -mx-1 outline-none"
                     />
                   ) : (
                     <p className="text-sm font-bold leading-tight truncate">
@@ -344,7 +344,7 @@ export default function ContentSidebar({
                             if (e.key === "Enter") commitEditingUnitNumber();
                             if (e.key === "Escape") cancelEditingUnitNumber();
                           }}
-                          className="w-12 text-sm font-bold bg-white border border-black px-1 outline-none"
+                          className="w-12 text-sm font-bold bg-white border border-primary rounded px-1 outline-none"
                         />
                       ) : (
                         <span
@@ -418,15 +418,17 @@ export default function ContentSidebar({
                           setDragOverLessonId(null);
                         }}
                         className={`group flex items-center gap-1.5 pl-8 pr-3 py-2.5 cursor-pointer border-t-2 ${
-                          isDragOver ? "border-black" : "border-transparent"
+                          isDragOver ? "border-primary" : "border-transparent"
                         } ${
-                          isSelected ? "bg-steel-gray" : "hover:bg-gray-50"
+                          isSelected
+                            ? "bg-primary/[0.07] shadow-[inset_3px_0_0_var(--color-primary)]"
+                            : "hover:bg-gray-50"
                         } ${draggingLessonId === lesson.id ? "opacity-40" : ""}`}
                         onClick={() => onSelectLesson(lesson.id)}
                       >
                         <p
                           className={`text-sm flex-1 min-w-0 truncate text-left ${
-                            isSelected ? "text-black font-bold" : "text-gray-700"
+                            isSelected ? "text-primary font-semibold" : "text-gray-700"
                           }`}
                         >
                           {lesson.title}
@@ -467,7 +469,7 @@ export default function ContentSidebar({
           <button
             type="button"
             onClick={onPublishAll}
-            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50"
+            className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50"
           >
             <UploadCloud size={15} />
             Publish all ({unpublishedCount} unpublished)
@@ -476,14 +478,14 @@ export default function ContentSidebar({
         <button
           type="button"
           onClick={() => setIsAddUnitOpen(true)}
-          className="w-full text-center text-base font-bold text-black border border-black px-4 py-3 hover:bg-gray-50"
+          className="w-full text-center text-sm font-semibold px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50"
         >
           + Add unit
         </button>
         <button
           type="button"
           onClick={() => setIsDriveImportOpen(true)}
-          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50"
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50"
         >
           <FolderInput size={15} />
           Import from Google Drive
@@ -493,7 +495,7 @@ export default function ContentSidebar({
           onClick={handleSyncCogniterra}
           disabled={isSyncingCogniterra}
           title="Places any Cogniterra assignment that isn't wired to a lesson yet into the right unit by topic — safe to re-run any time, already-wired assignments are skipped."
-          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-black border border-black px-4 py-2.5 hover:bg-gray-50 disabled:opacity-50"
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
         >
           <RefreshCw size={15} className={isSyncingCogniterra ? "animate-spin" : ""} />
           {isSyncingCogniterra ? "Syncing Cogniterra…" : "Sync Cogniterra assignments"}

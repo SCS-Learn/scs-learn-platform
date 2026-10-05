@@ -1,5 +1,5 @@
-/** Where a learner lands after signing in when no ?next= was given. */
-export const DEFAULT_AFTER_LOGIN = "/student";
+/** Where someone lands after signing in when no ?next= was given: /dashboard routes them to their role's home. */
+export const DEFAULT_AFTER_LOGIN = "/dashboard";
 
 /**
  * ?next= arrives from the URL, so it is attacker-controlled. Only same-origin

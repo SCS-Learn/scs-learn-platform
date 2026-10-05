@@ -1,68 +1,57 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, CircleHelp, Layers } from "lucide-react";
+import { BookOpen, CircleHelp, Layers } from "lucide-react";
 import type { StudentCourseSummary } from "@/lib/student/types";
+import CourseBanner from "@/components/app/CourseBanner";
+import { card, cardHover } from "@/components/app/ui";
 
 export default function StudentCourseCard({ course }: { course: StudentCourseSummary }) {
+  const started = course.percentComplete > 0;
   return (
     <Link
       href={`/student/${course.code}`}
       aria-label={`Open ${course.title}`}
-      className="border border-gray-200 bg-white p-5 flex flex-col gap-4 hover:border-black hover:shadow-sm transition"
+      className={`group flex flex-col overflow-hidden ${card} ${cardHover}`}
     >
-      <div>
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <p className="text-xs font-bold text-primary tracking-wide">{course.code}</p>
+      <CourseBanner code={course.code} className="h-28" />
+      <div className="flex flex-1 flex-col gap-3 p-5">
+        <div>
           {(course.department || course.track) && (
-            <p className="text-[11px] text-gray-400 text-right truncate max-w-[50%]">
-              {[course.department, course.track].filter(Boolean).join(" · ")}
-            </p>
+            <p className="mb-1 truncate text-xs text-gray-500">{[course.department, course.track].filter(Boolean).join(" · ")}</p>
           )}
+          <h3 className="font-serif text-lg font-semibold leading-snug group-hover:text-primary">{course.title}</h3>
         </div>
-        <h2 className="text-lg font-serif font-bold leading-snug">{course.title}</h2>
-      </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500">
-        <span className="inline-flex items-center gap-1.5">
-          <Layers size={13} className="text-gray-400" />
-          {course.unitCount} {course.unitCount === 1 ? "unit" : "units"}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <BookOpen size={13} className="text-gray-400" />
-          {course.contentLessonCount}{" "}
-          {course.contentLessonCount === 1 ? "content lesson" : "content lessons"}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <CircleHelp size={13} className="text-gray-400" />
-          {course.quizLessonCount} {course.quizLessonCount === 1 ? "quiz" : "quizzes"}
-        </span>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-3 mb-1.5">
-          <p className="text-xs font-bold text-gray-600">
-            {course.completedLessonCount} of {course.totalLessonCount} lessons complete
-          </p>
-          <p className="text-xs font-bold text-green-600">{course.percentComplete}%</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1.5">
+            <Layers size={13} className="text-gray-400" />
+            {course.unitCount} {course.unitCount === 1 ? "unit" : "units"}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <BookOpen size={13} className="text-gray-400" />
+            {course.contentLessonCount} {course.contentLessonCount === 1 ? "lesson" : "lessons"}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CircleHelp size={13} className="text-gray-400" />
+            {course.quizLessonCount} {course.quizLessonCount === 1 ? "quiz" : "quizzes"}
+          </span>
         </div>
-        <div
-          className="h-2 rounded-full bg-gray-100 overflow-hidden"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={course.percentComplete}
-          aria-label={`${course.percentComplete}% complete`}
-        >
-          <div
-            className="h-full rounded-full bg-green-500 transition-[width]"
-            style={{ width: `${course.percentComplete}%` }}
-          />
+
+        <div className="mt-auto pt-2">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="font-medium text-gray-600">
+              {course.totalLessonCount === 0
+                ? "No lessons published yet"
+                : started
+                  ? `${course.completedLessonCount} of ${course.totalLessonCount} complete`
+                  : "Not started"}
+            </span>
+            <span className="font-bold text-green-700">{course.percentComplete}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full rounded-full bg-green-600 transition-[width]" style={{ width: `${course.percentComplete}%` }} />
+          </div>
         </div>
       </div>
-
-      <span className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-primary text-white py-2.5">
-        Go to course
-        <ArrowRight size={14} />
-      </span>
     </Link>
   );
 }

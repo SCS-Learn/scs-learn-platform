@@ -32,16 +32,16 @@ export default function AnnouncementsPanel({
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0 px-2 py-4 lg:px-4 lg:py-6">
+    <div className="h-full flex flex-col min-h-0 p-5">
       <div className="flex items-center justify-between mb-5 shrink-0">
-        <h3 className="text-lg font-bold">Announcements</h3>
+        <h3 className="font-serif text-lg font-semibold">Announcements</h3>
       </div>
 
       <div className="mb-6 shrink-0">
         <select
           value={targetCourseCode}
           onChange={(e) => setTargetCourseCode(e.target.value)}
-          className="w-full text-sm font-bold text-gray-600 border border-gray-200 px-3 py-2.5 mb-3 bg-white"
+          className="w-full rounded-lg text-sm font-semibold text-gray-700 border border-gray-300 px-3 py-2.5 mb-3 bg-white"
         >
           {courses.map((course) => (
             <option key={course.code} value={course.code}>
@@ -54,13 +54,13 @@ export default function AnnouncementsPanel({
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Post an update to your students…"
           rows={3}
-          className="w-full text-base border border-gray-200 px-3 py-3 resize-none focus:outline-none focus:border-black"
+          className="w-full rounded-lg text-sm border border-gray-300 px-3 py-2.5 resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         />
         <button
           type="button"
           onClick={post}
           disabled={!draft.trim() || !targetCourseCode || isPending}
-          className="mt-3 w-full flex items-center justify-center gap-2 text-sm font-bold bg-primary text-white border border-primary py-2.5 hover:opacity-90 disabled:opacity-40"
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg text-sm font-semibold bg-primary text-white py-2.5 transition-colors hover:bg-primary-dark disabled:opacity-40"
         >
           <Send size={15} />
           Post announcement
@@ -70,7 +70,7 @@ export default function AnnouncementsPanel({
       <div className={`flex flex-col gap-5 flex-1 min-h-0 overflow-y-auto pr-1 ${isPending ? "opacity-60" : ""}`}>
         {announcements.map((announcement) => (
           <div key={announcement.id} className="group flex gap-3">
-            <div className="w-9 h-9 bg-gray-100 text-xs font-bold text-gray-500 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-primary/10 text-xs font-bold text-primary flex items-center justify-center shrink-0">
               {announcement.authorInitials}
             </div>
             <div className="flex-1 min-w-0">

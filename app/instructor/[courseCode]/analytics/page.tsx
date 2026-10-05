@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import AnalyticsClient from "@/components/instructor/AnalyticsClient";
 import { getCourseWithContent } from "@/lib/instructor/data/courses";
+import AppHeader from "@/components/app/AppHeader";
 
 export default async function CourseAnalyticsPage({
   params,
@@ -14,5 +15,10 @@ export default async function CourseAnalyticsPage({
     notFound();
   }
 
-  return <AnalyticsClient course={course} />;
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <AppHeader mode="teaching" backHref={`/instructor/${courseCode}`} backLabel="Course dashboard" />
+      <AnalyticsClient course={course} />
+    </main>
+  );
 }

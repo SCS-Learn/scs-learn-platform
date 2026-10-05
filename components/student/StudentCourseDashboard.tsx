@@ -11,7 +11,10 @@ import {
   Play,
   Trophy,
 } from "lucide-react";
-import StudentHeader from "@/components/student/StudentHeader";
+import AppHeader from "@/components/app/AppHeader";
+import CourseBanner from "@/components/app/CourseBanner";
+import ProgressRing from "@/components/app/ProgressRing";
+import { btnPrimary, card } from "@/components/app/ui";
 import type { StudentCourse, StudentLesson } from "@/lib/student/types";
 import type { Announcement, CalendarEvent } from "@/lib/instructor/mock-data";
 import { parseISODate, TYPE_LABEL, TYPE_STYLE } from "@/lib/instructor/calendar";
@@ -80,8 +83,8 @@ function ProgressBar({ percent, label }: { percent: number; label: string }) {
 
 function Panel({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <section className="border border-gray-200 bg-white p-5">
-      <h2 className="flex items-center gap-2 text-sm font-bold mb-4">
+    <section className={`${card} p-5`}>
+      <h2 className="flex items-center gap-2 font-serif text-lg font-semibold mb-4">
         {icon}
         {title}
       </h2>
@@ -92,12 +95,10 @@ function Panel({ icon, title, children }: { icon: React.ReactNode; title: string
 
 export default function StudentCourseDashboard({
   course,
-  learnerName,
   announcements,
   events,
 }: {
   course: StudentCourse;
-  learnerName: string;
   announcements: Announcement[];
   events: CalendarEvent[];
 }) {
@@ -109,47 +110,49 @@ export default function StudentCourseDashboard({
 
   return (
     <main className="min-h-screen bg-gray-50 text-black">
-      <StudentHeader backHref="/student" backLabel="My courses" learnerName={learnerName} />
+      <AppHeader mode="learning" backHref="/student" backLabel="My learning" />
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <section className="border border-gray-200 bg-white p-6 mb-6 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-          <div className="min-w-0">
+      <CourseBanner code={course.code} showCode={false} className="h-36 md:h-44" />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
+        <section className={`${card} relative -mt-16 p-6 mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between`}>
+          <div className="min-w-0 flex items-center gap-5">
+            <ProgressRing percent={percentComplete} size={72} stroke={7} className="hidden sm:inline-flex" />
+            <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
               <p className="text-xs font-bold text-primary tracking-wide">{course.code}</p>
               {(course.department || course.track) && (
                 <p className="text-xs text-gray-400">{[course.department, course.track].filter(Boolean).join(" · ")}</p>
               )}
             </div>
-            <h1 className="text-3xl font-serif font-bold mb-4">{course.title}</h1>
-            <div className="max-w-md">
-              <div className="flex items-center justify-between gap-3 mb-1.5">
-                <p className="text-xs font-bold text-gray-600">
-                  {completedCount} of {lessons.length} lessons complete
-                </p>
-                <p className="text-xs font-bold text-green-600">{percentComplete}%</p>
-              </div>
-              <ProgressBar percent={percentComplete} label={`${percentComplete}% complete`} />
+            <h1 className="text-3xl font-serif font-semibold leading-tight">{course.title}</h1>
+            <p className="mt-1.5 text-sm text-gray-600">
+              {completedCount} of {lessons.length} lessons complete
+              <span className="sm:hidden"> · {percentComplete}%</span>
+            </p>
             </div>
           </div>
 
           {lessons.length > 0 && (
             <Link
               href={lessonHref(course.code, (resumeLesson ?? lessons[0]).id)}
-              className="shrink-0 inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-primary text-white px-5 py-3 hover:bg-primary/90 transition"
+              className={`${btnPrimary} shrink-0 max-w-full md:max-w-sm px-5 py-3`}
             >
               <Play size={14} />
-              {resumeLesson
-                ? completedCount > 0
-                  ? `Resume: ${resumeLesson.code} ${resumeLesson.title}`
-                  : "Start course"
-                : "Review course"}
+              <span className="truncate">
+                {resumeLesson
+                  ? completedCount > 0
+                    ? `Resume: ${resumeLesson.code} ${resumeLesson.title}`
+                    : "Start course"
+                  : "Review course"}
+              </span>
             </Link>
           )}
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 flex flex-col gap-4">
-            <h2 className="text-xs font-bold text-gray-500 tracking-wide">COURSE CONTENT</h2>
+            <h2 className="font-serif text-xl font-semibold">Course content</h2>
             {course.units.map((unit) => {
               const done = unit.lessons.filter((l) => l.completedAt != null).length;
               const unitPercent = Math.round((done / unit.lessons.length) * 100);
@@ -157,12 +160,19 @@ export default function StudentCourseDashboard({
               // course (02-180 has 150+ lessons) is otherwise a wall of links.
               const isCurrentUnit = resumeLesson ? unit.lessons.some((l) => l.id === resumeLesson.id) : false;
               return (
-                <details key={unit.id} open={isCurrentUnit} className="group border border-gray-200 bg-white">
-                  <summary className="list-none cursor-pointer px-5 pt-4 pb-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <p className="text-sm font-bold">
-                        <span className="text-gray-400">{unit.code}</span> {unit.title}
-                      </p>
+                <details key={unit.id} open={isCurrentUnit} className={`group overflow-hidden ${card}`}>
+                  <summary className="list-none cursor-pointer px-5 pt-4 pb-3.5 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                    <div className="flex items-start justify-between gap-3 mb-2.5">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            unitPercent === 100 ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {unitPercent === 100 ? <CheckCircle2 size={15} /> : unit.code.replace(/^Unit\s*/i, "")}
+                        </span>
+                        <p className="text-[15px] font-semibold leading-snug">{unit.title}</p>
+                      </div>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-bold text-gray-500">
                           {done}/{unit.lessons.length}
@@ -177,7 +187,7 @@ export default function StudentCourseDashboard({
                       <li key={lesson.id}>
                         <Link
                           href={lessonHref(course.code, lesson.id)}
-                          className="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                          className="flex items-center gap-3 px-5 py-2.5 pl-[3.75rem] text-sm text-gray-700 hover:bg-gray-50 hover:text-black"
                         >
                           {lesson.completedAt != null ? (
                             <CheckCircle2 size={15} className="text-green-500 shrink-0" aria-label="Completed" />

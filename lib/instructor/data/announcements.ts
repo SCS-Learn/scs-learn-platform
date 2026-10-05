@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import type { Announcement } from "@/lib/instructor/mock-data";
 
@@ -26,12 +26,13 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
 }
 
 export async function getAnnouncements(): Promise<Announcement[]> {
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
   const { data: ownCourses, error: coursesError } = await supabase
     .from("courses")
     .select("id")
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID);
+    .eq("instructor_id", instructorId);
   if (coursesError) throw new Error(coursesError.message);
 
   const ownCourseIds = (ownCourses ?? []).map((c) => c.id);
@@ -48,6 +49,7 @@ export async function getAnnouncements(): Promise<Announcement[]> {
 }
 
 export async function postAnnouncement(input: { courseCode: string; message: string }) {
+  const { id: instructorId } = await requireCourseInstructor(input.courseCode);
   const supabase = await createClient();
 
   const { data: course, error: courseError } = await supabase
@@ -59,7 +61,7 @@ export async function postAnnouncement(input: { courseCode: string; message: str
 
   const { error } = await supabase.from("announcements").insert({
     course_id: course.id,
-    instructor_id: CURRENT_INSTRUCTOR_ID,
+    instructor_id: instructorId,
     message: input.message,
   });
   if (error) throw new Error(error.message);
@@ -69,6 +71,7 @@ export async function postAnnouncement(input: { courseCode: string; message: str
 }
 
 export async function deleteAnnouncement(id: string) {
+  await requireInstructor();
   const supabase = await createClient();
   const { error } = await supabase.from("announcements").delete().eq("id", id);
   if (error) throw new Error(error.message);

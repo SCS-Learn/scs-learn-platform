@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Unit, LessonItem, LessonType } from "@/lib/instructor/mock-data";
@@ -80,6 +82,7 @@ async function renumberLessonsInUnit(supabase: SupabaseClient, unitId: string): 
 }
 
 export async function addUnit(courseCode: string, title: string): Promise<Unit> {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
 
   const { data: course, error: courseError } = await supabase
@@ -118,6 +121,7 @@ export async function addUnitFromImport(
   title: string,
   sourceDriveFolderId: string
 ): Promise<Unit> {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
 
   const { data: course, error: courseError } = await supabase
@@ -152,6 +156,7 @@ export async function addUnitFromImport(
 }
 
 export async function renameUnit(courseCode: string, unitId: string, title: string) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { error } = await supabase.from("units").update({ title }).eq("id", unitId);
   if (error) throw new Error(error.message);
@@ -161,6 +166,7 @@ export async function renameUnit(courseCode: string, unitId: string, title: stri
 }
 
 export async function deleteUnit(courseCode: string, unitId: string) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { data: unit, error: unitError } = await supabase
     .from("units")
@@ -179,6 +185,7 @@ export async function deleteUnit(courseCode: string, unitId: string) {
 }
 
 export async function reorderUnits(courseCode: string, orderedUnitIds: string[]) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const results = await Promise.all(
     orderedUnitIds.map((id, index) =>
@@ -210,6 +217,7 @@ export async function reorderUnits(courseCode: string, orderedUnitIds: string[])
 }
 
 export async function addLesson(courseCode: string, unitId: string): Promise<LessonItem> {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
 
   const { data: unit, error: unitError } = await supabase
@@ -277,6 +285,7 @@ export async function addLessonFromImport(
     category?: "assignment" | "homework" | null;
   }
 ): Promise<LessonItem> {
+  await requireInstructor();
   const supabase = await createClient();
 
   const { data: unit, error: unitError } = await supabase
@@ -326,6 +335,7 @@ export async function addLessonFromImport(
 }
 
 export async function deleteLesson(courseCode: string, lessonId: string) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
@@ -348,6 +358,7 @@ export async function reorderLessons(
   unitId: string,
   orderedLessonIds: string[]
 ) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { data: unit, error: unitError } = await supabase
     .from("units")
@@ -386,6 +397,7 @@ export async function moveLessonToUnit(
   toUnitId: string,
   targetLessonId: string | null
 ) {
+  await requireCourseInstructor(courseCode);
   if (fromUnitId === toUnitId) return;
   const supabase = await createClient();
 
@@ -437,6 +449,7 @@ export async function updateQuizCompletionThreshold(
   lessonId: string,
   threshold: number
 ) {
+  await requireCourseInstructor(courseCode);
   if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100) {
     throw new Error("Completion threshold must be an integer from 0 to 100.");
   }
@@ -461,6 +474,7 @@ export async function updateShowReferenceAnswers(
   lessonId: string,
   show: boolean
 ) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { error } = await supabase
     .from("lessons")
@@ -479,6 +493,7 @@ export async function updateLessonContent(
   lessonId: string,
   patch: { title: string; contentHtml: string }
 ) {
+  await requireInstructor();
   const supabase = await createClient();
   const { error } = await supabase
     .from("lessons")
@@ -499,6 +514,7 @@ export async function updateLessonType(
   lessonId: string,
   type: LessonType
 ) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { error } = await supabase
     .from("lessons")
@@ -511,6 +527,7 @@ export async function updateLessonType(
 }
 
 export async function publishLesson(courseCode: string, lessonId: string) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { error } = await supabase
     .from("lessons")
@@ -523,6 +540,7 @@ export async function publishLesson(courseCode: string, lessonId: string) {
 
 /** Publishes every not-yet-published lesson in the course in one go. */
 export async function publishAllLessons(courseCode: string) {
+  await requireCourseInstructor(courseCode);
   const supabase = await createClient();
 
   const { data: course, error: courseError } = await supabase

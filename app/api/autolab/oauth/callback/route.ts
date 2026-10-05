@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { completeAuthorizationCode } from "@/lib/autolab/client";
 import { platformBaseUrl } from "@/lib/lti/config";
+import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 // account; after that the stored refresh token carries the integration.
 // Full walkthrough in docs/lti.md.
 export async function GET(request: Request) {
+  // The stored refresh token acts for the whole platform - instructors only.
+  if (!(await getCurrentInstructor())) {
+    return NextResponse.json({ error: "Instructor sign-in required" }, { status: 401 });
+  }
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const oauthError = url.searchParams.get("error");

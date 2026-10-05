@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENT_INSTRUCTOR_ID } from "@/lib/instructor/data/current-instructor";
+import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import type {
   InstructorCourse,
@@ -184,11 +184,12 @@ const COURSE_WITH_CONTENT_SELECT =
   "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, points, needs_review)))))";
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
     .select(COURSE_WITH_CONTENT_SELECT)
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID)
+    .eq("instructor_id", instructorId)
     .order("code");
   if (error) throw new Error(error.message);
 
@@ -196,12 +197,13 @@ export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
 }
 
 export async function getCourseWithContent(courseCode: string): Promise<InstructorCourse | null> {
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
     .select(COURSE_WITH_CONTENT_SELECT)
     .eq("code", courseCode)
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID)
+    .eq("instructor_id", instructorId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
@@ -248,6 +250,7 @@ export type CreateCourseInput = {
 };
 
 export async function createCourse(input: CreateCourseInput): Promise<{ code: string }> {
+  const { id: instructorId } = await requireInstructor();
   const code = input.code.trim();
   const title = input.title.trim();
 
@@ -269,7 +272,7 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
     title,
     department: "",
     track: "",
-    instructor_id: CURRENT_INSTRUCTOR_ID,
+    instructor_id: instructorId,
     student_count: 0,
   });
   if (error) throw new Error(error.message);
@@ -279,12 +282,13 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
 }
 
 export async function deleteCourse(courseCode: string) {
+  const { id: instructorId } = await requireCourseInstructor(courseCode);
   const supabase = await createClient();
   const { error } = await supabase
     .from("courses")
     .delete()
     .eq("code", courseCode)
-    .eq("instructor_id", CURRENT_INSTRUCTOR_ID);
+    .eq("instructor_id", instructorId);
   if (error) throw new Error(error.message);
 
   revalidatePath("/instructor");

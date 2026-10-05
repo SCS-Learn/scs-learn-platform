@@ -1,5 +1,7 @@
 "use server";
 
+import { requireInstructor } from "@/lib/instructor/data/current-instructor";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type LessonBlockKind = "slide_file" | "video" | "question_group" | "course_notes";
@@ -84,6 +86,7 @@ function toLessonBlock(row: {
 }
 
 export async function addLessonBlock(lessonId: string, patch: LessonBlockPatch): Promise<LessonBlock> {
+  await requireInstructor();
   const supabase = await createClient();
 
   const insert = {
@@ -111,6 +114,7 @@ export async function addLessonBlock(lessonId: string, patch: LessonBlockPatch):
 }
 
 export async function getLessonBlocks(lessonId: string): Promise<LessonBlock[]> {
+  await requireInstructor();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("lesson_blocks")

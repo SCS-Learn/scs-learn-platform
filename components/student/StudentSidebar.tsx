@@ -27,27 +27,36 @@ export default function StudentSidebar({
   selectedLessonId: string;
   onSelectLesson: (lessonId: string) => void;
 }) {
+  const allLessons = units.flatMap((u) => u.lessons);
+  const percentComplete =
+    allLessons.length === 0
+      ? 0
+      : Math.round((allLessons.filter((l) => l.completedAt != null).length / allLessons.length) * 100);
+
   return (
     <aside className="w-80 shrink-0 h-full min-h-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
-      <div className="px-6 py-6 border-b border-gray-100 flex flex-col gap-5">
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
         <Link
           href={`/student/${courseCode}`}
-          className="inline-flex items-center justify-center gap-2 w-full text-sm font-bold bg-white text-black border border-black px-5 py-3 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-black"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={14} />
           Course home
         </Link>
-
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-black tracking-wide mb-1">{courseCode}</p>
-          <p className="text-base font-bold truncate leading-snug">{courseTitle}</p>
+        <p className="mt-3 text-xs font-bold text-primary">{courseCode}</p>
+        <p className="font-serif text-lg font-semibold leading-snug line-clamp-2">{courseTitle}</p>
+        <div className="mt-3 flex items-center gap-2">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full rounded-full bg-green-600 transition-[width]" style={{ width: `${percentComplete}%` }} />
+          </div>
+          <span className="text-xs font-bold tabular-nums text-gray-600">{percentComplete}%</span>
         </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto py-4">
         {units.map((unit) => (
           <div key={unit.id} className="mb-5">
-            <p className="px-6 py-2.5 text-[11px] font-bold text-gray-400 uppercase tracking-wide">
+            <p className="px-5 py-2 text-[11px] font-bold text-gray-400 uppercase tracking-wide">
               {unit.code} &middot; {unit.title}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -65,8 +74,11 @@ export default function StudentSidebar({
                     key={lesson.id}
                     type="button"
                     onClick={() => onSelectLesson(lesson.id)}
-                    className={`flex items-center gap-3 mx-3 px-4 py-3 text-sm text-left ${
-                      isSelected ? "bg-gray-100 text-black font-bold" : "text-gray-700 hover:bg-gray-50"
+                    aria-current={isSelected ? "page" : undefined}
+                    className={`flex items-center gap-3 mx-2 rounded-lg px-3 py-2.5 text-sm text-left transition-colors ${
+                      isSelected
+                        ? "bg-primary/[0.07] text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]"
+                        : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
                     <LessonIcon type={lesson.type} />

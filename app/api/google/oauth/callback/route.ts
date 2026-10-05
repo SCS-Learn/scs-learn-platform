@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 import { createOAuth2Client, saveOAuthCredentials, GOOGLE_OAUTH_SCOPES } from "@/lib/google/oauth-client";
 import { STATE_COOKIE, RETURN_TO_COOKIE, DEFAULT_RETURN_TO } from "@/lib/google/oauth-start-state";
 
@@ -11,6 +12,12 @@ const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:300
  * (see lib/google/oauth-client.ts), so there's nothing else to keep in sync.
  */
 export async function GET(request: NextRequest) {
+  // Stores credentials against the signed-in instructor, so only an
+  // instructor may start or finish the flow.
+  if (!(await getCurrentInstructor())) {
+    return NextResponse.redirect(new URL("/login?next=/instructor", SITE_URL()));
+  }
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
