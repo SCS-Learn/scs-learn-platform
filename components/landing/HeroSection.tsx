@@ -1,5 +1,8 @@
-import EmailSignupForm from "./EmailSignupForm";
+import Image from "next/image";
+import Link from "next/link";
 import CourseCarousel, { type CarouselCourse } from "./CourseCarousel";
+import CmuLink from "./ui/CmuLink";
+import { heading1, heading2 } from "./ui/typography";
 
 const COURSES: CarouselCourse[] = [
   {
@@ -54,30 +57,47 @@ const COURSES: CarouselCourse[] = [
 
 export default function HeroSection() {
   return (
-    <section className="flex flex-col bg-white text-black font-text pt-10 pb-16 lg:h-[calc(100svh-5rem)] lg:min-h-[36rem] lg:pt-6 lg:pb-6 short:pt-3">
-      <div className="mx-auto w-full max-w-[1400px] px-6 md:px-12 lg:flex lg:flex-1 lg:flex-col lg:justify-center lg:px-16">
-        <div className="flex flex-col items-center text-center">
-          <h1 className="font-display font-black leading-[0.95] tracking-[-0.02em] text-[2.25rem] sm:text-[3.25rem] lg:text-[4rem] xl:text-[4.625rem] short:text-[3.25rem]">
-            <span className="block">
-              Take real <span className="text-primary">Carnegie</span>
-            </span>
-            <span className="block">
-              <span className="whitespace-nowrap text-primary">Mellon University</span> courses.
-            </span>
-          </h1>
+    <>
+      {/* cmu.edu's hero: full-bleed photo under a dark scrim, white serif headline, red-arrow CTA. */}
+      <section className="relative isolate flex min-h-[32rem] items-end bg-black text-white lg:min-h-[38rem]">
+        <Image
+          src="/hero-background.webp"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="-z-20 object-cover"
+        />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/60 to-black/20" />
 
-          <p className="mt-4 max-w-2xl text-pretty text-base leading-[1.55] text-iron-gray md:text-lg">
-            Real courses from the Griffin School of Computer Science, taught live by the
-            professors who built them, with an AI tutor trained on the material.
+        <div className="mx-auto w-full max-w-7xl px-4 pb-14 pt-24 sm:px-6 md:px-12 lg:px-16 lg:pb-20">
+          <h1 className={`${heading1} max-w-3xl`}>Take real Carnegie Mellon courses.</h1>
+          <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-white/85">
+            Real courses from the Griffin School of Computer Science, taught live by the professors who built them,
+            with an AI tutor trained on the material.
           </p>
-
-          <EmailSignupForm buttonLabel="Claim my spot" className="mt-6" />
+          <div className="mt-8 flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-8">
+            <CmuLink href="/student" tone="dark">
+              Start learning, free
+            </CmuLink>
+            <Link href="/instructor" className="text-sm font-semibold underline underline-offset-4 hover:text-white/80">
+              I teach a course
+            </Link>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-12 lg:mt-10 lg:h-[calc(100svh-500px)] lg:min-h-0 short:mt-8">
-        <CourseCarousel courses={COURSES} />
-      </div>
-    </section>
+      <section id="courses" className="scroll-mt-4 bg-white text-black pt-14 pb-16 md:pt-20 md:pb-20">
+        <div className="mx-auto mb-8 flex w-full max-w-7xl flex-col gap-4 px-4 sm:px-6 md:flex-row md:items-end md:justify-between md:px-12 lg:px-16">
+          <h2 className={heading2}>Courses taught by the faculty who built them</h2>
+          <Link href="/student" className="shrink-0 text-sm font-semibold underline underline-offset-4 hover:text-primary">
+            Sign in to start a course
+          </Link>
+        </div>
+        <div className="h-[26rem] sm:h-[28rem]">
+          <CourseCarousel courses={COURSES} />
+        </div>
+      </section>
+    </>
   );
 }

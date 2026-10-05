@@ -2,6 +2,8 @@
 
 import { useState, type CSSProperties } from "react";
 import { Check, Mail, Video } from "lucide-react";
+import CmuLink from "./ui/CmuLink";
+import { heading2, sectionPadding } from "./ui/typography";
 
 const GRID_STYLE: CSSProperties = {
   backgroundImage:
@@ -14,7 +16,7 @@ const GRID_STYLE: CSSProperties = {
 
 function FilledCheck({ className = "" }: { className?: string }) {
   return (
-    <span className={`flex shrink-0 items-center justify-center rounded-full bg-primary text-white ${className}`}>
+    <span className={`flex shrink-0 items-center justify-center bg-primary text-white ${className}`}>
       <Check size={12} strokeWidth={3.5} />
     </span>
   );
@@ -22,22 +24,22 @@ function FilledCheck({ className = "" }: { className?: string }) {
 
 const STEPS = [
   {
-    tab: "Sign up",
-    title: "Sign up for free",
-    description:
-      "No application, no payment, no prerequisites. Just your email to reserve your spot.",
+    tab: "Sign in",
+    title: "Sign in for free",
+    description: "No application, no payment, no prerequisites. Just your email, and you're in.",
     points: ["Completely free", "No application or prerequisites", "Takes less than a minute"],
-    cta: "Claim my spot",
+    cta: "Start learning",
+    href: "/student",
     panel: "bg-primary",
     visual: (
-      <div className="w-56 rounded-2xl bg-white p-4 text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
-        <div className="flex items-center gap-2.5 rounded-full bg-gray-light px-3 py-2 text-sm text-iron-gray">
+      <div className="w-56  bg-white p-4 text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
+        <div className="flex items-center gap-2.5 bg-gray-light px-3 py-2 text-sm text-iron-gray">
           <Mail size={16} />
           you@email.com
         </div>
         <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
           <FilledCheck className="h-[18px] w-[18px]" />
-          Spot reserved
+          Signed in
         </div>
       </div>
     ),
@@ -52,12 +54,13 @@ const STEPS = [
       "Ask questions in real time",
       "Learn alongside other students",
     ],
-    cta: "See the first course",
-    panel: "bg-hornbostel-teal",
+    cta: "See the courses",
+    href: "#courses",
+    panel: "bg-black",
     visual: (
-      <div className="w-56 overflow-hidden rounded-2xl bg-white text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
+      <div className="w-56 overflow-hidden  bg-white text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
         <div className="flex gap-3 p-3.5">
-          <div className="flex h-12 w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-gray-light">
+          <div className="flex h-12 w-11 shrink-0 flex-col items-center justify-center border border-gray-light">
             <span className="text-[10px] font-bold uppercase leading-none tracking-wide text-primary">Sep</span>
             <span className="mt-0.5 text-lg font-semibold leading-none">21</span>
           </div>
@@ -73,9 +76,9 @@ const STEPS = [
         <div className="flex items-center justify-between border-t border-gray-light px-3.5 py-2 text-xs">
           <span className="text-iron-gray">Going?</span>
           <div className="flex gap-1">
-            <span className="rounded-full bg-primary px-2 py-0.5 font-semibold text-white">Yes</span>
-            <span className="rounded-full border border-gray-light px-2 py-0.5 text-iron-gray">No</span>
-            <span className="rounded-full border border-gray-light px-2 py-0.5 text-iron-gray">Maybe</span>
+            <span className="bg-primary px-2 py-0.5 font-semibold text-white">Yes</span>
+            <span className="border border-gray-light px-2 py-0.5 text-iron-gray">No</span>
+            <span className="border border-gray-light px-2 py-0.5 text-iron-gray">Maybe</span>
           </div>
         </div>
       </div>
@@ -92,11 +95,12 @@ const STEPS = [
       "Available whenever you're stuck",
     ],
     cta: "Meet the AI tutor",
-    panel: "bg-weaver-blue",
+    href: "/student",
+    panel: "bg-[#222]",
     visual: (
       <div className="flex w-56 flex-col gap-2 text-left text-sm">
-        <span className="self-end rounded-2xl rounded-br-md bg-white px-3.5 py-2">Why is my loop stuck?</span>
-        <span className="self-start rounded-2xl rounded-bl-md bg-primary px-3.5 py-2 text-white">
+        <span className="self-end  bg-white px-3.5 py-2">Why is my loop stuck?</span>
+        <span className="self-start  bg-primary px-3.5 py-2 text-white">
           Check your stop condition on line 4.
         </span>
       </div>
@@ -109,19 +113,17 @@ export default function HowItWorksSection() {
   const step = STEPS[active];
 
   return (
-    <section className="bg-gray-light text-black font-text py-24 md:py-32">
-      <div className="mx-auto w-full max-w-[1400px] px-6 md:px-12 lg:px-16">
-        <h2 className="max-w-[12em] font-display font-black leading-[0.95] tracking-[-0.02em] text-[2.5rem] sm:text-[3.5rem] lg:text-[4.5rem]">
-          Here&apos;s how it works
-        </h2>
-        <p className="mt-5 max-w-3xl text-pretty text-lg leading-[1.55] text-iron-gray md:text-xl">
-          Three steps from signing up to learning alongside Carnegie Mellon faculty.
+    <section id="how-it-works" className={`scroll-mt-4 bg-gray-light text-black ${sectionPadding}`}>
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-12 lg:px-16">
+        <h2 className={heading2}>Here&apos;s how it works</h2>
+        <p className="mt-4 max-w-3xl text-pretty text-lg leading-relaxed text-iron-gray">
+          Three steps from signing in to learning alongside Carnegie Mellon faculty.
         </p>
 
         <div
           role="tablist"
           aria-label="How it works steps"
-          className="mt-10 inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-white p-1.5 [scrollbar-width:none]"
+          className="mt-10 flex max-w-full gap-6 overflow-x-auto border-b border-steel-gray [scrollbar-width:none] sm:gap-10"
         >
           {STEPS.map(({ tab }, i) => (
             <button
@@ -132,8 +134,8 @@ export default function HowItWorksSection() {
               aria-selected={i === active}
               aria-controls="how-panel"
               onClick={() => setActive(i)}
-              className={`whitespace-nowrap rounded-full px-5 py-2.5 text-base font-medium transition-colors sm:px-8 lg:px-12 ${
-                i === active ? "bg-black text-white" : "text-iron-gray hover:text-black"
+              className={`-mb-px whitespace-nowrap border-b-4 pb-3 pt-1 text-base font-semibold transition-colors ${
+                i === active ? "border-primary text-black" : "border-transparent text-iron-gray hover:text-black"
               }`}
             >
               <span className="tabular-nums">{i + 1}.</span> {tab}
@@ -145,11 +147,11 @@ export default function HowItWorksSection() {
           id="how-panel"
           role="tabpanel"
           aria-labelledby={`how-tab-${active}`}
-          className="mt-4 grid grid-cols-1 overflow-hidden rounded-[2rem] bg-white md:grid-cols-2"
+          className="mt-8 grid grid-cols-1 overflow-hidden bg-white md:grid-cols-2"
         >
           <div
             aria-hidden
-            className={`relative isolate flex min-h-[22rem] items-center justify-center overflow-hidden rounded-[2rem] transition-colors duration-500 md:min-h-[30rem] ${step.panel}`}
+            className={`relative isolate flex min-h-[20rem] items-center justify-center overflow-hidden transition-colors duration-500 md:min-h-[26rem] ${step.panel}`}
           >
             <div className="absolute inset-0 -z-10" style={GRID_STYLE} />
             <div key={active} className="scale-110 sm:scale-125 lg:scale-[1.4]">
@@ -158,7 +160,7 @@ export default function HowItWorksSection() {
           </div>
 
           <div className="flex flex-col justify-center px-8 py-12 sm:px-12 lg:px-16">
-            <h3 className="font-display text-[1.75rem] font-semibold leading-[1.15] tracking-tight md:text-[2.125rem]">
+            <h3 className="font-brand text-[1.75rem] font-semibold leading-[1.2] md:text-[2rem]">
               {step.title}
             </h3>
             <p className="mt-4 max-w-md text-pretty text-lg leading-[1.55] text-iron-gray">{step.description}</p>
@@ -170,12 +172,9 @@ export default function HowItWorksSection() {
                 </li>
               ))}
             </ul>
-            <a
-              href="#"
-              className="mt-9 inline-flex items-center self-start whitespace-nowrap rounded-full bg-primary px-7 py-3 text-base font-medium text-white transition-colors hover:bg-primary-dark sm:text-lg"
-            >
+            <CmuLink href={step.href} className="mt-9 self-start">
               {step.cta}
-            </a>
+            </CmuLink>
           </div>
         </div>
       </div>

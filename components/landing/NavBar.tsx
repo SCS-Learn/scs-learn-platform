@@ -1,48 +1,48 @@
+import Image from "next/image";
+import Link from "next/link";
+
 const LINKS = [
-  { label: "How it works", href: "#" },
-  { label: "For educators", href: "#" },
-  { label: "FAQ", href: "#" },
+  { label: "Courses", href: "#courses" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "FAQ", href: "#faq" },
 ];
 
+// Modeled on cmu.edu's header: black bar, a solid Carnegie Red block (here the
+// official SCS Learn icon), the SCS unitmark, white links, and square outlined
+// buttons. Brand assets are from the SCS Learn logo kit (public/brand/).
 export default function NavBar() {
   return (
-    <header className="bg-white text-black font-text">
-      <div className="flex h-20 w-full items-center justify-between gap-6 px-6 md:px-12 lg:px-16 xl:px-24">
-        <div className="flex items-center gap-6">
-          <a
-            href="#"
-            aria-label="SCS Learn home"
-            className="shrink-0 whitespace-nowrap rounded-lg bg-gray-light px-4 py-2.5 font-display text-lg font-extrabold leading-none tracking-[-0.02em]"
-          >
-            SCS <span className="text-primary">Learn</span>
-          </a>
+    <header className="bg-black text-white">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-stretch justify-between gap-4 pr-4 sm:pr-6 md:px-12 lg:px-16">
+        <Link href="/" aria-label="SCS Learn home" className="flex shrink-0 items-center gap-4">
+          <Image src="/brand/scs-learn-icon-red.png" alt="" width={64} height={64} priority className="h-16 w-16" />
+          <Image
+            src="/brand/scs-unitmark-white.png"
+            alt="Carnegie Mellon University School of Computer Science"
+            width={3833}
+            height={686}
+            priority
+            className="hidden h-8 w-auto lg:block"
+          />
+        </Link>
 
-          <nav className="hidden lg:flex items-center">
+        <div className="flex items-center gap-5 sm:gap-7">
+          <nav className="hidden md:flex items-center gap-7">
             {LINKS.map(({ label, href }) => (
-              <a
-                key={label}
-                href={href}
-                className="rounded-full px-4 py-2 text-lg font-medium text-black hover:bg-primary/[0.08] transition-colors"
-              >
+              <a key={label} href={href} className="text-[15px] hover:underline underline-offset-4">
                 {label}
               </a>
             ))}
+            <Link href="/instructor" className="text-[15px] hover:underline underline-offset-4">
+              For instructors
+            </Link>
           </nav>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <a
-            href="#"
-            className="hidden sm:inline-flex items-center rounded-full px-4 py-2 text-lg font-medium text-black underline underline-offset-4"
+          <Link
+            href="/student"
+            className="border border-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-white hover:text-black"
           >
-            I&apos;m a student
-          </a>
-          <a
-            href="#"
-            className="inline-flex items-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-base sm:text-lg font-medium text-white hover:bg-primary-dark transition-colors"
-          >
-            I&apos;m an instructor
-          </a>
+            Sign in
+          </Link>
         </div>
       </div>
     </header>
