@@ -36,22 +36,22 @@ export default function LoginForm({
   const error = state.status === "error" ? state.message : initialError;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="next" value={next} />
       <label className="block">
-        <span className="text-xs font-bold text-gray-600">Email</span>
+        <span className="text-sm font-semibold text-gray-800">Email</span>
         <input
           name="email"
           type="email"
           required
           autoComplete="email"
           placeholder="you@example.com"
-          className="mt-1 w-full border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm transition-shadow focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
         />
       </label>
       {showName && (
         <label className="block">
-          <span className="text-xs font-bold text-gray-600">
+          <span className="text-sm font-semibold text-gray-800">
             Name <span className="font-normal text-gray-400">(first sign-in only)</span>
           </span>
           <input
@@ -59,7 +59,7 @@ export default function LoginForm({
             type="text"
             autoComplete="name"
             placeholder="Ada Lovelace"
-            className="mt-1 w-full border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm transition-shadow focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
           />
         </label>
       )}
@@ -70,7 +70,7 @@ export default function LoginForm({
       <button
         type="submit"
         disabled={pending}
-        className="w-full bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+        className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
       >
         {pending ? (devInstant ? "Signing in…" : "Sending…") : devInstant ? "Sign in" : "Email me a sign-in link"}
       </button>

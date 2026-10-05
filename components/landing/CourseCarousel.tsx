@@ -25,7 +25,13 @@ export default function CourseCarousel({ courses }: { courses: CarouselCourse[] 
                   src={course.image}
                   alt=""
                   fill
-                  sizes="(min-width: 96rem) 22vw, (min-width: 64rem) 28vw, (min-width: 48rem) 38vw, (min-width: 40rem) 55vw, 78vw"
+                  // Not the card's width: the card is tall and the photos are
+                  // landscape, so object-cover scales each one to the card's
+                  // HEIGHT (26-28rem) and crops the sides - the rendered image
+                  // is ~800px wide. Sizing to the card width made the browser
+                  // fetch a copy half that size and stretch it.
+                  sizes="800px"
+                  quality={90}
                   className="-z-20 object-cover transition-transform duration-[3s] ease-out group-hover:scale-110"
                 />
                 <div

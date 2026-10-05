@@ -18,7 +18,9 @@
 
 @theme inline {
   --font-sans: var(--font-body);
-  --font-serif: var(--font-heading);
+  /* Headings app-wide use CMU's web serif (Source Serif, see app/layout.tsx),
+     matching the landing page. Bricolage stays available as font-display. */
+  --font-serif: var(--font-brand-serif), Georgia, serif;
   --font-text: var(--font-inter);
   --font-display: var(--font-heading);
   --font-brand: var(--font-brand-serif), Georgia, serif;
@@ -78,7 +80,7 @@
   h4,
   h5,
   h6 {
-    font-family: var(--font-heading), system-ui, sans-serif;
+    font-family: var(--font-brand-serif), Georgia, serif;
   }
 }
 
@@ -152,8 +154,9 @@ body {
 }
 
 .topic-lesson-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-family: var(--font-brand-serif), Georgia, serif;
+  font-size: 1.625rem;
+  font-weight: 600;
   margin: 0;
   padding: 0;
   flex: 1;
@@ -163,34 +166,39 @@ body {
   white-space: nowrap;
 }
 
+/* Segmented control (student viewer + instructor editor lesson tabs). */
 .lesson-tab-bar {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 0.25rem;
   flex-shrink: 0;
+  padding: 0.25rem;
+  border-radius: 0.625rem;
+  background: #f3f4f6;
 }
 
 .lesson-tab {
   font-size: 0.875rem;
   font-weight: 600;
-  padding: 0.625rem 1.25rem;
-  border-radius: 0;
-  border: 1px solid var(--color-steel-gray);
-  background: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 0;
+  background: transparent;
   color: var(--color-iron-gray);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .lesson-tab:hover {
-  background: var(--color-steel-gray);
+  color: #000000;
 }
 
 .lesson-tab.is-active {
-  background: #000000;
-  border-color: #000000;
-  color: white;
+  background: white;
+  color: #000000;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
 }
 
 .lesson-tab-panel {
@@ -456,6 +464,11 @@ body {
 
 /* Landing page motion, modeled on cmu.edu ------------------------------- */
 
+/* Anchor links (nav: Courses, How it works, FAQ) glide instead of jumping. */
+html {
+  scroll-behavior: smooth;
+}
+
 /* Scroll reveal: .reveal elements fade up once they enter the viewport.
    Hidden only after the inline script in app/page.tsx sets .reveal-ready on
    <html>, so the page is fully visible without JavaScript, and ScrollReveal
@@ -483,6 +496,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   .reveal-ready .reveal {
     animation: none;
   }

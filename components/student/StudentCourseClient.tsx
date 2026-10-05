@@ -29,9 +29,12 @@ function initialCompletedByLessonId(course: StudentCourse): Record<string, strin
 export default function StudentCourseClient({
   course,
   initialLessonId,
+  header,
 }: {
   course: StudentCourse;
   initialLessonId?: string;
+  /** The app bar, rendered by the (server) page and passed through. */
+  header?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const firstLessonId = course.units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
@@ -71,7 +74,9 @@ export default function StudentCourseClient({
   const selectedLesson = unitsWithProgress.flatMap((u) => u.lessons).find((l) => l.id === selectedLessonId);
 
   return (
-    <main className="h-screen bg-gray-50 text-black flex overflow-hidden">
+    <main className="h-screen bg-gray-50 text-black flex flex-col overflow-hidden">
+      {header}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       <StudentSidebar
         courseCode={course.code}
         courseTitle={course.title}
@@ -105,6 +110,7 @@ export default function StudentCourseClient({
             This course has no published lessons yet.
           </div>
         )}
+      </div>
       </div>
     </main>
   );

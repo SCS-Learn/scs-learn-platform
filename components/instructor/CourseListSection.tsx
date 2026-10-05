@@ -336,11 +336,11 @@ export default function CourseListSection({ courses: initialCourses }: { courses
   return (
     <>
       <div className="flex items-center justify-between gap-4 mb-4">
-        <h2 className="text-sm font-bold">Your courses</h2>
+        <h2 className="font-serif text-xl font-semibold">Your courses</h2>
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center justify-center gap-2 text-sm font-bold bg-primary text-white px-5 py-2.5 hover:opacity-90 transition shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-dark shrink-0"
         >
           <Plus size={16} />
           New course
@@ -351,7 +351,7 @@ export default function CourseListSection({ courses: initialCourses }: { courses
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="w-full border-2 border-dashed border-steel-gray rounded-md p-10 text-center hover:border-iron-gray hover:bg-white transition"
+          className="w-full border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:border-gray-400 hover:bg-white transition"
         >
           <Plus size={24} className="mx-auto mb-2 text-gray-400" />
           <p className="text-sm font-bold mb-1">Create your first course</p>
@@ -360,7 +360,7 @@ export default function CourseListSection({ courses: initialCourses }: { courses
           </p>
         </button>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {courses.map((course) => (
             <CourseCard key={course.code} course={course} onDelete={handleDelete} />
           ))}

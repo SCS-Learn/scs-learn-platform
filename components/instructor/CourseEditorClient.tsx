@@ -67,7 +67,14 @@ function withRenumberedLessonCodes(unit: Unit): Unit {
 
 const AUTOSAVE_DELAY_MS = 800;
 
-export default function CourseEditorClient({ course }: { course: InstructorCourse }) {
+export default function CourseEditorClient({
+  course,
+  header,
+}: {
+  course: InstructorCourse;
+  /** The app bar, rendered by the (server) page and passed through. */
+  header?: React.ReactNode;
+}) {
   const router = useRouter();
   const [units, setUnits] = useState<Unit[]>(course.units);
 
@@ -438,7 +445,9 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
   };
 
   return (
-    <main className="h-screen bg-gray-50 text-black grid grid-cols-[1fr_3fr_1fr] overflow-hidden">
+    <main className="h-screen bg-gray-50 text-black flex flex-col overflow-hidden">
+      {header}
+      <div className="flex-1 min-h-0 grid grid-cols-[1fr_3fr_1fr] overflow-hidden">
       <ContentSidebar
         courseCode={course.code}
         courseTitle={course.title}
@@ -594,6 +603,7 @@ export default function CourseEditorClient({ course }: { course: InstructorCours
         onSaveDraft={flushPendingSave}
         onPublish={publish}
       />
+      </div>
     </main>
   );
 }

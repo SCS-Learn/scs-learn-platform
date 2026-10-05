@@ -44,10 +44,10 @@ function CompletionFooter({
           type="button"
           onClick={onToggle}
           disabled={isPending || (!isComplete && !canMarkComplete)}
-          className={`text-sm font-bold px-4 py-2 flex items-center gap-2 disabled:opacity-50 ${
+          className={`text-sm font-semibold rounded-lg px-4 py-2.5 flex items-center gap-2 transition-colors disabled:opacity-50 ${
             isComplete
-              ? "border border-green-500 text-green-800 hover:bg-gray-50"
-              : "bg-primary text-white hover:opacity-90"
+              ? "border border-green-600 bg-green-50 text-green-800 hover:bg-green-100"
+              : "bg-primary text-white hover:bg-primary-dark"
           }`}
         >
           {isPending ? (

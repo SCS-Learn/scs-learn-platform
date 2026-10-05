@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import StudentCourseClient from "@/components/student/StudentCourseClient";
 import { getStudentCourse } from "@/lib/student/data/course";
+import AppHeader from "@/components/app/AppHeader";
 
 export default async function StudentCoursePage({
   params,
@@ -17,5 +18,11 @@ export default async function StudentCoursePage({
     notFound();
   }
 
-  return <StudentCourseClient course={course} initialLessonId={lesson} />;
+  return (
+    <StudentCourseClient
+      course={course}
+      initialLessonId={lesson}
+      header={<AppHeader mode="learning" />}
+    />
+  );
 }

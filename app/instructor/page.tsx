@@ -1,4 +1,5 @@
-import InstructorHeader from "@/components/instructor/InstructorHeader";
+import AppHeader from "@/components/app/AppHeader";
+import { card, eyebrow, pageTitle } from "@/components/app/ui";
 import CourseListSection from "@/components/instructor/CourseListSection";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import { getAnnouncements } from "@/lib/instructor/data/announcements";
@@ -13,26 +14,26 @@ export default async function InstructorDashboardPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black flex flex-col lg:h-screen lg:overflow-hidden">
-      <InstructorHeader />
+    <main className="min-h-screen bg-gray-50 text-black">
+      <AppHeader mode="teaching" />
 
-      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-        <aside className="lg:w-1/4 flex flex-col min-h-0 shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 bg-white p-6 lg:overflow-hidden">
-          <AnnouncementsPanel courses={courses} announcements={announcements} />
-        </aside>
-
-        <div className="lg:w-3/4 flex-1 px-6 py-8 min-w-0 min-h-0 overflow-y-auto">
-          <p className="text-xs font-bold text-iron-gray tracking-wide mb-1">
-            INSTRUCTOR DASHBOARD
+      <section className="border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-10">
+          <p className={`${eyebrow} mb-2`}>Teaching</p>
+          <h1 className={pageTitle}>Welcome back, {instructor.name.split(" ")[0]}.</h1>
+          <p className="mt-2 text-gray-600">
+            You&apos;re teaching {courses.length} {courses.length === 1 ? "course" : "courses"} this term.
           </p>
-          <h1 className="text-3xl font-serif font-bold mb-1">Good morning, {instructor.name.split(" ")[0]}.</h1>
-          <p className="text-gray-500 mb-8">
-            You are teaching {courses.length} course
-            {courses.length === 1 ? "" : "s"} this term.
-          </p>
+        </div>
+      </section>
 
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
           <CourseListSection courses={courses} />
         </div>
+        <aside className={`${card} h-fit lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden flex flex-col`}>
+          <AnnouncementsPanel courses={courses} announcements={announcements} />
+        </aside>
       </div>
     </main>
   );

@@ -163,11 +163,14 @@ export default function BuildSection() {
 
               <div
                 aria-hidden
-                className={`group/panel relative flex h-[22rem] justify-center overflow-hidden px-6 pt-10 md:col-span-7 md:h-[25rem] ${panel} ${
+                className={`group/panel relative flex items-center justify-center px-6 py-10 sm:px-10 md:col-span-7 md:min-h-[25rem] ${panel} ${
                   i % 2 === 1 ? "md:order-first" : ""
                 }`}
               >
-                <div className="h-full w-full max-w-sm overflow-hidden border border-gray-200 border-b-0 bg-white p-7 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)] transition-transform duration-500 ease-out group-hover/panel:-translate-y-3">
+                {/* The whole card sits inside the panel (it used to bleed off the
+                    bottom edge, which the hover lift made look cut off). The lift
+                    is a few px, well inside the panel's padding. */}
+                <div className="w-full max-w-sm border border-gray-200 bg-white p-7 shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)] transition-[transform,box-shadow] duration-300 ease-out group-hover/panel:-translate-y-1.5 group-hover/panel:shadow-[0_32px_56px_-24px_rgba(0,0,0,0.45)] motion-reduce:transition-none motion-reduce:group-hover/panel:translate-y-0">
                   {graphic}
                 </div>
               </div>

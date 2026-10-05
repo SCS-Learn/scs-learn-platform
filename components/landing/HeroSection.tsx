@@ -9,49 +9,49 @@ const COURSES: CarouselCourse[] = [
     code: "06-204",
     title: "Great Ideas in Computational Biology",
     meta: "Phillip Compeau · Python · Intro",
-    image: "/landing/courses/lab.jpg",
+    image: "/landing/photos/comp-bio-poster-session.jpg",
   },
   {
     code: "15-112",
     title: "Fundamentals of Programming and Computer Science",
     meta: "Python · Intro",
-    image: "/landing/courses/studio.jpg",
+    image: "/landing/photos/students-coding.jpg",
   },
   {
     code: "10-301",
     title: "Introduction to Machine Learning",
     meta: "Python · Intermediate",
-    image: "/landing/courses/classroom.jpg",
+    image: "/landing/photos/ml-visualization.jpg",
   },
   {
     code: "15-122",
     title: "Principles of Imperative Computation",
     meta: "C · Intro",
-    image: "/landing/courses/workshop.jpg",
+    image: "/landing/photos/gates-center-study.jpg",
   },
   {
     code: "11-411",
     title: "Natural Language Processing",
     meta: "Python · Advanced",
-    image: "/landing/courses/lab.jpg",
+    image: "/landing/photos/language-technologies-group.jpg",
   },
   {
     code: "15-213",
     title: "Introduction to Computer Systems",
     meta: "C · Intermediate",
-    image: "/landing/courses/studio.jpg",
+    image: "/landing/photos/hardware-lab.jpg",
   },
   {
     code: "16-311",
     title: "Introduction to Robotics",
     meta: "Python · Intermediate",
-    image: "/landing/courses/classroom.jpg",
+    image: "/landing/photos/robotic-arm-lab.jpg",
   },
   {
     code: "05-391",
     title: "Designing Human-Centered Software",
     meta: "Design · Intro",
-    image: "/landing/courses/workshop.jpg",
+    image: "/landing/photos/vr-hci-study.jpg",
   },
 ];
 
@@ -66,6 +66,10 @@ export default function HeroSection() {
           fill
           priority
           sizes="100vw"
+          // The file is already a compressed 2000px WebP, the largest copy we
+          // have. Re-encoding it through the optimizer (q75) compounded the
+          // loss, so it's served exactly as-is.
+          unoptimized
           className="-z-20 object-cover animate-fade-in"
         />
         <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/60 to-black/20" />

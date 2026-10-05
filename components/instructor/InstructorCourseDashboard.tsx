@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BarChart3, ChevronDown, CircleHelp, Eye, ExternalLink, FileText, Pencil, Users } from "lucide-react";
-import InstructorHeader from "@/components/instructor/InstructorHeader";
+import AppHeader from "@/components/app/AppHeader";
+import CourseBanner from "@/components/app/CourseBanner";
+import { btnPrimary, btnSecondary, card } from "@/components/app/ui";
 import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import CalendarPanel from "@/components/instructor/CalendarPanel";
 import { formatRelativeTime } from "@/lib/instructor/format";
@@ -15,16 +17,14 @@ function LessonIcon({ type }: { type: LessonItem["type"] }) {
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="border border-gray-200 bg-white p-5">
+    <div className={`${card} p-5`}>
       <p className="text-xs font-bold text-gray-500 tracking-wide mb-2">{label}</p>
-      <p className="text-3xl font-serif font-bold tabular-nums">{value}</p>
+      <p className="text-3xl font-serif font-semibold tabular-nums">{value}</p>
       {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
     </div>
   );
 }
 
-const actionClass =
-  "inline-flex items-center justify-center gap-1.5 text-sm font-bold border border-black text-black px-4 py-2.5 hover:bg-gray-50 transition";
 
 export default function InstructorCourseDashboard({
   course,
@@ -45,31 +45,33 @@ export default function InstructorCourseDashboard({
 
   return (
     <main className="min-h-screen bg-gray-50 text-black">
-      <InstructorHeader backHref="/instructor" backLabel="Back to dashboard" />
+      <AppHeader mode="teaching" backHref="/instructor" backLabel="All courses" />
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <section className="border border-gray-200 bg-white p-6 mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <CourseBanner code={course.code} showCode={false} className="h-32 md:h-40" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-10">
+        <section className={`${card} relative -mt-14 p-6 mb-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between`}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
-              <p className="text-sm font-bold text-iron-gray tracking-wide">{course.code}</p>
+              <p className="text-sm font-bold text-primary tracking-wide">{course.code}</p>
               {(course.department || course.track) && (
                 <p className="text-xs text-gray-400">{[course.department, course.track].filter(Boolean).join(" · ")}</p>
               )}
             </div>
-            <h1 className="text-3xl font-serif font-bold">{course.title}</h1>
+            <h1 className="text-3xl font-serif font-semibold">{course.title}</h1>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Link href={`/instructor/${course.code}/edit`} className={`${actionClass} bg-black text-white hover:bg-black/85`}>
+            <Link href={`/instructor/${course.code}/edit`} className={btnPrimary}>
               <Pencil size={14} />
               Edit content
             </Link>
-            <Link href={`/instructor/${course.code}/analytics`} className={actionClass}>
+            <Link href={`/instructor/${course.code}/analytics`} className={btnSecondary}>
               <BarChart3 size={14} />
               Analytics
             </Link>
-            <a href={`/student/${course.code}`} target="_blank" rel="noopener noreferrer" className={actionClass}>
+            <a href={`/student/${course.code}`} target="_blank" rel="noopener noreferrer" className={btnSecondary}>
               <Eye size={14} />
-              Student view
+              Preview as student
             </a>
           </div>
         </section>
@@ -95,8 +97,8 @@ export default function InstructorCourseDashboard({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 flex flex-col gap-6">
-            <section className="border border-gray-200 bg-white">
-              <h2 className="flex items-center gap-2 text-sm font-bold px-5 py-4 border-b border-gray-100">
+            <section className={`${card} overflow-hidden`}>
+              <h2 className="flex items-center gap-2 font-serif text-lg font-semibold px-5 py-4 border-b border-gray-100">
                 <Users size={15} className="text-gray-400" />
                 Learners
               </h2>
@@ -154,8 +156,8 @@ export default function InstructorCourseDashboard({
               )}
             </section>
 
-            <section className="border border-gray-200 bg-white">
-              <h2 className="text-sm font-bold px-5 py-4 border-b border-gray-100">Content</h2>
+            <section className={`${card} overflow-hidden`}>
+              <h2 className="font-serif text-lg font-semibold px-5 py-4 border-b border-gray-100">Content</h2>
               {course.units.length === 0 ? (
                 <p className="px-5 py-4 text-sm text-gray-400">
                   No units yet.{" "}
@@ -198,7 +200,7 @@ export default function InstructorCourseDashboard({
                               </span>
                             )}
                             <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 shrink-0 ${
+                              className={`rounded-full text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                 lesson.isPublished ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
                               }`}
                             >
@@ -217,10 +219,10 @@ export default function InstructorCourseDashboard({
           </div>
 
           <div className="flex flex-col gap-6">
-            <section className="border border-gray-200 bg-white h-[30rem]">
+            <section className={`${card} h-[30rem] overflow-hidden`}>
               <AnnouncementsPanel courses={[{ code: course.code, title: course.title }]} announcements={announcements} />
             </section>
-            <section className="border border-gray-200 bg-white p-5 h-[24rem]">
+            <section className={`${card} p-5 h-[24rem]`}>
               <CalendarPanel events={events} courses={[course]} />
             </section>
           </div>

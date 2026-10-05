@@ -40,8 +40,12 @@ export default function RootLayout({
     // suppressHydrationWarning: the landing page's inline script adds
     // .reveal-ready to <html> before hydration (see app/page.tsx). Only covers
     // this element's own attributes, not its children.
+    // data-scroll-behavior: the CSS below smooth-scrolls in-page anchor jumps
+    // (the landing nav's Courses / How it works / FAQ); this tells Next 16 to
+    // switch it off during route navigations so new pages don't glide to the top.
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
       className={`${openSans.variable} ${bricolage.variable} ${inter.variable} ${sourceSerif.variable} h-full antialiased`}
     >

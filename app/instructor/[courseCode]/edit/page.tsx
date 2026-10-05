@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import AppHeader from "@/components/app/AppHeader";
 import CourseEditorClient from "@/components/instructor/CourseEditorClient";
 import { getCourseWithContent } from "@/lib/instructor/data/courses";
 
@@ -14,5 +15,10 @@ export default async function CourseEditorPage({
     notFound();
   }
 
-  return <CourseEditorClient course={course} />;
+  return (
+    <CourseEditorClient
+      course={course}
+      header={<AppHeader mode="teaching" />}
+    />
+  );
 }

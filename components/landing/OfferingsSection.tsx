@@ -21,7 +21,7 @@ const OFFERINGS: Offering[] = [
     description: "Free and open, whenever you want to learn - every lecture, from the professors who teach it.",
     cta: "Start watching",
     href: SCS_LEARN_YOUTUBE_URL,
-    image: "/landing/courses/classroom.jpg",
+    image: "/landing/photos/lecture-hall.jpg",
     wide: true,
   },
   {
@@ -43,7 +43,7 @@ const OFFERINGS: Offering[] = [
     description: "Join the School of Computer Science in Pittsburgh as a full-time student at Carnegie Mellon University.",
     cta: "Explore admissions",
     href: null,
-    image: "/landing/courses/workshop.jpg",
+    image: "/landing/photos/campus-walk.jpg",
     wide: true,
   },
 ];
@@ -69,6 +69,7 @@ export default function OfferingsSection() {
                       alt=""
                       fill
                       sizes="(min-width: 48rem) 66vw, 100vw"
+                      quality={90}
                       className="-z-20 object-cover transition-transform duration-[3s] ease-out group-hover:scale-110"
                     />
                     <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/55 to-black/30" />

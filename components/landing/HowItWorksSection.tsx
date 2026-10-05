@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Mail, Video } from "lucide-react";
+import { Check, CirclePlay, Code2, FileText, ListChecks, Mail, type LucideIcon } from "lucide-react";
 import CmuLink from "./ui/CmuLink";
 import { heading2, sectionPadding } from "./ui/typography";
 
@@ -22,7 +22,33 @@ function FilledCheck({ className = "" }: { className?: string }) {
   );
 }
 
-const STEPS = [
+type Feature = { icon: LucideIcon; title: string; text: string };
+
+type Step = {
+  tab: string;
+  title: string;
+  description: string;
+  /** Plain check-mark list... */
+  points?: string[];
+  /** ...or an icon + title + one-liner feature list (the "what's included" step). */
+  features?: Feature[];
+  cta: string;
+  href: string;
+  panel: string;
+  visual: React.ReactNode;
+};
+
+// What a course actually comes with on SCS Learn - each maps to something the
+// platform delivers: YouTube lectures, lesson notes / slide decks, autograded
+// Cogniterra + Autolab assignments, and in-app quizzes (incl. AI-graded free response).
+const COURSE_RESOURCES: (Feature & { count: string })[] = [
+  { icon: CirclePlay, title: "Watch the full lectures", text: "Every lecture from the course, recorded and free to rewatch.", count: "Lectures" },
+  { icon: FileText, title: "Read the notes and slides", text: "The same lecture notes and slide decks CMU students use.", count: "Notes & slides" },
+  { icon: Code2, title: "Do real coursework", text: "Programming assignments, autograded the moment you submit.", count: "Assignments" },
+  { icon: ListChecks, title: "Check yourself with quizzes", text: "Instant feedback, including written answers graded by AI.", count: "Quizzes" },
+];
+
+const STEPS: Step[] = [
   {
     tab: "Sign in",
     title: "Sign in for free",
@@ -45,42 +71,31 @@ const STEPS = [
     ),
   },
   {
-    tab: "Join live",
-    title: "Join your professor live",
+    tab: "What's included",
+    title: "Everything the course gives its own students",
     description:
-      "Real sessions with the CMU faculty member teaching the course, answering your questions in real time.",
-    points: [
-      "Taught by the faculty who built the course",
-      "Ask questions in real time",
-      "Learn alongside other students",
-    ],
+      "Not a trimmed-down MOOC. You work through the real course, at your own pace, with the same materials Carnegie Mellon students get.",
+    features: COURSE_RESOURCES,
     cta: "See the courses",
     href: "#courses",
     panel: "bg-black",
     visual: (
-      <div className="w-56 overflow-hidden  bg-white text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
-        <div className="flex gap-3 p-3.5">
-          <div className="flex h-12 w-11 shrink-0 flex-col items-center justify-center border border-gray-light">
-            <span className="text-[10px] font-bold uppercase leading-none tracking-wide text-primary">Sep</span>
-            <span className="mt-0.5 text-lg font-semibold leading-none">21</span>
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight">06-204 Live</p>
-            <p className="mt-1 flex items-center gap-1 text-xs text-iron-gray">
-              <Video size={12} className="shrink-0 text-primary" />
-              7:00 – 8:00 PM ET
-            </p>
-            <p className="mt-0.5 truncate text-xs text-iron-gray">Phillip Compeau</p>
-          </div>
+      <div className="w-56 bg-white text-left shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]">
+        <div className="border-b border-gray-light px-3.5 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-primary">06-204</p>
+          <p className="text-sm font-semibold leading-tight">Course contents</p>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-light px-3.5 py-2 text-xs">
-          <span className="text-iron-gray">Going?</span>
-          <div className="flex gap-1">
-            <span className="bg-primary px-2 py-0.5 font-semibold text-white">Yes</span>
-            <span className="border border-gray-light px-2 py-0.5 text-iron-gray">No</span>
-            <span className="border border-gray-light px-2 py-0.5 text-iron-gray">Maybe</span>
-          </div>
-        </div>
+        <ul className="flex flex-col py-1.5">
+          {COURSE_RESOURCES.map(({ icon: Icon, count }) => (
+            <li key={count} className="flex items-center gap-2.5 px-3.5 py-1.5 text-xs font-medium">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-primary text-white">
+                <Icon size={12} strokeWidth={2.5} />
+              </span>
+              {count}
+              <Check size={13} strokeWidth={3} className="ml-auto text-primary" />
+            </li>
+          ))}
+        </ul>
       </div>
     ),
   },
@@ -117,7 +132,7 @@ export default function HowItWorksSection() {
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-12 lg:px-16">
         <h2 className={`${heading2} reveal`}>Here&apos;s how it works</h2>
         <p className="reveal mt-4 max-w-3xl text-pretty text-lg leading-relaxed text-iron-gray">
-          Three steps from signing in to learning alongside Carnegie Mellon faculty.
+          Three steps from signing in to working through a real Carnegie Mellon course.
         </p>
 
         <div
@@ -166,14 +181,30 @@ export default function HowItWorksSection() {
               {step.title}
             </h3>
             <p className="mt-4 max-w-md text-pretty text-lg leading-[1.55] text-iron-gray">{step.description}</p>
-            <ul className="mt-7 flex flex-col gap-3">
-              {step.points.map((point) => (
-                <li key={point} className="flex items-start gap-3 text-base font-medium leading-snug md:text-[17px]">
-                  <FilledCheck className="mt-px h-5 w-5" />
-                  {point}
-                </li>
-              ))}
-            </ul>
+            {step.features ? (
+              <ul className="mt-7 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {step.features.map(({ icon: Icon, title, text }) => (
+                  <li key={title} className="flex gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-primary text-white">
+                      <Icon size={18} strokeWidth={2} />
+                    </span>
+                    <div>
+                      <p className="text-base font-semibold leading-snug">{title}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-iron-gray">{text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="mt-7 flex flex-col gap-3">
+                {step.points?.map((point) => (
+                  <li key={point} className="flex items-start gap-3 text-base font-medium leading-snug md:text-[17px]">
+                    <FilledCheck className="mt-px h-5 w-5" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            )}
             <CmuLink href={step.href} className="mt-9 self-start">
               {step.cta}
             </CmuLink>

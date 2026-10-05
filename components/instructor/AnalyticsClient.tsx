@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCircle2, AlertTriangle, OctagonAlert } from "lucide-react";
-import InstructorHeader from "@/components/instructor/InstructorHeader";
+import Link from "next/link";
+import { BarChart3, CheckCircle2, AlertTriangle, OctagonAlert } from "lucide-react";
 import {
   courseAnalytics,
   type InstructorCourse,
@@ -19,9 +19,9 @@ const statusConfig: Record<
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-gray-200 bg-white p-5">
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-bold text-gray-500 tracking-wide mb-2">{label}</p>
-      <p className="text-3xl font-serif font-bold tabular-nums">{value}</p>
+      <p className="text-3xl font-serif font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -31,26 +31,37 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
 
   if (!analytics) {
     return (
-      <main className="min-h-screen bg-gray-50 text-black">
-        <InstructorHeader backHref="/instructor" backLabel="Back to dashboard" />
-        <div className="w-[60%] mx-auto px-6 py-10 text-gray-500">
-          No analytics available for this course.
+      <div className="bg-gray-50 px-4 py-16 text-black">
+        <div className="mx-auto max-w-md rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <BarChart3 size={22} />
+          </span>
+          <h1 className="mt-4 font-serif text-2xl font-semibold">No analytics yet</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Detailed analytics for {course.code} will appear here. Live learner progress and quiz averages are on the
+            course dashboard.
+          </p>
+          <Link
+            href={`/instructor/${course.code}`}
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
+          >
+            Go to course dashboard
+          </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   const maxQuizCount = Math.max(...analytics.quizScoreDistribution.map((b) => b.count), 1);
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black">
-      <InstructorHeader backHref={`/instructor/${course.code}`} backLabel="Back to course" />
+    <div className="bg-gray-50 text-black">
 
       <div className="w-[70%] mx-auto px-6 py-10">
         <p className="text-xs font-bold text-iron-gray tracking-wide mb-1">
           {course.code} · ANALYTICS
         </p>
-        <h1 className="text-3xl font-serif font-bold mb-1">{course.title}</h1>
+        <h1 className="text-3xl font-serif font-semibold mb-1">{course.title}</h1>
         <p className="text-gray-500 mb-8">
           Sample data for demo purposes — not connected to real student activity yet.
         </p>
@@ -69,7 +80,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="border border-gray-200 bg-white p-5">
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-bold mb-4">Completion by unit</h2>
                 <div className="flex flex-col gap-3">
                   {analytics.unitCompletion.map((unit) => (
@@ -102,7 +113,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
                 </div>
               </div>
 
-              <div className="border border-gray-200 bg-white p-5">
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-bold mb-4">Quiz score distribution</h2>
                 <div className="flex items-end justify-between gap-3 h-40">
                   {analytics.quizScoreDistribution.map((bucket) => (
@@ -123,7 +134,7 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
               </div>
             </div>
 
-            <div className="border border-gray-200 bg-white overflow-hidden">
+            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h2 className="text-sm font-bold">Students</h2>
                 <span className="text-xs text-gray-400">
@@ -187,6 +198,6 @@ export default function AnalyticsClient({ course }: { course: InstructorCourse }
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }
