@@ -71,14 +71,13 @@ export default async function LoginPage({
             <h1 className="mt-2 font-serif text-4xl font-semibold">{isInstructor ? "Instructor sign in" : "Sign in"}</h1>
             <p className="mt-2 mb-8 text-sm leading-relaxed text-gray-600">
               {isInstructor
-                ? "Use the email your department registered for instructor access. No password needed."
-                : "New or returning, it's the same form. No password needed: we'll email you a link."}
+                ? "Sign in, or create an account with the email your department registered for instructor access."
+                : "Sign in to pick up where you left off, or create an account to start a course."}
             </p>
             <LoginForm
               next={next}
               initialError={error ? ERROR_MESSAGES[error] : undefined}
               devInstant={await isDevInstantSignIn()}
-              showName={!isInstructor}
             />
             <p className="mt-8 border-t border-gray-100 pt-5 text-sm text-gray-600">
               {isInstructor ? (

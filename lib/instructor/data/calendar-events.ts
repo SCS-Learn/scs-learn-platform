@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { getTaughtCourseIds, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import type { CalendarEvent, CalendarEventScope, CalendarEventType } from "@/lib/instructor/mock-data";
 
 type CalendarEventRow = {
@@ -39,13 +39,7 @@ export async function getVisibleCalendarEvents(): Promise<CalendarEvent[]> {
   const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
-  const { data: ownCourses, error: coursesError } = await supabase
-    .from("courses")
-    .select("id")
-    .eq("instructor_id", instructorId);
-  if (coursesError) throw new Error(coursesError.message);
-
-  const ownCourseIds = (ownCourses ?? []).map((c) => c.id);
+  const ownCourseIds = await getTaughtCourseIds(instructorId);
   const orFilter =
     ownCourseIds.length > 0
       ? `scope.eq.global,course_id.in.(${ownCourseIds.join(",")})`

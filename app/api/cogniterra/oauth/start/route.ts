@@ -4,7 +4,6 @@ import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 import { getCogniterraAuthorizeUrl } from "@/lib/cogniterra/oauth-client";
 import { STATE_COOKIE, RETURN_TO_COOKIE, DEFAULT_RETURN_TO } from "@/lib/cogniterra/oauth-start-state";
 
-const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 /**
  * Kicks off the "Connect Cogniterra" flow: redirects to Cogniterra's own
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
   // Stores credentials against the signed-in instructor, so only an
   // instructor may start or finish the flow.
   if (!(await getCurrentInstructor())) {
-    return NextResponse.redirect(new URL("/login?next=/instructor", SITE_URL()));
+    return NextResponse.redirect(new URL("/login?next=/instructor", request.nextUrl.origin));
   }
 
   const returnTo = new URL(request.url).searchParams.get("return_to") || DEFAULT_RETURN_TO;
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
   const state = randomUUID();
   const authUrl = getCogniterraAuthorizeUrl(state);
   if (!authUrl) {
-    return NextResponse.redirect(new URL(`${returnTo}?cogniterra=not_configured`, SITE_URL()));
+    return NextResponse.redirect(new URL(`${returnTo}?cogniterra=not_configured`, request.nextUrl.origin));
   }
 
   const response = NextResponse.redirect(authUrl);

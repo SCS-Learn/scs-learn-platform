@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { getTaughtCourseIds, requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import type {
   InstructorCourse,
@@ -185,11 +186,13 @@ const COURSE_WITH_CONTENT_SELECT =
 
 export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
   const { id: instructorId } = await requireInstructor();
+  const courseIds = await getTaughtCourseIds(instructorId);
+  if (courseIds.length === 0) return [];
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
     .select(COURSE_WITH_CONTENT_SELECT)
-    .eq("instructor_id", instructorId)
+    .in("id", courseIds)
     .order("code");
   if (error) throw new Error(error.message);
 
@@ -198,12 +201,14 @@ export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
 
 export async function getCourseWithContent(courseCode: string): Promise<InstructorCourse | null> {
   const { id: instructorId } = await requireInstructor();
+  const courseIds = await getTaughtCourseIds(instructorId);
+  if (courseIds.length === 0) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
     .select(COURSE_WITH_CONTENT_SELECT)
     .eq("code", courseCode)
-    .eq("instructor_id", instructorId)
+    .in("id", courseIds)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
@@ -267,15 +272,29 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
     .maybeSingle();
   if (existing) throw new Error("A course with this code already exists.");
 
-  const { error } = await supabase.from("courses").insert({
-    code,
-    title,
-    department: "",
-    track: "",
-    instructor_id: instructorId,
-    student_count: 0,
-  });
+  const { data: created, error } = await supabase
+    .from("courses")
+    .insert({
+      code,
+      title,
+      department: "",
+      track: "",
+      instructor_id: instructorId,
+      student_count: 0,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  // The owner is also listed as course staff (see add-admins-and-course-instructors.sql).
+  // A missing table (migration not run yet) is fine: ownership alone grants access.
+  const admin = createAdminClient();
+  if (admin && created) {
+    const { error: staffError } = await admin
+      .from("course_instructors")
+      .insert({ course_id: created.id, instructor_id: instructorId });
+    if (staffError && !["42P01", "PGRST205"].includes(staffError.code)) console.error("createCourse: course_instructors:", staffError.message);
+  }
 
   revalidatePath("/instructor");
   return { code };
@@ -284,12 +303,17 @@ export async function createCourse(input: CreateCourseInput): Promise<{ code: st
 export async function deleteCourse(courseCode: string) {
   const { id: instructorId } = await requireCourseInstructor(courseCode);
   const supabase = await createClient();
-  const { error } = await supabase
+  // Owner-only: instructors an admin added to the course can teach it but not delete it.
+  const { data: deleted, error } = await supabase
     .from("courses")
     .delete()
     .eq("code", courseCode)
-    .eq("instructor_id", instructorId);
+    .eq("instructor_id", instructorId)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!deleted || deleted.length === 0) {
+    throw new Error(`Only the course owner can delete ${courseCode}. Ask an admin to remove you from it instead.`);
+  }
 
   revalidatePath("/instructor");
 }
