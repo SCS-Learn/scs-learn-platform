@@ -4,7 +4,6 @@ import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 import { createOAuth2Client, GOOGLE_OAUTH_SCOPES } from "@/lib/google/oauth-client";
 import { STATE_COOKIE, RETURN_TO_COOKIE, DEFAULT_RETURN_TO } from "@/lib/google/oauth-start-state";
 
-const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 /**
  * Kicks off the "Connect Google Drive" flow: redirects to Google's consent
@@ -23,14 +22,14 @@ export async function GET(request: NextRequest) {
   // Stores credentials against the signed-in instructor, so only an
   // instructor may start or finish the flow.
   if (!(await getCurrentInstructor())) {
-    return NextResponse.redirect(new URL("/login?next=/instructor", SITE_URL()));
+    return NextResponse.redirect(new URL("/login?next=/instructor", request.nextUrl.origin));
   }
 
   const returnTo = new URL(request.url).searchParams.get("return_to") || DEFAULT_RETURN_TO;
 
   const oauth2Client = createOAuth2Client();
   if (!oauth2Client) {
-    return NextResponse.redirect(new URL(`${returnTo}?google=not_configured`, SITE_URL()));
+    return NextResponse.redirect(new URL(`${returnTo}?google=not_configured`, request.nextUrl.origin));
   }
 
   const state = randomUUID();

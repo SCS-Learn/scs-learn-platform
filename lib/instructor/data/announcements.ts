@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { getTaughtCourseIds, requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import type { Announcement } from "@/lib/instructor/mock-data";
 
@@ -29,13 +29,7 @@ export async function getAnnouncements(): Promise<Announcement[]> {
   const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
-  const { data: ownCourses, error: coursesError } = await supabase
-    .from("courses")
-    .select("id")
-    .eq("instructor_id", instructorId);
-  if (coursesError) throw new Error(coursesError.message);
-
-  const ownCourseIds = (ownCourses ?? []).map((c) => c.id);
+  const ownCourseIds = await getTaughtCourseIds(instructorId);
   if (ownCourseIds.length === 0) return [];
 
   const { data, error } = await supabase

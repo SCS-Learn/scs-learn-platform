@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, GraduationCap, LogOut, UserRound, BookOpen } from "lucide-react";
+import { ArrowLeft, ChevronDown, GraduationCap, LogOut, UserRound, BookOpen, ShieldCheck } from "lucide-react";
 import { signOut } from "@/lib/auth/actions";
 
 export default function AppHeaderBar({
@@ -12,14 +12,16 @@ export default function AppHeaderBar({
   initials,
   email,
   isInstructor,
+  isAdmin = false,
   backHref,
   backLabel,
 }: {
-  mode: "learning" | "teaching" | "account";
+  mode: "learning" | "teaching" | "account" | "admin";
   name: string;
   initials: string;
   email: string | null;
   isInstructor: boolean;
+  isAdmin?: boolean;
   backHref?: string;
   backLabel?: string;
 }) {
@@ -53,6 +55,13 @@ export default function AppHeaderBar({
           <Image src="/brand/scs-learn-icon-red.png" alt="" width={32} height={32} className="h-8 w-8 rounded-md" />
           <span className="hidden text-[15px] font-bold tracking-tight sm:inline">SCS Learn</span>
         </Link>
+
+        {mode === "admin" && (
+          <span className="flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-white">
+            <ShieldCheck size={13} />
+            Admin
+          </span>
+        )}
 
         {isTeaching && (
           <span className="flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white">
@@ -100,6 +109,9 @@ export default function AppHeaderBar({
                   <MenuLink href="/instructor" icon={<GraduationCap size={15} />} label="My courses" />
                 ) : (
                   <MenuLink href="/student" icon={<BookOpen size={15} />} label="My learning" />
+                )}
+                {isAdmin && mode !== "admin" && (
+                  <MenuLink href="/admin" icon={<ShieldCheck size={15} />} label="Admin" />
                 )}
                 {isInstructor && (
                   <div className="mt-1 border-t border-gray-100 pt-1">

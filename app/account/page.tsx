@@ -4,6 +4,7 @@ import { ArrowRight, GraduationCap, User } from "lucide-react";
 import AppHeader from "@/components/app/AppHeader";
 import { card } from "@/components/app/ui";
 import ProfileNameForm from "@/components/auth/ProfileNameForm";
+import PasswordForm from "@/components/auth/PasswordForm";
 import { displayNameFor, getSessionUser } from "@/lib/auth/session";
 import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 
@@ -29,6 +30,14 @@ export default async function AccountPage() {
           <ProfileNameForm initialName={name} />
           <p className="mt-5 text-xs font-bold text-gray-600">Email</p>
           <p className="text-sm">{user.email}</p>
+        </section>
+
+        <section className={`${card} p-5`}>
+          <h2 className="text-sm font-bold mb-1">Password</h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Set one to sign in with your email and password - no waiting for an emailed link.
+          </p>
+          <PasswordForm />
         </section>
 
         <section className={`${card} p-5`}>

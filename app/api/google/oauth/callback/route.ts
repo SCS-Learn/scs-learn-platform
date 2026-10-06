@@ -3,7 +3,6 @@ import { getCurrentInstructor } from "@/lib/instructor/data/current-instructor";
 import { createOAuth2Client, saveOAuthCredentials, GOOGLE_OAUTH_SCOPES } from "@/lib/google/oauth-client";
 import { STATE_COOKIE, RETURN_TO_COOKIE, DEFAULT_RETURN_TO } from "@/lib/google/oauth-start-state";
 
-const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 /**
  * Exchanges the authorization code Google redirected back with for a
@@ -15,7 +14,7 @@ export async function GET(request: NextRequest) {
   // Stores credentials against the signed-in instructor, so only an
   // instructor may start or finish the flow.
   if (!(await getCurrentInstructor())) {
-    return NextResponse.redirect(new URL("/login?next=/instructor", SITE_URL()));
+    return NextResponse.redirect(new URL("/login?next=/instructor", request.nextUrl.origin));
   }
 
   const { searchParams } = new URL(request.url);
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   function redirectWithStatus(status: string) {
     const separator = returnTo.includes("?") ? "&" : "?";
-    const response = NextResponse.redirect(new URL(`${returnTo}${separator}google=${status}`, SITE_URL()));
+    const response = NextResponse.redirect(new URL(`${returnTo}${separator}google=${status}`, request.nextUrl.origin));
     response.cookies.delete(STATE_COOKIE);
     response.cookies.delete(RETURN_TO_COOKIE);
     return response;

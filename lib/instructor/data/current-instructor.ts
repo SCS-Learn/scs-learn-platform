@@ -42,7 +42,10 @@ export const getCurrentInstructor = cache(async (): Promise<CurrentInstructor | 
     const legacy = await admin.from("instructors").select("id, name, initials").eq("auth_user_id", user.id).maybeSingle();
     return legacy.data ? toInstructor(legacy.data as InstructorRow) : null;
   }
-  if (!user.email) return null;
+  // Only a *confirmed* address may claim an instructor row: with password
+  // sign-up, anyone can register an unverified account under a professor's
+  // email, and must not inherit their courses by doing so.
+  if (!user.email || !user.email_confirmed_at) return null;
 
   const invited = await admin
     .from("instructors")
@@ -72,17 +75,34 @@ export async function requireInstructor(): Promise<CurrentInstructor> {
   return instructor;
 }
 
-/** requireInstructor, plus: the course must be one this instructor teaches. */
+/**
+ * Ids of every course this instructor teaches: ones they own
+ * (courses.instructor_id) plus ones an admin added them to
+ * (course_instructors). Falls back to owned-only until
+ * add-admins-and-course-instructors.sql has been run.
+ */
+export const getTaughtCourseIds = cache(async (instructorId: string): Promise<string[]> => {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const [owned, staffed] = await Promise.all([
+    admin.from("courses").select("id").eq("instructor_id", instructorId),
+    admin.from("course_instructors").select("course_id").eq("instructor_id", instructorId),
+  ]);
+  if (owned.error) throw new Error(owned.error.message);
+  // 42P01 = table doesn't exist yet (migration not run): owned courses only.
+  if (staffed.error && !["42P01", "PGRST205"].includes(staffed.error.code)) throw new Error(staffed.error.message);
+  const ids = new Set((owned.data ?? []).map((r) => r.id as string));
+  for (const r of staffed.data ?? []) ids.add(r.course_id as string);
+  return [...ids];
+});
+
+/** requireInstructor, plus: the course must be one this instructor teaches (owns or was added to). */
 export async function requireCourseInstructor(courseCode: string): Promise<CurrentInstructor> {
   const instructor = await requireInstructor();
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("courses")
-    .select("id")
-    .eq("code", courseCode)
-    .eq("instructor_id", instructor.id)
-    .maybeSingle();
+  const { data, error } = await supabase.from("courses").select("id").eq("code", courseCode).maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) throw new Error(`You don't teach ${courseCode}.`);
+  const taught = await getTaughtCourseIds(instructor.id);
+  if (!data || !taught.includes(data.id as string)) throw new Error(`You don't teach ${courseCode}.`);
   return instructor;
 }
