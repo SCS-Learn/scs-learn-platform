@@ -1,12 +1,14 @@
 import type { NextConfig } from "next";
 import path from "path";
 
-// The Computing Education Innovation Fund's giving form, fund preselected
-// (Danielle Hoffman, SCS advancement, 2026-10-19). Keep "innovationfund": her
-// email's visible text reads "innovatiofund", which opens the form with no fund
-// selected.
-const GIVING_FORM_URL =
-  "https://givenow.cmu.edu/campaigns/42968/donations/new?a=14281285&designation=scscomputingeducationinnovationfund";
+// The Griffin School Computing Education Innovation Fund's giving form, fund
+// preselected, with advancement's source tracking (Danielle Hoffman,
+// 2026-10-27): one tracked link for the site's Give buttons and one for the
+// QR code on every video's closing card.
+const GIVING_FORM_WEBSITE =
+  "https://givenow.cmu.edu/campaigns/42968/donations/new?a=14504178&designation=griffinschoolcomputingeducationinnovationfund";
+const GIVING_FORM_YOUTUBE =
+  "https://givenow.cmu.edu/campaigns/42968/donations/new?a=14504181&designation=griffinschoolcomputingeducationinnovationfund";
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -27,12 +29,13 @@ const nextConfig: NextConfig = {
   // Our own giving addresses. The QR code on every video's closing card points
   // at /give/youtube, and a published video can't be re-rendered, so these
   // stay temporary (307) redirects: browsers don't cache them, and changing a
-  // destination here moves every video and button at once. When source-tracked
-  // links arrive from advancement, give each path its own.
+  // destination here moves every video and button at once. A new permanent
+  // placement (trailer, flyer) gets its own path and tracked link from
+  // advancement.
   async redirects() {
     return [
-      { source: "/give", destination: GIVING_FORM_URL, permanent: false },
-      { source: "/give/youtube", destination: GIVING_FORM_URL, permanent: false },
+      { source: "/give", destination: GIVING_FORM_WEBSITE, permanent: false },
+      { source: "/give/youtube", destination: GIVING_FORM_YOUTUBE, permanent: false },
     ];
   },
 };
