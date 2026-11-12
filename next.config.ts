@@ -10,6 +10,12 @@ const GIVING_FORM_WEBSITE =
 const GIVING_FORM_YOUTUBE =
   "https://givenow.cmu.edu/campaigns/42968/donations/new?a=14504181&designation=griffinschoolcomputingeducationinnovationfund";
 
+// learn.cs.cmu.edu sends everyone to the Griffin School's CS Learn page on the
+// university CMS until our own site is ready there. Temporary (307), so
+// browsers don't cache it and we can take the domain back by deleting the rule.
+const LEARN_DOMAIN = "learn.cs.cmu.edu";
+const LEARN_LANDING_PAGE = "https://www.cs.cmu.edu/learn";
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
@@ -36,6 +42,14 @@ const nextConfig: NextConfig = {
     return [
       { source: "/give", destination: GIVING_FORM_WEBSITE, permanent: false },
       { source: "/give/youtube", destination: GIVING_FORM_YOUTUBE, permanent: false },
+      // After the giving rules, so learn.cs.cmu.edu/give and /give/youtube keep
+      // reaching the giving form (the first matching rule wins).
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: LEARN_DOMAIN }],
+        destination: LEARN_LANDING_PAGE,
+        permanent: false,
+      },
     ];
   },
 };
