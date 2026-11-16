@@ -43,9 +43,11 @@ const nextConfig: NextConfig = {
       { source: "/give", destination: GIVING_FORM_WEBSITE, permanent: false },
       { source: "/give/youtube", destination: GIVING_FORM_YOUTUBE, permanent: false },
       // After the giving rules, so learn.cs.cmu.edu/give and /give/youtube keep
-      // reaching the giving form (the first matching rule wins).
+      // reaching the giving form (the first matching rule wins). /privacy (and
+      // the /_next assets it loads) stay on learn.cs.cmu.edu: Google's OAuth
+      // consent screen and the YouTube API audit need a privacy policy there.
       {
-        source: "/:path*",
+        source: "/:path((?!privacy$|_next/).*)",
         has: [{ type: "host", value: LEARN_DOMAIN }],
         destination: LEARN_LANDING_PAGE,
         permanent: false,
