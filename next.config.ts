@@ -16,6 +16,13 @@ const GIVING_FORM_YOUTUBE =
 const LEARN_DOMAIN = "learn.cs.cmu.edu";
 const LEARN_LANDING_PAGE = "https://www.cs.cmu.edu/learn";
 
+// Link-preview crawlers. They skip the /give redirect and read app/give's
+// preview card instead; a card can't come from a redirect, and the giving
+// form's own card is a cropped university wordmark. iMessage previews announce
+// themselves as facebookexternalhit and Twitterbot.
+const PREVIEW_CRAWLERS =
+  ".*(LinkedInBot|facebookexternalhit|Facebot|Twitterbot|Slackbot|Discordbot|WhatsApp|TelegramBot|Pinterest|redditbot|Embedly).*";
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
@@ -40,14 +47,21 @@ const nextConfig: NextConfig = {
   // advancement.
   async redirects() {
     return [
-      { source: "/give", destination: GIVING_FORM_WEBSITE, permanent: false },
+      {
+        source: "/give",
+        missing: [{ type: "header", key: "user-agent", value: PREVIEW_CRAWLERS }],
+        destination: GIVING_FORM_WEBSITE,
+        permanent: false,
+      },
       { source: "/give/youtube", destination: GIVING_FORM_YOUTUBE, permanent: false },
       // After the giving rules, so learn.cs.cmu.edu/give and /give/youtube keep
       // reaching the giving form (the first matching rule wins). /privacy, /terms (and
       // the /_next assets it loads) stay on learn.cs.cmu.edu: Google's OAuth
       // consent screen and the YouTube API audit need a privacy policy and terms there.
+      // /give and /og/ stay too: /give only gets this far for a preview crawler,
+      // which needs the card page and its image.
       {
-        source: "/:path((?!privacy$|terms$|_next/).*)",
+        source: "/:path((?!privacy$|terms$|give$|og/|_next/).*)",
         has: [{ type: "host", value: LEARN_DOMAIN }],
         destination: LEARN_LANDING_PAGE,
         permanent: false,
