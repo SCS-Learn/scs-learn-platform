@@ -10,6 +10,14 @@ const GIVING_FORM_WEBSITE =
 const GIVING_FORM_YOUTUBE =
   "https://givenow.cmu.edu/campaigns/42968/donations/new?a=14504181&designation=griffinschoolcomputingeducationinnovationfund";
 
+// Giving CMU Day 2026 (through Tue 12/1): the fund's Giving Day page, with the
+// team tracking link advancement gave us (givecampus.com/s/yqdqi0, Danielle
+// Hoffman, 2026-11-20). Only gifts made through the Giving Day campaign count
+// toward the page's 100-donor goal, and the evergreen forms above are a
+// separate campaign. On 12/2, point both rules back at the evergreen forms.
+const GIVING_DAY_PAGE =
+  "https://www.givecampus.com/schools/CarnegieMellonUniversity/giving-cmu-day-2026/pages/school-of-computer-science/computing-education-innovation-fund/?a=14775714";
+
 // learn.cs.cmu.edu sends everyone to the Griffin School's CS Learn page on the
 // university CMS until our own site is ready there. Temporary (307), so
 // browsers don't cache it and we can take the domain back by deleting the rule.
@@ -50,10 +58,10 @@ const nextConfig: NextConfig = {
       {
         source: "/give",
         missing: [{ type: "header", key: "user-agent", value: PREVIEW_CRAWLERS }],
-        destination: GIVING_FORM_WEBSITE,
+        destination: GIVING_DAY_PAGE,
         permanent: false,
       },
-      { source: "/give/youtube", destination: GIVING_FORM_YOUTUBE, permanent: false },
+      { source: "/give/youtube", destination: GIVING_DAY_PAGE, permanent: false },
       // After the giving rules, so learn.cs.cmu.edu/give and /give/youtube keep
       // reaching the giving form (the first matching rule wins). /privacy, /terms (and
       // the /_next assets it loads) stay on learn.cs.cmu.edu: Google's OAuth
