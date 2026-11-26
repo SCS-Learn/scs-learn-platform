@@ -171,6 +171,9 @@ export function shuffleAnswerOptions(
   const obj = { ...choices };
 
   if (questionType === "ordering") {
+    // Learner copies arrive with the order already shuffled on the server,
+    // which holds the correct order (lib/quiz/learner-view.ts).
+    if (obj.fixedOrder === true) return choices;
     const items = Array.isArray(obj.items) ? obj.items.map(String) : [];
     if (items.length < 2) return choices;
     const displayOrder = seededShuffle(items, seed, true);

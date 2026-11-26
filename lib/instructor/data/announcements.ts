@@ -65,8 +65,21 @@ export async function postAnnouncement(input: { courseCode: string; message: str
 }
 
 export async function deleteAnnouncement(id: string) {
-  await requireInstructor();
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
+  // Course staff may remove any announcement in a course they teach.
+  const { data: announcement, error: lookupError } = await supabase
+    .from("announcements")
+    .select("course_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!announcement) throw new Error("Announcement not found.");
+  const taught = await getTaughtCourseIds(instructorId);
+  if (!taught.includes(announcement.course_id as string)) {
+    throw new Error("You don't teach the course this announcement belongs to.");
+  }
+
   const { error } = await supabase.from("announcements").delete().eq("id", id);
   if (error) throw new Error(error.message);
 

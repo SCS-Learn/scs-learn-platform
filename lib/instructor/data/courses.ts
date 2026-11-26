@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTaughtCourseIds, requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
+import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
 import type {
   InstructorCourse,
   Unit,
@@ -132,7 +133,7 @@ function toLessonItem(row: LessonRow): LessonItem {
       kind: block.kind,
       title: block.title,
       renderMode: block.render_mode,
-      bodyHtml: block.body_html,
+      bodyHtml: sanitizeLessonHtml(block.body_html),
       renderedImageUrls: block.rendered_image_urls,
       pdfUrl: pdfUrlForBlock(block, row.attachments),
       videoUrl: block.video_url,
@@ -148,7 +149,7 @@ function toLessonItem(row: LessonRow): LessonItem {
     title: row.title,
     type: row.type as LessonType,
     category: row.category as "assignment" | "homework" | null,
-    contentHtml: row.content_html,
+    contentHtml: sanitizeLessonHtml(row.content_html),
     contentSource: row.content_source as LessonContentSource,
     blocks,
     isPublished: row.is_published,

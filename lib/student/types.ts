@@ -7,7 +7,11 @@ export type StudentQuestion = {
   id: string;
   promptText: string;
   choices: QuestionChoices;
-  /** Used client-side for instant grading — never shown until the learner submits. */
+  /**
+   * Always null in what learners receive: quizzes are graded on the server and
+   * keys never leave it (lib/quiz/learner-view.ts). Set only for instructor
+   * preview and inside server code.
+   */
   answerKey: string | null;
   questionType: QuestionType;
   /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
@@ -62,6 +66,8 @@ export type QuizSubmissionStatus = {
   variantIndex: number;
   /** Per-question grading — fraction 0..1 (partial credit for free_response) plus any LLM feedback. */
   scores: Record<string, { fraction: number; feedback: string | null; feedbackRating?: "up" | "down" | null }>;
+  /** Formatted correct answers for the questions this attempt missed, keyed by question id; only when the lesson shows reference answers. Computed on the server. */
+  correctAnswers?: Record<string, string>;
 };
 
 export type StudentLesson = {

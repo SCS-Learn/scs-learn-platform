@@ -1,11 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
-import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-progress";
-import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
+import {
+  fetchLessonCompletionsForLessons,
+  fetchQuizSubmissionsForLessons,
+  loadQuestionsForBlocks,
+  questionBlockKey,
+} from "@/lib/student/data/learner-records";
+import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
 import { reconcileQuizSubmission } from "@/lib/quiz/grading";
+import { revealedAnswers, withoutAnswerKey } from "@/lib/quiz/learner-view";
 import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
-import { applyQuestionVariants, parseVariants } from "@/lib/quiz/variants";
+import { applyQuestionVariants } from "@/lib/quiz/variants";
 import type {
   StudentCourse,
   StudentCourseSummary,
@@ -18,18 +24,6 @@ import type {
   QuizSubmissionStatus,
   LessonType,
 } from "@/lib/student/types";
-import type { QuestionChoices } from "@/lib/quiz/types";
-
-type QuestionRow = {
-  id: string;
-  position: number;
-  prompt_text: string;
-  choices: QuestionChoices;
-  answer_key: string | null;
-  question_type: string;
-  points: number;
-  variants?: unknown;
-};
 
 type AutolabScoreRow = {
   platform_user_id: string;
@@ -58,7 +52,7 @@ type LessonBlockRow = {
   body_html: string | null;
   rendered_image_urls: string[] | null;
   video_url: string | null;
-  question_groups: { questions: QuestionRow[] } | null;
+  question_group_id: string | null;
 };
 
 type AttachmentRow = {
@@ -106,20 +100,7 @@ type CourseRow = {
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
 const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(questions(id, position, prompt_text, choices, answer_key, question_type, points, variants)))))";
-
-function toQuestion(row: QuestionRow): StudentQuestion {
-  const variants = parseVariants(row.variants);
-  return {
-    id: row.id,
-    promptText: row.prompt_text,
-    choices: row.choices,
-    answerKey: row.answer_key,
-    questionType: row.question_type as StudentQuestion["questionType"],
-    points: row.points,
-    ...(variants.length > 0 ? { variants } : {}),
-  };
-}
+  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_group_id)))";
 
 type LtiScoreRow = {
   platform_user_id: string;
@@ -234,13 +215,16 @@ function pdfUrlForBlock(block: LessonBlockRow, attachments: AttachmentRow[]): st
   return lessonPdf?.url ?? null;
 }
 
-function toLesson(
-  row: LessonRow,
-  autolab: AutolabStatus | null,
-  lti: LtiStatus | null,
-  quizSubmission: QuizSubmissionStatus | null,
-  completedAt: string | null
-): StudentLesson {
+type LearnerContext = {
+  autolabByLessonId: Map<string, AutolabStatus>;
+  ltiByLessonId: Map<string, LtiStatus>;
+  quizByLessonId: Map<string, QuizSubmissionStatus>;
+  completedByLessonId: Map<string, string>;
+  /** Questions WITH answer keys by questionBlockKey(), for grading here on the server; stripped before they leave toLesson. */
+  questionsByBlock: Map<string, StudentQuestion[]>;
+};
+
+function toLesson(row: LessonRow, ctx: LearnerContext): StudentLesson {
   const blocks: StudentLessonBlock[] = [...row.lesson_blocks]
     .sort((a, b) => a.position - b.position)
     .map((block) => ({
@@ -248,69 +232,56 @@ function toLesson(
       kind: block.kind,
       title: block.title,
       renderMode: block.render_mode,
-      bodyHtml: block.body_html,
+      bodyHtml: sanitizeLessonHtml(block.body_html),
       renderedImageUrls: block.rendered_image_urls,
       pdfUrl: pdfUrlForBlock(block, row.attachments),
       videoUrl: block.video_url,
-      questions: block.question_groups
-        ? [...block.question_groups.questions].sort((a, b) => a.position - b.position).map(toQuestion)
+      questions: block.question_group_id
+        ? (ctx.questionsByBlock.get(questionBlockKey({ lessonId: row.id, groupId: block.question_group_id })) ?? [])
         : null,
     }));
 
+  const quizSubmission = ctx.quizByLessonId.get(row.id) ?? null;
+  const showReferenceAnswers = row.show_reference_answers ?? false;
   const questions = blocks.flatMap((block) => block.questions ?? []);
   const variantIndex = quizSubmission?.variantIndex ?? 0;
   const scoredQuestions = applyQuestionVariants(questions, variantIndex);
+  const reconciled = reconcileQuizSubmission(scoredQuestions, quizSubmission);
 
   return {
     id: row.id,
     code: row.code,
     title: row.title,
     type: row.type as LessonType,
-    contentHtml: row.content_html,
+    contentHtml: sanitizeLessonHtml(row.content_html),
     contentSource: row.content_source as StudentLesson["contentSource"],
-    blocks,
-    autolab,
-    lti,
-    quizSubmission: reconcileQuizSubmission(scoredQuestions, quizSubmission),
+    // Answer keys stay on the server; see lib/quiz/learner-view.ts.
+    blocks: blocks.map((block) => ({ ...block, questions: block.questions?.map(withoutAnswerKey) ?? null })),
+    autolab: ctx.autolabByLessonId.get(row.id) ?? null,
+    lti: ctx.ltiByLessonId.get(row.id) ?? null,
+    quizSubmission: reconciled && {
+      ...reconciled,
+      correctAnswers: revealedAnswers(scoredQuestions, reconciled.scores, showReferenceAnswers),
+    },
     quizCompletionThreshold: row.quiz_completion_threshold ?? DEFAULT_QUIZ_COMPLETION_THRESHOLD,
-    showReferenceAnswers: row.show_reference_answers ?? false,
-    completedAt,
+    showReferenceAnswers,
+    completedAt: ctx.completedByLessonId.get(row.id) ?? null,
   };
 }
 
-function toUnit(
-  row: UnitRow,
-  autolabByLessonId: Map<string, AutolabStatus>,
-  ltiByLessonId: Map<string, LtiStatus>,
-  quizByLessonId: Map<string, QuizSubmissionStatus>,
-  completedByLessonId: Map<string, string>
-): StudentUnit | null {
+function toUnit(row: UnitRow, ctx: LearnerContext): StudentUnit | null {
   const publishedLessons = [...row.lessons]
     .filter((l) => l.is_published)
     .sort((a, b) => a.position - b.position)
-    .map((l) =>
-      toLesson(
-        l,
-        autolabByLessonId.get(l.id) ?? null,
-        ltiByLessonId.get(l.id) ?? null,
-        quizByLessonId.get(l.id) ?? null,
-        completedByLessonId.get(l.id) ?? null
-      )
-    );
+    .map((l) => toLesson(l, ctx));
   if (publishedLessons.length === 0) return null;
   return { id: row.id, code: row.code, title: row.title, lessons: publishedLessons };
 }
 
-function toCourse(
-  row: CourseRow,
-  autolabByLessonId: Map<string, AutolabStatus>,
-  ltiByLessonId: Map<string, LtiStatus>,
-  quizByLessonId: Map<string, QuizSubmissionStatus>,
-  completedByLessonId: Map<string, string>
-): StudentCourse {
+function toCourse(row: CourseRow, ctx: LearnerContext): StudentCourse {
   const units = [...row.units]
     .sort((a, b) => a.position - b.position)
-    .map((u) => toUnit(u, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId))
+    .map((u) => toUnit(u, ctx))
     .filter((u): u is StudentUnit => u !== null);
   return { code: row.code, title: row.title, department: row.department, track: row.track, units };
 }
@@ -408,12 +379,29 @@ export async function getStudentCourse(courseCode: string): Promise<StudentCours
 
   const course = data as unknown as CourseRow;
   const lessonIds = course.units.flatMap((u) => u.lessons.map((l) => l.id));
-  const [autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId] = await Promise.all([
-    fetchAutolabStatusByLessonId(lessonIds, learner.id),
-    fetchLtiStatusByLessonId(lessonIds, learner.id),
-    fetchQuizSubmissionsForLessons(lessonIds, learner.id),
-    fetchLessonCompletionsForLessons(lessonIds, learner.id),
-  ]);
+  // Questions are read with the service role (they carry answer keys), so
+  // only for lessons this page will actually show: published ones.
+  const publishedQuestionBlocks = course.units.flatMap((u) =>
+    u.lessons
+      .filter((l) => l.is_published)
+      .flatMap((l) =>
+        l.lesson_blocks.flatMap((b) => (b.question_group_id ? [{ lessonId: l.id, groupId: b.question_group_id }] : []))
+      )
+  );
+  const [autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId, questionsByBlock] =
+    await Promise.all([
+      fetchAutolabStatusByLessonId(lessonIds, learner.id),
+      fetchLtiStatusByLessonId(lessonIds, learner.id),
+      fetchQuizSubmissionsForLessons(lessonIds, learner.id),
+      fetchLessonCompletionsForLessons(lessonIds, learner.id),
+      loadQuestionsForBlocks(publishedQuestionBlocks),
+    ]);
 
-  return toCourse(course, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId);
+  return toCourse(course, {
+    autolabByLessonId,
+    ltiByLessonId,
+    quizByLessonId,
+    completedByLessonId,
+    questionsByBlock,
+  });
 }

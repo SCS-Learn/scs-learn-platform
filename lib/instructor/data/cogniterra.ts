@@ -1,6 +1,10 @@
 "use server";
 
-import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import {
+  requireCourseInstructor,
+  requireCourseInstructorFor,
+  requireInstructor,
+} from "@/lib/instructor/data/current-instructor";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -152,7 +156,8 @@ export async function wireExternalLessonsToCogniterra(
   courseCode: string,
   assignments: DriveAssignmentForMatch[]
 ): Promise<{ wired: number; skipped: number }> {
-  await requireCourseInstructor(courseCode);
+  // The writes below use the service role, so every lesson must be in this course.
+  await requireCourseInstructorFor(courseCode, ...assignments.map((a) => ({ lessonId: a.lessonId })));
   if (assignments.length === 0) {
     return { wired: 0, skipped: 0 };
   }

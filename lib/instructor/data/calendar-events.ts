@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getTaughtCourseIds, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import {
+  getTaughtCourseIds,
+  requireCourseInstructorFor,
+  requireInstructor,
+} from "@/lib/instructor/data/current-instructor";
 import type { CalendarEvent, CalendarEventScope, CalendarEventType } from "@/lib/instructor/mock-data";
 
 type CalendarEventRow = {
@@ -64,20 +68,16 @@ export async function addCalendarEvent(input: {
   scope: CalendarEventScope;
   courseCode?: string;
 }) {
-  const { id: instructorId } = await requireInstructor();
-  const supabase = await createClient();
-
+  let instructorId: string;
   let courseId: string | null = null;
   if (input.scope === "course") {
     if (!input.courseCode) throw new Error("A courseware code is required for this event.");
-    const { data: course, error } = await supabase
-      .from("courses")
-      .select("id")
-      .eq("code", input.courseCode)
-      .single();
-    if (error || !course) throw new Error("Unknown courseware code");
-    courseId = course.id;
+    // Course events only in courses this instructor teaches.
+    ({ id: instructorId, courseId } = await requireCourseInstructorFor(input.courseCode));
+  } else {
+    ({ id: instructorId } = await requireInstructor());
   }
+  const supabase = await createClient();
 
   const { error } = await supabase.from("calendar_events").insert({
     date: input.date,
@@ -96,8 +96,21 @@ export async function addCalendarEvent(input: {
 }
 
 export async function deleteCalendarEvent(id: string) {
-  await requireInstructor();
+  const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
+  // The host may remove their event; course staff may remove events in their course.
+  const { data: event, error: lookupError } = await supabase
+    .from("calendar_events")
+    .select("host_instructor_id, course_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!event) throw new Error("Event not found.");
+  const isHost = event.host_instructor_id === instructorId;
+  const teachesCourse =
+    event.course_id !== null && (await getTaughtCourseIds(instructorId)).includes(event.course_id as string);
+  if (!isHost && !teachesCourse) throw new Error("You can't remove this event.");
+
   const { error } = await supabase.from("calendar_events").delete().eq("id", id);
   if (error) throw new Error(error.message);
 

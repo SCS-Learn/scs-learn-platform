@@ -1,12 +1,18 @@
+import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 // Service-role client. Bypasses RLS, so it must never be imported into
 // anything that ships to the browser.
 //
-// Everything else in this project talks to Supabase with the anon key, which
-// is fine while the stub-auth policies are permissive. The LTI tables are the
-// exception: lti_tools holds shared secrets and has no RLS policy at all, so
-// the anon key cannot see it by design. Only this client can.
+// Most code talks to Supabase as the signed-in user (lib/supabase/server.ts),
+// and RLS decides what that user may read and write. This client is for the
+// rest, always after the calling code has checked who is asking:
+// - tables with no client-reachable policy (lti_tools and its shared secrets,
+//   lti_platforms, credentials tables);
+// - quiz questions for learners, which carry answer keys (stripped before
+//   they reach the browser);
+// - learner writes (quiz submissions and responses, lesson completions), made
+//   only after the server has graded the attempt or checked the threshold.
 //
 // SUPABASE_SERVICE_ROLE_KEY is deliberately not NEXT_PUBLIC_.
 export function createServiceClient() {

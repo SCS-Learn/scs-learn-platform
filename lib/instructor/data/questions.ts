@@ -1,6 +1,6 @@
 "use server";
 
-import { requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { requireCourseInstructorFor, requireInstructorFor } from "@/lib/instructor/data/current-instructor";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -28,7 +28,7 @@ export async function addQuestionGroup(
   lessonId: string,
   patch: { sourceDriveFileId: string; title: string; position: number }
 ): Promise<QuestionGroup> {
-  await requireInstructor();
+  await requireInstructorFor({ lessonId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("question_groups")
@@ -83,7 +83,7 @@ export async function addQuestion(
     needsReview?: boolean;
   }
 ): Promise<Question> {
-  await requireInstructor();
+  await requireInstructorFor({ questionGroupId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("questions")
@@ -130,7 +130,7 @@ export async function persistQuestionVariants(
     answerKey: string | null;
   }
 ): Promise<void> {
-  await requireInstructor();
+  await requireInstructorFor({ questionId });
   if (!seed.promptText.trim()) return;
   if (!isAutogradableQuestionType(seed.questionType)) return;
 
@@ -163,7 +163,7 @@ export async function updateQuestion(
     needsReview?: boolean;
   }
 ): Promise<Question> {
-  await requireCourseInstructor(courseCode);
+  await requireCourseInstructorFor(courseCode, { questionId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("questions")
@@ -208,7 +208,7 @@ export async function updateQuestion(
 }
 
 export async function getQuestionsForGroup(questionGroupId: string): Promise<Question[]> {
-  await requireInstructor();
+  await requireInstructorFor({ questionGroupId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("questions")
@@ -279,7 +279,7 @@ export async function createQuestionInGroup(
   questionGroupId: string,
   questionType: AutogradableQuestionType = "multiple_choice"
 ): Promise<Question> {
-  await requireCourseInstructor(courseCode);
+  await requireCourseInstructorFor(courseCode, { questionGroupId });
   const supabase = await createClient();
   const position = await nextQuestionPosition(supabase, questionGroupId);
   const created = await addQuestion(questionGroupId, {
@@ -297,7 +297,7 @@ export async function createQuestionInGroup(
 }
 
 export async function deleteQuestion(courseCode: string, questionId: string): Promise<void> {
-  await requireCourseInstructor(courseCode);
+  await requireCourseInstructorFor(courseCode, { questionId });
   const supabase = await createClient();
   const { data: existing, error: lookupError } = await supabase
     .from("questions")

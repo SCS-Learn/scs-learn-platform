@@ -1,6 +1,6 @@
 "use server";
 
-import { requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { requireInstructorFor } from "@/lib/instructor/data/current-instructor";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Attachment } from "@/lib/instructor/mock-data";
@@ -18,7 +18,10 @@ export async function addAttachment(
     lessonBlockId?: string | null;
   }
 ): Promise<Attachment> {
-  await requireInstructor();
+  await requireInstructorFor(
+    { lessonId },
+    ...(file.lessonBlockId ? [{ lessonBlockId: file.lessonBlockId }] : [])
+  );
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("attachments")
@@ -39,7 +42,7 @@ export async function addAttachment(
 }
 
 export async function deleteAttachment(attachmentId: string) {
-  await requireInstructor();
+  await requireInstructorFor({ attachmentId });
   const supabase = await createClient();
 
   const { data: attachment, error: fetchError } = await supabase

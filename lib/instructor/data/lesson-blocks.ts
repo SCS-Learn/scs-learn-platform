@@ -1,6 +1,7 @@
 "use server";
 
-import { requireInstructor } from "@/lib/instructor/data/current-instructor";
+import { requireInstructorFor } from "@/lib/instructor/data/current-instructor";
+import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -78,7 +79,7 @@ function toLessonBlock(row: {
     title: row.title,
     sourceDriveFileId: row.source_drive_file_id,
     renderMode: row.render_mode,
-    bodyHtml: row.body_html,
+    bodyHtml: sanitizeLessonHtml(row.body_html),
     renderedImageUrls: row.rendered_image_urls,
     videoUrl: row.video_url,
     questionGroupId: row.question_group_id,
@@ -86,7 +87,10 @@ function toLessonBlock(row: {
 }
 
 export async function addLessonBlock(lessonId: string, patch: LessonBlockPatch): Promise<LessonBlock> {
-  await requireInstructor();
+  await requireInstructorFor(
+    { lessonId },
+    ...(patch.kind === "question_group" ? [{ questionGroupId: patch.questionGroupId }] : [])
+  );
   const supabase = await createClient();
 
   const insert = {
@@ -114,7 +118,7 @@ export async function addLessonBlock(lessonId: string, patch: LessonBlockPatch):
 }
 
 export async function getLessonBlocks(lessonId: string): Promise<LessonBlock[]> {
-  await requireInstructor();
+  await requireInstructorFor({ lessonId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("lesson_blocks")

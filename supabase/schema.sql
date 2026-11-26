@@ -5,12 +5,13 @@
 -- non-ASCII characters (en/em dashes, middle dots) into mojibake once stored - use plain
 -- hyphens instead of typographic dashes in any string literal here.
 --
--- Auth status: stubbed. There is exactly one "acting" instructor (Phillip Compeau) and no
--- login screen yet. RLS is enabled on every table so the shape is auth-ready, but every
--- policy here is permissive ("using (true)") since there's no session identity to check
--- against yet. This is intentionally wide-open for this stub-auth phase - do not treat as
--- production-safe. Tighten these policies (auth.uid() checks against instructors.auth_user_id)
--- once real login exists.
+-- Policies: the "stub_auth_allow_all" policies below date from before login existed and
+-- are wide open. They are NOT the access model. After this file (and lti.sql, autolab.sql,
+-- storage.sql and the other migrations), run
+-- migrations/replace-stub-auth-policies.sql, which drops every policy in public and
+-- installs the role-scoped ones, then migrations/server-side-learner-writes.sql.
+-- supabase/tests/rls/checks.sql is the executable spec; supabase/tests/rls/run.sh
+-- checks it against a throwaway local Postgres.
 
 create extension if not exists pgcrypto;
 
@@ -112,7 +113,7 @@ create table public.calendar_events (
   )
 );
 
--- Row Level Security (stub-auth: wide open, see header note) ----------------
+-- Row Level Security (stub-auth placeholders, replaced by migrations/replace-stub-auth-policies.sql)
 
 alter table public.instructors enable row level security;
 alter table public.courses enable row level security;

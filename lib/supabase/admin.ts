@@ -1,15 +1,16 @@
+import "server-only";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null = null;
 
 /**
- * Service-role client - the only thing allowed to touch a table with no
- * client-reachable RLS policy (instructor_google_credentials holds a real
- * third-party secret, unlike the rest of this stub-auth schema, which uses a
- * permissive "using (true)" policy everywhere). Bypasses RLS entirely - never
- * expose this to client code or use it for anything else. Returns null when
- * SUPABASE_SERVICE_ROLE_KEY isn't configured, so Google OAuth features
- * degrade to "not connected" instead of throwing at import time.
+ * Service-role client for tables with no client-reachable RLS policy
+ * (credentials, admins, course_instructors) and for identity lookups that
+ * must not be forgeable from the browser (instructors.auth_user_id). Bypasses
+ * RLS entirely: never expose it to client code, and check who is asking
+ * before every use. Returns null when SUPABASE_SERVICE_ROLE_KEY isn't
+ * configured, so Google OAuth features degrade to "not connected" instead of
+ * throwing at import time. See lib/supabase/service.ts for the throwing variant.
  */
 export function createAdminClient(): SupabaseClient | null {
   if (cached) return cached;

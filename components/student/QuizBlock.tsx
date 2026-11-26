@@ -88,13 +88,9 @@ export default function QuizBlock({
           return;
         }
 
-        const result = await submitQuiz(
-          courseCode,
-          lessonId,
-          payload,
-          activeQuestions,
-          variantIndex
-        );
+        // Graded on the server against the stored questions; the browser
+        // never has the answer keys.
+        const result = await submitQuiz(courseCode, lessonId, payload, variantIndex);
         setSubmission(result);
         setResponses(result.responses);
         setVariantIndex(result.variantIndex);
@@ -187,6 +183,11 @@ export default function QuizBlock({
         const graded = submitted && score !== undefined;
         const feedbackState = feedbackStateFor(score?.fraction);
         const isFreeResponse = question.questionType === "free_response";
+        // Preview has the keys locally; learners get the answers they may see
+        // from the server, only after grading.
+        const correctAnswer = question.answerKey
+          ? formatCorrectAnswer(question)
+          : (submission?.correctAnswers?.[question.id] ?? "");
 
         const embedsPrompt = questionEmbedsPrompt(
           question.questionType,
@@ -275,18 +276,18 @@ export default function QuizBlock({
             )}
             {graded &&
               feedbackState !== "correct" &&
-              question.answerKey &&
+              correctAnswer &&
               !isFreeResponse &&
               (previewMode || allowReferenceAnswers) && (
                 <div className="text-xs text-gray-600 mt-2">
-                  <span className="font-medium">Correct answer:</span> {formatCorrectAnswer(question)}
+                  <span className="font-medium">Correct answer:</span> {correctAnswer}
                 </div>
               )}
-            {graded && feedbackState !== "correct" && question.answerKey && isFreeResponse && previewMode && (
+            {graded && feedbackState !== "correct" && correctAnswer && isFreeResponse && previewMode && (
               revealedAnswers.has(question.id) ? (
                 <div className="text-xs text-gray-600 mt-2">
                   <span className="font-medium">Reference answer:</span>{" "}
-                  <RichText className="mt-1">{formatCorrectAnswer(question)}</RichText>
+                  <RichText className="mt-1">{correctAnswer}</RichText>
                 </div>
               ) : (
                 <button
@@ -298,10 +299,10 @@ export default function QuizBlock({
                 </button>
               )
             )}
-            {graded && feedbackState !== "correct" && question.answerKey && isFreeResponse && !previewMode && allowReferenceAnswers && (
+            {graded && feedbackState !== "correct" && correctAnswer && isFreeResponse && !previewMode && allowReferenceAnswers && (
               <div className="text-xs text-gray-600 mt-2">
                 <span className="font-medium">Reference answer:</span>{" "}
-                <RichText className="mt-1">{formatCorrectAnswer(question)}</RichText>
+                <RichText className="mt-1">{correctAnswer}</RichText>
               </div>
             )}
           </div>
