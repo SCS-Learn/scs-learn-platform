@@ -8,10 +8,8 @@
 --   rows    ran and returned or changed rows
 -- Write statements need "returning 1" so their rows are counted.
 --
--- Expectations encode the policy model of
--- supabase/migrations/replace-stub-auth-policies.sql followed by
--- server-side-learner-writes.sql. When a table, policy or role rule changes,
--- change or add a row here in the same PR.
+-- Expectations encode the policy model of the canonical migration chain.
+-- When a table, policy or role rule changes, change or add a row here.
 
 create or replace function public._t(label text, r text, sub text, q text, expect text)
 returns text language plpgsql as $$

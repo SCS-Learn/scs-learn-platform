@@ -32,7 +32,7 @@ export async function addInstructor(_prev: AdminActionState, formData: FormData)
   const { error } = await db().from("instructors").insert({ name, initials: initialsFor(name), email });
   if (error) {
     if (error.code === "23505") return { status: "error", message: `${email} is already an instructor.` };
-    if (error.code === "42703") return { status: "error", message: "Run supabase/migrations/add-admins-and-course-instructors.sql first." };
+    if (error.code === "42703") return { status: "error", message: "The instructor schema is missing. Ask a maintainer to check the database migration history." };
     return { status: "error", message: error.message };
   }
   return done(`Added ${name}. They get instructor access when they sign in with ${email}.`);
@@ -67,7 +67,7 @@ export async function addCourseInstructor(_prev: AdminActionState, formData: For
   const { error } = await db().from("course_instructors").insert({ course_id: courseId, instructor_id: instructorId });
   if (error) {
     if (error.code === "23505") return { status: "error", message: "They already teach this courseware." };
-    if (["42P01", "PGRST205"].includes(error.code)) return { status: "error", message: "Run supabase/migrations/add-admins-and-course-instructors.sql first." };
+    if (["42P01", "PGRST205"].includes(error.code)) return { status: "error", message: "The instructor schema is missing. Ask a maintainer to check the database migration history." };
     return { status: "error", message: error.message };
   }
   return done("Instructor added to the courseware.");

@@ -197,7 +197,7 @@ export async function fetchQuizSubmissionsForLessons(
     );
   } catch (error) {
     console.warn(
-      "Skipping quiz progress (supabase/migrations/add-quiz-progress.sql likely not run yet):",
+      "Skipping quiz progress:",
       error
     );
     return new Map();
@@ -248,7 +248,7 @@ export async function fetchLessonCompletionsForLessons(
     );
   } catch (error) {
     console.warn(
-      "Skipping lesson completions (supabase/migrations/add-lesson-completions.sql likely not run yet):",
+      "Skipping lesson completions:",
       error
     );
     return new Map();

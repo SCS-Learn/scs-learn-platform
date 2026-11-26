@@ -59,11 +59,11 @@ app/api/autolab/oauth/callback  One-time OAuth bootstrap
 
 components/lti/ExternalActivity.tsx   The learner-facing embed
 
-supabase/lti.sql         LTI tables. Run after schema.sql
-supabase/autolab.sql     Autolab tables. Run after lti.sql
+supabase/migrations/    Canonical chain, including the LTI and Autolab tables
 ```
 
-Run the unit tests with `npm run test:lti`.
+See the [database guide](../supabase/README.md) for local replay and RLS
+verification. Run the unit tests with `npm run test:lti`.
 
 ## Environment
 

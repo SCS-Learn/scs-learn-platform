@@ -100,7 +100,7 @@ type CourseRow = {
 };
 
 // Deliberately no autolab_links here: that table only exists once
-// supabase/autolab.sql has been run, and embedding an optional table directly
+// the database migrations have run, and embedding an optional table directly
 // in this query means a missing table fails the *entire* course fetch with a
 // PostgREST "no relationship in schema cache" error. Fetched separately below
 // instead, where its absence can degrade to "no autolab data" instead of
@@ -176,9 +176,8 @@ function toAutolabStatus(link: AutolabLinkRow, learnerId: string): AutolabStatus
   };
 }
 
-// Best-effort: autolab_links/autolab_scores only exist once supabase/autolab.sql
-// has been run. Any failure here (most commonly that table not existing yet)
-// degrades to "no autolab data" rather than failing the whole course page.
+// Autolab status is best-effort so an unavailable table does not prevent the
+// course page from loading.
 async function fetchAutolabStatusByLessonId(
   lessonIds: string[],
   learnerId: string
@@ -200,7 +199,7 @@ async function fetchAutolabStatusByLessonId(
       (data ?? []).map((row) => [row.lesson_id, toAutolabStatus(row as unknown as AutolabLinkRow, learnerId)])
     );
   } catch (error) {
-    console.warn("Skipping Autolab status (supabase/autolab.sql likely not run yet):", error);
+    console.warn("Skipping Autolab status:", error);
     return new Map();
   }
 }

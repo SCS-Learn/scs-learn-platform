@@ -40,8 +40,7 @@ export default async function InstructorAccessPage() {
           <div className="mt-6 border border-amber-200 bg-amber-50 p-4">
             <p className="text-xs font-bold text-amber-900">DEV ONLY · link this account to an instructor</p>
             <p className="mt-1 text-xs text-amber-900">
-              Shown under <code>next dev</code> only. Production access is granted by email (see
-              supabase/migrations/add-instructor-accounts.sql).
+              Available under <code>npm run dev</code>. Production instructor access is granted by email.
             </p>
             <div className="mt-3 flex flex-col gap-2">
               {unclaimed.map((row) => (

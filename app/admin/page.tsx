@@ -28,8 +28,8 @@ export default async function AdminPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
         {!migrated && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            Run <code>supabase/migrations/add-admins-and-course-instructors.sql</code> in the Supabase SQL editor to
-            enable instructor emails and courseware staffing.
+            The database schema required for instructor emails and courseware staffing is missing.
+            Ask a maintainer to check the migration history for this environment.
           </p>
         )}
 

@@ -1,6 +1,4 @@
--- Fixture data for checks.sql, loaded as postgres (bypasses RLS). Builds on
--- the seed rows in supabase/schema.sql (instructors ...0001/...0002, courses
--- ...0101/...0102, lessons ...0301-...0312).
+-- Fixture data for checks.sql, loaded as postgres (bypasses RLS).
 --
 --   A  = auth user aaaaaaaa-...  -> instructor ...0001, owns courses 101 and 102
 --   B  = auth user bbbbbbbb-...  -> instructor ...0002, owns 103, co-staff on 102
@@ -15,26 +13,39 @@ insert into auth.users (id, email) values
   ('22222222-0000-0000-0000-000000000002', 'l2@example.edu');
 update auth.users set raw_user_meta_data = '{"full_name": " Learner Two "}'
   where id = '22222222-0000-0000-0000-000000000002';
-update public.instructors set auth_user_id = 'aaaaaaaa-0000-0000-0000-000000000001', email = 'a@example.edu'
-  where id = '00000000-0000-0000-0000-000000000001';
-update public.instructors set auth_user_id = 'bbbbbbbb-0000-0000-0000-000000000002', email = 'b@example.edu'
-  where id = '00000000-0000-0000-0000-000000000002';
+insert into public.instructors (id, name, initials, auth_user_id, email) values
+  ('00000000-0000-0000-0000-000000000001', 'Instructor A', 'IA', 'aaaaaaaa-0000-0000-0000-000000000001', 'a@example.edu'),
+  ('00000000-0000-0000-0000-000000000002', 'Instructor B', 'IB', 'bbbbbbbb-0000-0000-0000-000000000002', 'b@example.edu');
 
 insert into public.courses (id, code, title, department, track, instructor_id) values
+  ('00000000-0000-0000-0000-000000000101', '99-101', 'A course', '', '', '00000000-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-000000000102', '99-102', 'A second course', '', '', '00000000-0000-0000-0000-000000000001'),
   ('00000000-0000-0000-0000-000000000103', '99-999', 'B course', '', '', '00000000-0000-0000-0000-000000000002');
 insert into public.course_instructors (course_id, instructor_id) values
+  ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000001'),
   ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-000000000002'),
   ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000002')
 on conflict do nothing;
 insert into public.units (id, course_id, code, title, position) values
+  ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-000000000101', 'Unit 1', 'A unit', 1),
   ('00000000-0000-0000-0000-000000000206', '00000000-0000-0000-0000-000000000103', 'Unit 1', 'B unit', 1),
   ('00000000-0000-0000-0000-000000000207', '00000000-0000-0000-0000-000000000102', 'Unit 1', '102 unit', 1);
-insert into public.lessons (id, unit_id, code, title, position, is_published) values
-  ('00000000-0000-0000-0000-000000000313', '00000000-0000-0000-0000-000000000206', '1.1', 'B lesson', 1, true),
-  ('00000000-0000-0000-0000-000000000314', '00000000-0000-0000-0000-000000000207', '1.1', '102 lesson', 1, false);
--- 301 and 303 (a quiz) are published; 302 stays unpublished.
-update public.lessons set is_published = true
-  where id in ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000303');
+insert into public.lessons (id, unit_id, code, title, type, position, is_published) values
+  ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000201', '1.1', 'Published lesson', 'lesson', 1, true),
+  ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000201', '1.2', 'Draft lesson', 'lesson', 2, false),
+  ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-000000000201', '1.3', 'Published quiz', 'quiz', 3, true),
+  ('00000000-0000-0000-0000-000000000313', '00000000-0000-0000-0000-000000000206', '1.1', 'B lesson', 'lesson', 1, true),
+  ('00000000-0000-0000-0000-000000000314', '00000000-0000-0000-0000-000000000207', '1.1', '102 lesson', 'lesson', 1, false);
+
+insert into public.announcements (course_id, instructor_id, message) values
+  ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000001', 'Fixture announcement');
+insert into public.calendar_events (date, title, type, scope, host_instructor_id) values
+  (current_date, 'Fixture talk', 'live-talk', 'global', '00000000-0000-0000-0000-000000000001');
+insert into public.admins (email) values ('admin@example.edu');
+insert into public.email_signups (email) values ('learner@example.edu');
+insert into public.instructor_google_credentials (instructor_id, refresh_token, scope) values
+  ('00000000-0000-0000-0000-000000000001', 'test-token', 'test-scope');
 
 insert into public.question_groups (id, lesson_id, source_drive_file_id, position) values
   ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-000000000303', 'x', 1),
