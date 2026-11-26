@@ -175,7 +175,7 @@ export async function signUpWithPassword(_prev: AuthFormState, formData: FormDat
 
   if (IS_DEV) {
     const admin = createAdminClient();
-    if (!admin) return { status: "error", message: "Dev sign-up needs SUPABASE_SERVICE_ROLE_KEY in .env.local." };
+    if (!admin) return { status: "error", message: "Dev sign-up needs SUPABASE_SERVICE_ROLE_KEY in the selected development profile." };
     const { error } = await admin.auth.admin.createUser({
       email,
       password,
@@ -268,7 +268,7 @@ export async function updatePassword(_prev: AuthFormState, formData: FormData): 
 async function devInstantSignIn(email: string, name: string): Promise<AuthFormState | null> {
   const admin = createAdminClient();
   if (!admin) {
-    return { status: "error", message: "Dev sign-in needs SUPABASE_SERVICE_ROLE_KEY in .env.local." };
+    return { status: "error", message: "Dev sign-in needs SUPABASE_SERVICE_ROLE_KEY in the selected development profile." };
   }
   // Fails harmlessly with "already registered" for a returning learner.
   await admin.auth.admin.createUser({

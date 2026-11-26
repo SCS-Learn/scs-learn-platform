@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node -- scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:lti": "node --experimental-strip-types --test lib/lti/*.test.ts"
+    "test:lti": "node --experimental-strip-types --test lib/lti/*.test.ts",
+    "test:dev": "node --test scripts/dev-profile.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
