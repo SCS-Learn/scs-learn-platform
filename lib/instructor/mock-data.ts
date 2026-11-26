@@ -69,6 +69,18 @@ export type InstructorCourse = {
   units: Unit[];
 };
 
+export type InstructorCourseListItem = Pick<InstructorCourse, "code" | "title" | "studentCount"> & {
+  lessonCount: number;
+  draftCount: number;
+};
+
+export type InstructorCourseOutline = Pick<InstructorCourse, "code" | "title" | "department" | "track"> & {
+  id: string;
+  units: (Pick<Unit, "id" | "code" | "title"> & {
+    lessons: Pick<LessonItem, "id" | "code" | "title" | "type" | "isPublished">[];
+  })[];
+};
+
 export const lessonTypeOptions = ["Content", "Quiz", "External assignment"] as const;
 
 export type LessonTypeLabel = (typeof lessonTypeOptions)[number];

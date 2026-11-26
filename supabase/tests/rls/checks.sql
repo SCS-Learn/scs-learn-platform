@@ -40,6 +40,41 @@ end $$;
 \set L2 '''22222222-0000-0000-0000-000000000002'''
 
 select r from (values
+  (_t('read catalog summaries', 'anon', null,
+    $q$select * from public.student_course_summaries()$q$, 'denied')),
+  (_t('catalog summary excludes other learners and draft lessons', 'authenticated', :L1,
+    $q$select 1 from public.student_course_summaries()
+      where "totalLessonCount" = 2 and "completedLessonCount" = 0
+        and "resumeLessonId" = '00000000-0000-0000-0000-000000000301'$q$, 'rows')),
+  (_t('catalog summary counts own completion and resumes ahead', 'authenticated', :L2,
+    $q$select 1 from public.student_course_summaries()
+      where "unitCount" = 1 and "totalLessonCount" = 2 and "quizLessonCount" = 1
+        and "completedLessonCount" = 1 and "percentComplete" = 50
+        and "resumeLessonId" = '00000000-0000-0000-0000-000000000303'$q$, 'rows')),
+  (_t('read course activity summary', 'anon', null,
+    $q$select 1 where public.course_activity_summary('00000000-0000-0000-0000-000000000101') is not null$q$, 'denied')),
+  (_t('read course activity as a learner with progress', 'authenticated', :L2,
+    $q$select 1 where public.course_activity_summary('00000000-0000-0000-0000-000000000101') is not null$q$, 'denied')),
+  (_t('read activity in a course not taught', 'authenticated', :B,
+    $q$select 1 where public.course_activity_summary('00000000-0000-0000-0000-000000000101') is not null$q$, 'denied')),
+  (_t('aggregate activity and resolve roster identity as owner', 'authenticated', :A,
+    $q$select 1 from public.course_activity_summary('00000000-0000-0000-0000-000000000101') as summary(value)
+      where value @> '{"learnerCount":1,"learnerPage":1,"learnerPageCount":1,"averagePercentComplete":50,"averageQuizScore":40,
+        "completionsByLessonId":{"00000000-0000-0000-0000-000000000301":1},
+        "averageScoreByQuizId":{"00000000-0000-0000-0000-000000000303":40},
+        "learners":[{"id":"22222222-0000-0000-0000-000000000002","name":"Learner Two","email":"l2@example.edu",
+          "lessonsCompleted":1,"percentComplete":50,"averageQuizScore":40}]}'::jsonb$q$, 'rows')),
+  (_t('limit the first roster page to 50 learners', 'authenticated', :B,
+    $q$select 1 from public.course_activity_summary('00000000-0000-0000-0000-000000000102') as summary(value)
+      where jsonb_array_length(value->'learners') = 50$q$, 'rows')),
+  (_t('page activity as co-staff with course-wide totals and legacy names', 'authenticated', :B,
+    $q$select 1 from public.course_activity_summary('00000000-0000-0000-0000-000000000102', 9) as summary(value)
+      where jsonb_array_length(value->'learners') = 1
+        and value @> '{"learnerCount":51,"learnerPage":2,"learnerPageCount":2,"averagePercentComplete":0,"averageQuizScore":null,
+          "learners":[{"id":"stub-learner-1","name":"Test learner (pre-login)","email":null}]}'::jsonb$q$, 'rows'))
+) t(r);
+
+select r from (values
   -- Signed out: the anon key alone reaches nothing.
   (_t('read lessons',                            'anon', null, $q$select 1 from public.lessons$q$, 'denied')),
   (_t('read answer keys',                        'anon', null, $q$select answer_key from public.questions$q$, 'denied')),

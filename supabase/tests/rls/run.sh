@@ -67,6 +67,7 @@ migrations/remove-calculated-question-types.sql
 migrations/remove-chemical-formula.sql
 migrations/replace-stub-auth-policies.sql
 migrations/server-side-learner-writes.sql
+migrations/optimize-course-reads.sql
 "
 
 files=()

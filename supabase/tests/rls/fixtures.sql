@@ -13,6 +13,8 @@ insert into auth.users (id, email) values
   ('bbbbbbbb-0000-0000-0000-000000000002', 'b@example.edu'),
   ('11111111-0000-0000-0000-000000000001', 'l1@example.edu'),
   ('22222222-0000-0000-0000-000000000002', 'l2@example.edu');
+update auth.users set raw_user_meta_data = '{"full_name": " Learner Two "}'
+  where id = '22222222-0000-0000-0000-000000000002';
 update public.instructors set auth_user_id = 'aaaaaaaa-0000-0000-0000-000000000001', email = 'a@example.edu'
   where id = '00000000-0000-0000-0000-000000000001';
 update public.instructors set auth_user_id = 'bbbbbbbb-0000-0000-0000-000000000002', email = 'b@example.edu'
@@ -47,6 +49,10 @@ insert into public.quiz_responses (submission_id, question_id, response_text) va
   ('00000000-0000-0000-0000-000000000601', '00000000-0000-0000-0000-000000000501', 'B');
 insert into public.lesson_completions (lesson_id, platform_user_id) values
   ('00000000-0000-0000-0000-000000000301', '22222222-0000-0000-0000-000000000002');
+-- Legacy activity in course 102 exercises paging, missing Auth rows and a course with no published lessons.
+insert into public.lesson_completions (lesson_id, platform_user_id, completed_at)
+select '00000000-0000-0000-0000-000000000314', 'stub-learner-' || n, '2026-01-01'::date + n
+from generate_series(1, 51) as pages(n);
 
 insert into public.lti_tools (id, name, vendor, launch_url, consumer_key, shared_secret) values
   ('00000000-0000-0000-0000-000000000701', 'Cogniterra', 'cogniterra', 'https://example.org/lti', 'key', 'shh');

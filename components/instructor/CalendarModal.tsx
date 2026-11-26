@@ -11,7 +11,7 @@ export default function CalendarModal({
   onClose,
 }: {
   events: CalendarEvent[];
-  courses: InstructorCourse[];
+  courses: Pick<InstructorCourse, "code" | "title">[];
   onClose: () => void;
 }) {
   useEffect(() => {

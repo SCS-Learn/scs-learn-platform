@@ -1,35 +1,42 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import InstructorCourseDashboard from "@/components/instructor/InstructorCourseDashboard";
-import { getCourseWithContent } from "@/lib/instructor/data/courses";
+import { getInstructorCourseOutline } from "@/lib/instructor/data/courses";
 import { getCourseActivity } from "@/lib/instructor/data/course-dashboard";
 import { getAnnouncements } from "@/lib/instructor/data/announcements";
 import { getVisibleCalendarEvents } from "@/lib/instructor/data/calendar-events";
 
 export default async function InstructorCourseDashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseCode: string }>;
+  searchParams: Promise<{ learnersPage?: string | string[] }>;
 }) {
   const { courseCode } = await params;
-  const [course, announcements, events] = await Promise.all([
-    getCourseWithContent(courseCode),
-    getAnnouncements(),
-    getVisibleCalendarEvents(),
-  ]);
+  const { learnersPage } = await searchParams;
+  const requestedPage = typeof learnersPage === "string" ? Number(learnersPage) : 1;
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 && requestedPage <= 2_147_483_647
+    ? requestedPage
+    : 1;
+  const course = await getInstructorCourseOutline(courseCode);
 
   if (!course) {
     notFound();
   }
 
-  const activity = await getCourseActivity(course);
+  const [activity, announcements, events] = await Promise.all([
+    getCourseActivity(course.id, page),
+    getAnnouncements(course.id),
+    getVisibleCalendarEvents(course.id),
+  ]);
 
   return (
     <InstructorCourseDashboard
       course={course}
       activity={activity}
-      announcements={announcements.filter((a) => a.courseCode === course.code)}
-      events={events.filter((e) => e.scope === "global" || e.courseCode === course.code)}
+      announcements={announcements}
+      events={events}
     />
   );
 }

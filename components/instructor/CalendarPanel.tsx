@@ -11,7 +11,7 @@ export default function CalendarPanel({
   courses,
 }: {
   events: CalendarEvent[];
-  courses: InstructorCourse[];
+  courses: Pick<InstructorCourse, "code" | "title">[];
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const today = new Date();

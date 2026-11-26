@@ -25,8 +25,12 @@ import type { QuizSubmissionStatus, StudentQuestion } from "@/lib/student/types"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Server action arguments are attacker-controlled: reject anything that isn't a uuid string. */
+export function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID.test(value);
+}
+
 export function assertUuid(value: unknown, what: string): asserts value is string {
-  if (typeof value !== "string" || !UUID.test(value)) throw new Error(`Invalid ${what}`);
+  if (!isUuid(value)) throw new Error(`Invalid ${what}`);
 }
 
 /** Service-role client for learner writes; only call it after the checks above. */
@@ -61,8 +65,6 @@ export async function getPublishedLesson(lessonId: unknown): Promise<PublishedLe
 
 type QuestionRow = {
   id: string;
-  question_group_id: string;
-  position: number;
   prompt_text: string;
   choices: QuestionChoices;
   answer_key: string | null;
@@ -104,29 +106,22 @@ export async function loadQuestionsForBlocks(blocks: QuestionBlockRef[]): Promis
   const service = createServiceClient();
 
   const groupIds = [...new Set(blocks.map((b) => b.groupId))];
-  const { data: groups, error: groupsError } = await service
-    .from("question_groups")
-    .select("id, lesson_id")
-    .in("id", groupIds);
-  if (groupsError) throw new Error(groupsError.message);
-  const lessonOfGroup = new Map((groups ?? []).map((g) => [g.id as string, g.lesson_id as string]));
-  const ownBlocks = blocks.filter((b) => lessonOfGroup.get(b.groupId) === b.lessonId);
-  if (ownBlocks.length === 0) return byBlock;
-
   const { data, error } = await service
-    .from("questions")
-    .select("id, question_group_id, position, prompt_text, choices, answer_key, question_type, points, variants")
-    .in("question_group_id", [...new Set(ownBlocks.map((b) => b.groupId))])
-    .order("position");
+    .from("question_groups")
+    .select("id, lesson_id, lessons!inner(id), questions(id, prompt_text, choices, answer_key, question_type, points, variants)")
+    .in("id", groupIds)
+    .in("lesson_id", [...new Set(blocks.map((block) => block.lessonId))])
+    .eq("lessons.is_published", true)
+    .order("position", { referencedTable: "questions" });
   if (error) throw new Error(error.message);
 
-  const byGroup = new Map<string, StudentQuestion[]>();
-  for (const row of (data ?? []) as QuestionRow[]) {
-    const list = byGroup.get(row.question_group_id) ?? [];
-    list.push(toQuestion(row));
-    byGroup.set(row.question_group_id, list);
+  const groups = new Map((data ?? []).map((group) => [group.id as string, group]));
+  for (const block of blocks) {
+    const group = groups.get(block.groupId);
+    if (group?.lesson_id === block.lessonId) {
+      byBlock.set(questionBlockKey(block), (group.questions as QuestionRow[]).map(toQuestion));
+    }
   }
-  for (const block of ownBlocks) byBlock.set(questionBlockKey(block), byGroup.get(block.groupId) ?? []);
   return byBlock;
 }
 
@@ -207,6 +202,30 @@ export async function fetchQuizSubmissionsForLessons(
     );
     return new Map();
   }
+}
+
+/** The fields needed to reconcile displayed grades, without feedback or grading details. */
+export async function fetchQuizResponsesForOutline(lessonIds: string[], learnerId: string) {
+  const attempts = new Map<string, { variantIndex: number; responses: Record<string, string> }>();
+  if (lessonIds.length === 0) return attempts;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quiz_submissions")
+    .select("lesson_id, variant_index, quiz_responses(question_id, response_text)")
+    .eq("platform_user_id", learnerId)
+    .in("lesson_id", lessonIds);
+  if (error) {
+    console.warn("Skipping quiz scores for the course outline:", error.message);
+    return attempts;
+  }
+  for (const attempt of data ?? []) {
+    attempts.set(attempt.lesson_id as string, {
+      variantIndex: (attempt.variant_index as number | null) ?? 0,
+      responses: Object.fromEntries(attempt.quiz_responses.map((row) => [row.question_id, row.response_text])),
+    });
+  }
+  return attempts;
 }
 
 export async function fetchLessonCompletionsForLessons(

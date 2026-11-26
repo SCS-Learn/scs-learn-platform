@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import AnalyticsClient from "@/components/instructor/AnalyticsClient";
-import { getCourseWithContent } from "@/lib/instructor/data/courses";
+import { getInstructorCourseTitle } from "@/lib/instructor/data/courses";
 import AppHeader from "@/components/app/AppHeader";
 
 export default async function CourseAnalyticsPage({
@@ -10,7 +10,7 @@ export default async function CourseAnalyticsPage({
   params: Promise<{ courseCode: string }>;
 }) {
   const { courseCode } = await params;
-  const course = await getCourseWithContent(courseCode);
+  const course = await getInstructorCourseTitle(courseCode);
 
   if (!course) {
     notFound();

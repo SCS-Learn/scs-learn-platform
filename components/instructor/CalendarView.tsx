@@ -30,7 +30,7 @@ export default function CalendarView({
   onClose,
 }: {
   events: CalendarEvent[];
-  courses: InstructorCourse[];
+  courses: Pick<InstructorCourse, "code" | "title">[];
   onClose: () => void;
 }) {
   const todayIso = isoToday();

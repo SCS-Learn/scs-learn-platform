@@ -10,7 +10,7 @@ import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organ
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
 import { getCogniterraEnvDefaults } from "@/lib/instructor/data/cogniterra";
 import CogniterraSetupFields from "@/components/instructor/CogniterraSetupFields";
-import type { InstructorCourse } from "@/lib/instructor/mock-data";
+import type { InstructorCourseListItem } from "@/lib/instructor/mock-data";
 
 type CreateStatus = "input" | "scanning" | "confirm" | "creating" | "importing";
 
@@ -299,7 +299,7 @@ function CreateCourseModal({
   );
 }
 
-export default function CourseListSection({ courses: initialCourses }: { courses: InstructorCourse[] }) {
+export default function CourseListSection({ courses: initialCourses }: { courses: InstructorCourseListItem[] }) {
   const [courses, setCourses] = useState(initialCourses);
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
@@ -319,8 +319,8 @@ export default function CourseListSection({ courses: initialCourses }: { courses
     router.push(`/instructor/${code}/edit`);
   };
 
-  const handleDelete = (course: InstructorCourse) => {
-    const lessonCount = course.units.reduce((sum, u) => sum + u.lessons.length, 0);
+  const handleDelete = (course: InstructorCourseListItem) => {
+    const { lessonCount } = course;
     const message =
       lessonCount > 0
         ? `Delete "${course.title}" (${course.code}) and all ${lessonCount} lessons? This cannot be undone.`

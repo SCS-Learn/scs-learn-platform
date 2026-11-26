@@ -1,116 +1,135 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import StudentSidebar from "@/components/student/StudentSidebar";
 import StudentLessonViewer from "@/components/student/StudentLessonViewer";
-import type { StudentCourse, QuizSubmissionStatus } from "@/lib/student/types";
+import type { StudentCourse, StudentLesson, QuizSubmissionStatus } from "@/lib/student/types";
 
-function initialQuizStatusByLessonId(course: StudentCourse): Record<string, QuizSubmissionStatus> {
-  const map: Record<string, QuizSubmissionStatus> = {};
-  for (const unit of course.units) {
-    for (const lesson of unit.lessons) {
-      if (lesson.quizSubmission) map[lesson.id] = lesson.quizSubmission;
-    }
-  }
-  return map;
-}
-
-function initialCompletedByLessonId(course: StudentCourse): Record<string, string | null> {
-  const map: Record<string, string | null> = {};
-  for (const unit of course.units) {
-    for (const lesson of unit.lessons) {
-      if (lesson.completedAt) map[lesson.id] = lesson.completedAt;
-    }
-  }
-  return map;
-}
+type LessonSelection = {
+  id: string;
+  lesson?: StudentLesson;
+  failed?: boolean;
+};
 
 export default function StudentCourseClient({
   course,
-  initialLessonId,
+  initialLesson,
   header,
 }: {
   course: StudentCourse;
-  initialLessonId?: string;
-  /** The app bar, rendered by the (server) page and passed through. */
+  initialLesson: StudentLesson | null;
   header?: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const firstLessonId = course.units.find((u) => u.lessons.length > 0)?.lessons[0]?.id ?? "";
-  const [selectedLessonId, setSelectedLessonIdState] = useState(initialLessonId || firstLessonId);
-  const [quizStatusByLessonId, setQuizStatusByLessonId] = useState(initialQuizStatusByLessonId(course));
-  const [completedByLessonId, setCompletedByLessonId] = useState(initialCompletedByLessonId(course));
+  const [selection, setSelection] = useState<LessonSelection>({ id: initialLesson?.id ?? "" });
+  const [quizChanges, setQuizChanges] = useState<Record<string, QuizSubmissionStatus | null>>({});
+  const [completionChanges, setCompletionChanges] = useState<Record<string, string | null>>({});
+  const lessonRequests = useRef(new Map<string, Promise<StudentLesson>>());
+  const selectionVersion = useRef(0);
 
-  // Keeps ?lesson=<id> in the address bar in sync with what's on screen, via
-  // the native History API rather than router.replace - a router navigation
-  // would re-run the page's server component (re-fetching the whole course)
-  // on every lesson click just to update the URL. This way a refresh lands
-  // back on the same lesson without any extra round trip on every click.
-  const selectLesson = useCallback(
-    (lessonId: string) => {
-      setSelectedLessonIdState(lessonId);
-      const params = new URLSearchParams(window.location.search);
-      params.set("lesson", lessonId);
-      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
-    },
-    [pathname]
-  );
+  useEffect(() => {
+    if (initialLesson) lessonRequests.current.set(initialLesson.id, Promise.resolve(initialLesson));
+  }, [initialLesson]);
 
-  const unitsWithProgress = useMemo(
-    () =>
-      course.units.map((unit) => ({
-        ...unit,
-        lessons: unit.lessons.map((lesson) => ({
-          ...lesson,
-          quizSubmission: quizStatusByLessonId[lesson.id] ?? lesson.quizSubmission,
-          completedAt:
-            lesson.id in completedByLessonId ? completedByLessonId[lesson.id] : lesson.completedAt,
-        })),
-      })),
-    [course.units, quizStatusByLessonId, completedByLessonId]
-  );
+  const loadLesson = useCallback((lessonId: string) => {
+    const cached = lessonRequests.current.get(lessonId);
+    if (cached) return cached;
 
-  const selectedLesson = unitsWithProgress.flatMap((u) => u.lessons).find((l) => l.id === selectedLessonId);
+    const pending = fetch(`/student/${encodeURIComponent(course.code)}/learn/${encodeURIComponent(lessonId)}`, {
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (!response.ok || response.redirected) throw new Error("Could not load this lesson");
+        return response.json() as Promise<StudentLesson>;
+      })
+      .catch((error: unknown) => {
+        lessonRequests.current.delete(lessonId);
+        throw error;
+      });
+    lessonRequests.current.set(lessonId, pending);
+    return pending;
+  }, [course.code]);
+
+  const selectLesson = useCallback((lessonId: string) => {
+    const version = ++selectionVersion.current;
+    const params = new URLSearchParams(window.location.search);
+    params.set("lesson", lessonId);
+    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    setSelection({ id: lessonId });
+    if (lessonId === initialLesson?.id) return;
+
+    void loadLesson(lessonId).then(
+      (lesson) => {
+        if (selectionVersion.current === version) setSelection({ id: lessonId, lesson });
+      },
+      () => {
+        if (selectionVersion.current === version) setSelection({ id: lessonId, failed: true });
+      }
+    );
+  }, [initialLesson?.id, loadLesson, pathname]);
+
+  const units = useMemo(() => course.units.map((unit) => ({
+    ...unit,
+    lessons: unit.lessons.map((lesson) => ({
+      ...lesson,
+      quizScore: lesson.id in quizChanges ? (quizChanges[lesson.id]?.scorePercent ?? null) : lesson.quizScore,
+      completedAt: lesson.id in completionChanges ? completionChanges[lesson.id] : lesson.completedAt,
+    })),
+  })), [course.units, quizChanges, completionChanges]);
+
+  const loadedLesson = selection.id === initialLesson?.id ? initialLesson : selection.lesson;
+  const lessons = units.flatMap((unit) => unit.lessons);
+  const activeIndex = lessons.findIndex((lesson) => lesson.id === selection.id);
+  const nextLessonId = loadedLesson && activeIndex >= 0 ? lessons[activeIndex + 1]?.id : undefined;
+
+  useEffect(() => {
+    if (nextLessonId) void loadLesson(nextLessonId).catch(() => undefined);
+  }, [loadLesson, nextLessonId]);
 
   return (
     <div className="h-screen bg-gray-50 text-black flex flex-col overflow-hidden">
       {header}
       <main className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-      <StudentSidebar
-        courseCode={course.code}
-        courseTitle={course.title}
-        units={unitsWithProgress}
-        selectedLessonId={selectedLessonId}
-        onSelectLesson={selectLesson}
-      />
+        <StudentSidebar
+          courseCode={course.code}
+          courseTitle={course.title}
+          units={units}
+          selectedLessonId={selection.id}
+          onSelectLesson={selectLesson}
+        />
 
-      <div className="flex-1 min-w-0 min-h-0 md:h-full overflow-hidden">
-        {selectedLesson ? (
-          <StudentLessonViewer
-            key={selectedLesson.id}
-            courseCode={course.code}
-            lesson={selectedLesson}
-            onQuizSubmitted={(lessonId, status) =>
-              setQuizStatusByLessonId((prev) => ({ ...prev, [lessonId]: status }))
-            }
-            onQuizReset={(lessonId) =>
-              setQuizStatusByLessonId((prev) => {
-                const next = { ...prev };
-                delete next[lessonId];
-                return next;
-              })
-            }
-            onCompletionChange={(lessonId, completedAt) =>
-              setCompletedByLessonId((prev) => ({ ...prev, [lessonId]: completedAt }))
-            }
-          />
-        ) : (
-          <div className="h-full bg-white flex items-center justify-center text-sm text-gray-500">
-            This courseware has no published lessons yet.
-          </div>
-        )}
-      </div>
+        <div className="flex-1 min-w-0 min-h-0 md:h-full overflow-hidden">
+          {loadedLesson ? (
+            <StudentLessonViewer
+              key={loadedLesson.id}
+              courseCode={course.code}
+              lesson={{
+                ...loadedLesson,
+                completedAt: lessons[activeIndex]?.completedAt ?? null,
+                quizSubmission: loadedLesson.id in quizChanges ? quizChanges[loadedLesson.id] : loadedLesson.quizSubmission,
+              }}
+              onQuizSubmitted={(lessonId, status) =>
+                setQuizChanges((prev) => ({ ...prev, [lessonId]: status }))
+              }
+              onQuizReset={(lessonId) =>
+                setQuizChanges((prev) => ({ ...prev, [lessonId]: null }))
+              }
+              onCompletionChange={(lessonId, completedAt) =>
+                setCompletionChanges((prev) => ({ ...prev, [lessonId]: completedAt }))
+              }
+            />
+          ) : (
+            <div className="h-full bg-white flex items-center justify-center gap-2 text-sm text-gray-500" role="status">
+              {selection.failed ? (
+                <>
+                  Could not load this lesson.
+                  <button className="underline" onClick={() => selectLesson(selection.id)}>Retry</button>
+                </>
+              ) : selection.id ? "Loading lesson…" : "This courseware has no published lessons yet."}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

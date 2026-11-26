@@ -1,14 +1,18 @@
+import "server-only";
+
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import {
   fetchLessonCompletionsForLessons,
+  fetchQuizResponsesForOutline,
   fetchQuizSubmissionsForLessons,
+  isUuid,
   loadQuestionsForBlocks,
   questionBlockKey,
 } from "@/lib/student/data/learner-records";
 import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
-import { reconcileQuizSubmission } from "@/lib/quiz/grading";
+import { reconcileQuizSubmission, scoreQuiz } from "@/lib/quiz/grading";
 import { revealedAnswers, withoutAnswerKey } from "@/lib/quiz/learner-view";
 import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
 import { applyQuestionVariants } from "@/lib/quiz/variants";
@@ -17,6 +21,7 @@ import type {
   StudentCourseSummary,
   StudentUnit,
   StudentLesson,
+  StudentLessonSummary,
   StudentLessonBlock,
   StudentQuestion,
   AutolabStatus,
@@ -62,15 +67,17 @@ type AttachmentRow = {
   storage_path: string | null;
 };
 
-type LessonRow = {
+type LessonOutlineRow = {
   id: string;
   code: string;
   title: string;
   type: string;
-  position: number;
+  lesson_blocks: { position: number; question_group_id: string | null }[];
+};
+
+type LessonRow = LessonOutlineRow & {
   content_html: string;
   content_source: string;
-  is_published: boolean;
   quiz_completion_threshold: number;
   show_reference_answers: boolean;
   attachments: AttachmentRow[];
@@ -81,8 +88,7 @@ type UnitRow = {
   id: string;
   code: string;
   title: string;
-  position: number;
-  lessons: LessonRow[];
+  lessons: LessonOutlineRow[];
 };
 
 type CourseRow = {
@@ -99,8 +105,8 @@ type CourseRow = {
 // PostgREST "no relationship in schema cache" error. Fetched separately below
 // instead, where its absence can degrade to "no autolab data" instead of
 // breaking every course's page.
-const COURSE_WITH_CONTENT_SELECT =
-  "code, title, department, track, units(id, code, title, position, lessons(id, code, title, type, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_group_id)))";
+const LESSON_CONTENT_SELECT =
+  "id, code, title, type, content_html, content_source, quiz_completion_threshold, show_reference_answers, attachments(url, name, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_group_id)";
 
 type LtiScoreRow = {
   platform_user_id: string;
@@ -143,7 +149,8 @@ async function fetchLtiStatusByLessonId(
       .select(
         "id, lesson_id, title, points_possible, custom_params, lti_results(platform_user_id, score, reported_at)"
       )
-      .in("lesson_id", lessonIds);
+      .in("lesson_id", lessonIds)
+      .eq("lti_results.platform_user_id", learnerId);
     if (error) throw new Error(error.message);
 
     return new Map(
@@ -185,7 +192,8 @@ async function fetchAutolabStatusByLessonId(
       .select(
         "lesson_id, course_name, assessment_name, title, points_possible, embed_in_iframe, autolab_scores(platform_user_id, score, points_possible, no_submission, synced_at)"
       )
-      .in("lesson_id", lessonIds);
+      .in("lesson_id", lessonIds)
+      .eq("autolab_scores.platform_user_id", learnerId);
     if (error) throw new Error(error.message);
 
     return new Map(
@@ -269,135 +277,127 @@ function toLesson(row: LessonRow, ctx: LearnerContext): StudentLesson {
   };
 }
 
-function toUnit(row: UnitRow, ctx: LearnerContext): StudentUnit | null {
-  const publishedLessons = [...row.lessons]
-    .filter((l) => l.is_published)
+function questionBlocks(lesson: LessonOutlineRow) {
+  return [...lesson.lesson_blocks]
     .sort((a, b) => a.position - b.position)
-    .map((l) => toLesson(l, ctx));
-  if (publishedLessons.length === 0) return null;
-  return { id: row.id, code: row.code, title: row.title, lessons: publishedLessons };
-}
-
-function toCourse(row: CourseRow, ctx: LearnerContext): StudentCourse {
-  const units = [...row.units]
-    .sort((a, b) => a.position - b.position)
-    .map((u) => toUnit(u, ctx))
-    .filter((u): u is StudentUnit => u !== null);
-  return { code: row.code, title: row.title, department: row.department, track: row.track, units };
+    .flatMap(({ question_group_id }) => question_group_id ? [{ lessonId: lesson.id, groupId: question_group_id }] : []);
 }
 
 export async function listStudentCourses(): Promise<StudentCourseSummary[]> {
   const supabase = await createClient();
-  const [{ data, error }, learner] = await Promise.all([
-    supabase
-      .from("courses")
-      .select(
-        "code, title, department, track, units(id, position, lessons(id, code, title, type, position, is_published))"
-      )
-      .order("code"),
-    getLaunchingUser(),
-  ]);
+  const { data, error } = await supabase.rpc("student_course_summaries").order("code");
   if (error) throw new Error(error.message);
-
-  type SummaryLessonRow = {
-    id: string;
-    code: string;
-    title: string;
-    type: string;
-    position: number;
-    is_published: boolean;
-  };
-  type SummaryUnitRow = {
-    id: string;
-    position: number;
-    lessons: SummaryLessonRow[];
-  };
-  type SummaryCourseRow = {
-    code: string;
-    title: string;
-    department: string;
-    track: string;
-    units: SummaryUnitRow[];
-  };
-
-  const courses = (data ?? []) as unknown as SummaryCourseRow[];
-  const allLessonIds = courses.flatMap((course) =>
-    course.units.flatMap((unit) =>
-      unit.lessons.filter((lesson) => lesson.is_published).map((lesson) => lesson.id)
-    )
-  );
-  const completedByLessonId = await fetchLessonCompletionsForLessons(allLessonIds, learner.id);
-
-  return courses.map((course) => {
-    const unitsWithPublished = [...course.units]
-      .sort((a, b) => a.position - b.position)
-      .map((unit) => ({
-        ...unit,
-        lessons: [...unit.lessons]
-          .filter((lesson) => lesson.is_published)
-          .sort((a, b) => a.position - b.position),
-      }))
-      .filter((unit) => unit.lessons.length > 0);
-
-    const lessons = unitsWithPublished.flatMap((unit) => unit.lessons);
-    const contentLessonCount = lessons.filter((lesson) => lesson.type !== "quiz").length;
-    const quizLessonCount = lessons.filter((lesson) => lesson.type === "quiz").length;
-    const completedLessonCount = lessons.filter((lesson) => completedByLessonId.has(lesson.id)).length;
-    const totalLessonCount = lessons.length;
-    const percentComplete =
-      totalLessonCount === 0 ? 0 : Math.round((completedLessonCount / totalLessonCount) * 100);
-
-    const resumeLesson =
-      lessons.find((lesson) => !completedByLessonId.has(lesson.id)) ?? lessons[0] ?? null;
-
-    return {
-      code: course.code,
-      title: course.title,
-      department: course.department,
-      track: course.track,
-      unitCount: unitsWithPublished.length,
-      contentLessonCount,
-      quizLessonCount,
-      completedLessonCount,
-      totalLessonCount,
-      percentComplete,
-      resumeLessonId: resumeLesson?.id ?? null,
-      resumeLessonCode: resumeLesson?.code ?? null,
-      resumeLessonTitle: resumeLesson?.title ?? null,
-    };
-  });
+  return data as StudentCourseSummary[];
 }
 
-export async function getStudentCourse(courseCode: string): Promise<StudentCourse | null> {
+async function readCourseOutline(courseCode: string): Promise<CourseRow | null> {
   const supabase = await createClient();
-  const [{ data, error }, learner] = await Promise.all([
-    supabase.from("courses").select(COURSE_WITH_CONTENT_SELECT).eq("code", courseCode).maybeSingle(),
-    getLaunchingUser(),
+  const { data, error } = await supabase
+    .from("courses")
+    .select("code, title, department, track, units(id, code, title, lessons(id, code, title, type, lesson_blocks(position, question_group_id)))")
+    .eq("code", courseCode)
+    .eq("units.lessons.is_published", true)
+    .not("units.lessons.lesson_blocks.question_group_id", "is", null)
+    .order("position", { referencedTable: "units" })
+    .order("position", { referencedTable: "units.lessons" })
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as unknown as CourseRow | null;
+}
+
+async function loadOutlineProgress(course: CourseRow, learnerId: string): Promise<StudentCourse> {
+  const lessons = course.units.flatMap((unit) => unit.lessons);
+  const lessonIds = lessons.map((lesson) => lesson.id);
+  const quizLessons = lessons.filter((lesson) => lesson.type === "quiz" || lesson.lesson_blocks.length > 0);
+  const [autolab, lti, completions, attempts] = await Promise.all([
+    fetchAutolabStatusByLessonId(lessonIds, learnerId),
+    fetchLtiStatusByLessonId(lessonIds, learnerId),
+    fetchLessonCompletionsForLessons(lessonIds, learnerId),
+    fetchQuizResponsesForOutline(quizLessons.map((lesson) => lesson.id), learnerId),
   ]);
+
+  // Only submitted quizzes need answer keys to display a score against the live questions.
+  const submittedQuizBlocks = quizLessons
+    .filter(({ id }) => attempts.has(id) && !lti.has(id) && !autolab.has(id))
+    .flatMap(questionBlocks);
+  const questions = await loadQuestionsForBlocks(submittedQuizBlocks);
+  const quizScores = new Map<string, number>();
+  for (const lesson of quizLessons) {
+    const attempt = attempts.get(lesson.id);
+    if (!attempt || lti.has(lesson.id) || autolab.has(lesson.id)) continue;
+    const quizQuestions = questionBlocks(lesson).flatMap((block) => questions.get(questionBlockKey(block)) ?? []);
+    if (lesson.type === "quiz" || quizQuestions.length > 0) {
+      const scoredQuestions = applyQuestionVariants(quizQuestions, attempt.variantIndex);
+      quizScores.set(lesson.id, scoreQuiz(scoredQuestions, attempt.responses).scorePercent);
+    }
+  }
+  const units: StudentUnit[] = course.units
+    .filter((unit) => unit.lessons.length > 0)
+    .map((unit) => ({
+      id: unit.id,
+      code: unit.code,
+      title: unit.title,
+      lessons: unit.lessons.map((lesson): StudentLessonSummary => {
+        const { id, code, title, type } = lesson;
+        const ltiStatus = lti.get(id);
+        const autolabStatus = autolab.get(id);
+        return {
+          id, code, title, type: type as LessonType,
+          quizScore: quizScores.get(id) ?? null,
+          completedAt: completions.get(id) ?? null,
+          autolab: autolabStatus ? { score: autolabStatus.score, pointsPossible: autolabStatus.pointsPossible } : null,
+          lti: ltiStatus ? { score: ltiStatus.score, pointsPossible: ltiStatus.pointsPossible } : null,
+        };
+      }),
+    }));
+  return { code: course.code, title: course.title, department: course.department, track: course.track, units };
+}
+
+export async function getStudentCourseOutline(courseCode: string): Promise<StudentCourse | null> {
+  const [course, learner] = await Promise.all([readCourseOutline(courseCode), getLaunchingUser()]);
+  return course ? loadOutlineProgress(course, learner.id) : null;
+}
+
+export async function getStudentCourseForLearning(courseCode: string, requestedLessonId?: string) {
+  const [course, learner] = await Promise.all([readCourseOutline(courseCode), getLaunchingUser()]);
+  if (!course) return null;
+
+  const lessons = course.units.flatMap((unit) => unit.lessons);
+  const selected = lessons.find((lesson) => lesson.id === requestedLessonId?.toLowerCase()) ?? lessons[0];
+  const [outline, lesson] = await Promise.all([
+    loadOutlineProgress(course, learner.id),
+    selected ? getStudentLesson(courseCode, selected.id, learner.id) : null,
+  ]);
+  return { course: outline, lesson };
+}
+
+export async function getStudentLesson(courseCode: string, lessonId: string, learnerId: string): Promise<StudentLesson | null> {
+  if (!isUuid(lessonId)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .select(`${LESSON_CONTENT_SELECT}, units!inner(courses!inner(code))`)
+    .eq("id", lessonId)
+    .eq("is_published", true)
+    .eq("units.courses.code", courseCode)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  const course = data as unknown as CourseRow;
-  const lessonIds = course.units.flatMap((u) => u.lessons.map((l) => l.id));
-  // Questions are read with the service role (they carry answer keys), so
-  // only for lessons this page will actually show: published ones.
-  const publishedQuestionBlocks = course.units.flatMap((u) =>
-    u.lessons
-      .filter((l) => l.is_published)
-      .flatMap((l) =>
-        l.lesson_blocks.flatMap((b) => (b.question_group_id ? [{ lessonId: l.id, groupId: b.question_group_id }] : []))
-      )
-  );
+  const lesson = data as unknown as LessonRow;
+  const lessonIds = [lesson.id];
+  const quizBlocks = questionBlocks(lesson);
+  const hasQuiz = lesson.type === "quiz" || quizBlocks.length > 0;
   const [autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId, questionsByBlock] =
     await Promise.all([
-      fetchAutolabStatusByLessonId(lessonIds, learner.id),
-      fetchLtiStatusByLessonId(lessonIds, learner.id),
-      fetchQuizSubmissionsForLessons(lessonIds, learner.id),
-      fetchLessonCompletionsForLessons(lessonIds, learner.id),
-      loadQuestionsForBlocks(publishedQuestionBlocks),
+      fetchAutolabStatusByLessonId(lessonIds, learnerId),
+      fetchLtiStatusByLessonId(lessonIds, learnerId),
+      fetchQuizSubmissionsForLessons(hasQuiz ? lessonIds : [], learnerId),
+      fetchLessonCompletionsForLessons(lessonIds, learnerId),
+      loadQuestionsForBlocks(quizBlocks),
     ]);
 
-  return toCourse(course, {
+  return toLesson(lesson, {
     autolabByLessonId,
     ltiByLessonId,
     quizByLessonId,

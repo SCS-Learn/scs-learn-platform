@@ -26,7 +26,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function AnalyticsClient({ course }: { course: InstructorCourse }) {
+export default function AnalyticsClient({ course }: { course: Pick<InstructorCourse, "code" | "title"> }) {
   const analytics = courseAnalytics[course.code];
 
   if (!analytics) {

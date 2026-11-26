@@ -8,6 +8,8 @@ import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
 import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
 import type {
   InstructorCourse,
+  InstructorCourseListItem,
+  InstructorCourseOutline,
   Unit,
   LessonItem,
   LessonType,
@@ -185,19 +187,69 @@ function toInstructorCourse(row: CourseRow): InstructorCourse {
 const COURSE_WITH_CONTENT_SELECT =
   "code, title, department, track, student_count, units(id, code, title, position, lessons(id, code, title, type, category, position, content_html, content_source, is_published, quiz_completion_threshold, show_reference_answers, updated_at, attachments(id, name, url, storage_path, lesson_block_id), lesson_blocks(id, kind, position, title, render_mode, body_html, rendered_image_urls, video_url, question_groups(id, questions(id, position, prompt_text, choices, answer_key, question_type, points, needs_review)))))";
 
-export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
+export async function getInstructorCourseList(): Promise<InstructorCourseListItem[]> {
   const { id: instructorId } = await requireInstructor();
   const courseIds = await getTaughtCourseIds(instructorId);
   if (courseIds.length === 0) return [];
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
-    .select(COURSE_WITH_CONTENT_SELECT)
+    .select("code, title, student_count, units(lessons(is_published))")
     .in("id", courseIds)
     .order("code");
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => toInstructorCourse(row as unknown as CourseRow));
+  return (data ?? []).map((row) => {
+    const lessons = row.units.flatMap((unit) => unit.lessons);
+    return {
+      code: row.code,
+      title: row.title,
+      studentCount: row.student_count,
+      lessonCount: lessons.length,
+      draftCount: lessons.filter((lesson) => !lesson.is_published).length,
+    };
+  });
+}
+
+export async function getInstructorCourseOutline(courseCode: string): Promise<InstructorCourseOutline | null> {
+  const { id: instructorId } = await requireInstructor();
+  const courseIds = await getTaughtCourseIds(instructorId);
+  if (courseIds.length === 0) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, code, title, department, track, units(id, code, title, lessons(id, code, title, type, is_published))")
+    .eq("code", courseCode)
+    .in("id", courseIds)
+    .order("position", { referencedTable: "units" })
+    .order("position", { referencedTable: "units.lessons" })
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    ...data,
+    units: data.units.map((unit) => ({
+      ...unit,
+      lessons: unit.lessons.map(({ id, code, title, type, is_published }) => ({
+        id, code, title, type: type as LessonType, isPublished: is_published,
+      })),
+    })),
+  };
+}
+
+export async function getInstructorCourseTitle(courseCode: string): Promise<Pick<InstructorCourse, "code" | "title"> | null> {
+  const { id: instructorId } = await requireInstructor();
+  const courseIds = await getTaughtCourseIds(instructorId);
+  if (courseIds.length === 0) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("code, title")
+    .eq("code", courseCode)
+    .in("id", courseIds)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function getCourseWithContent(courseCode: string): Promise<InstructorCourse | null> {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BarChart3, BookOpen, Pencil, Trash2, Users } from "lucide-react";
-import type { InstructorCourse } from "@/lib/instructor/mock-data";
+import type { InstructorCourseListItem } from "@/lib/instructor/mock-data";
 import CourseBanner from "@/components/app/CourseBanner";
 import { btnSecondary, card, cardHover } from "@/components/app/ui";
 
@@ -10,12 +10,10 @@ export default function CourseCard({
   course,
   onDelete,
 }: {
-  course: InstructorCourse;
-  onDelete?: (course: InstructorCourse) => void;
+  course: InstructorCourseListItem;
+  onDelete?: (course: InstructorCourseListItem) => void;
 }) {
-  const lessons = course.units.flatMap((u) => u.lessons);
-  const lessonCount = lessons.length;
-  const draftCount = lessons.filter((l) => !l.isPublished).length;
+  const { lessonCount, draftCount } = course;
 
   return (
     <div className={`group relative flex flex-col overflow-hidden ${card} ${cardHover}`}>

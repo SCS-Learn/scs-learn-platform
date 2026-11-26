@@ -89,11 +89,17 @@ export type StudentLesson = {
   completedAt: string | null;
 };
 
+export type StudentLessonSummary = Pick<StudentLesson, "id" | "code" | "title" | "type" | "completedAt"> & {
+  autolab: Pick<AutolabStatus, "score" | "pointsPossible"> | null;
+  lti: Pick<LtiStatus, "score" | "pointsPossible"> | null;
+  quizScore: number | null;
+};
+
 export type StudentUnit = {
   id: string;
   code: string;
   title: string;
-  lessons: StudentLesson[];
+  lessons: StudentLessonSummary[];
 };
 
 export type StudentCourse = {

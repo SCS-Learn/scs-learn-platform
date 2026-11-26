@@ -25,11 +25,12 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
   };
 }
 
-export async function getAnnouncements(): Promise<Announcement[]> {
+export async function getAnnouncements(courseId?: string): Promise<Announcement[]> {
   const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
-  const ownCourseIds = await getTaughtCourseIds(instructorId);
+  const taught = await getTaughtCourseIds(instructorId);
+  const ownCourseIds = courseId === undefined ? taught : taught.filter((id) => id === courseId);
   if (ownCourseIds.length === 0) return [];
 
   const { data, error } = await supabase

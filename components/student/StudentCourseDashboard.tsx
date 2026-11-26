@@ -58,7 +58,7 @@ function collectGrades(course: StudentCourse): GradeRow[] {
         rows.push({
           lessonId: lesson.id,
           label,
-          score: lesson.quizSubmission ? `${lesson.quizSubmission.scorePercent}%` : null,
+          score: lesson.quizScore === null ? null : `${lesson.quizScore}%`,
         });
       }
     }

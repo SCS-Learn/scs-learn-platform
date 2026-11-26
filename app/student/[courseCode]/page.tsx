@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import StudentCourseDashboard from "@/components/student/StudentCourseDashboard";
-import { getStudentCourse } from "@/lib/student/data/course";
+import { getStudentCourseOutline } from "@/lib/student/data/course";
 import { getCourseAnnouncements, getCourseUpcomingEvents } from "@/lib/student/data/course-dashboard";
 
 export default async function StudentCourseDashboardPage({
@@ -11,7 +11,7 @@ export default async function StudentCourseDashboardPage({
 }) {
   const { courseCode } = await params;
   const [course, announcements, events] = await Promise.all([
-    getStudentCourse(courseCode),
+    getStudentCourseOutline(courseCode),
     getCourseAnnouncements(courseCode),
     getCourseUpcomingEvents(courseCode),
   ]);

@@ -7,7 +7,7 @@ import AnnouncementsPanel from "@/components/instructor/AnnouncementsPanel";
 import CalendarPanel from "@/components/instructor/CalendarPanel";
 import { formatRelativeTime } from "@/lib/instructor/format";
 import type { CourseActivity } from "@/lib/instructor/data/course-dashboard";
-import type { Announcement, CalendarEvent, InstructorCourse, LessonItem } from "@/lib/instructor/mock-data";
+import type { Announcement, CalendarEvent, InstructorCourseOutline, LessonItem } from "@/lib/instructor/mock-data";
 
 function LessonIcon({ type }: { type: LessonItem["type"] }) {
   if (type === "quiz") return <CircleHelp size={14} className="text-gray-500 shrink-0" />;
@@ -32,7 +32,7 @@ export default function InstructorCourseDashboard({
   announcements,
   events,
 }: {
-  course: InstructorCourse;
+  course: InstructorCourseOutline;
   activity: CourseActivity;
   announcements: Announcement[];
   events: CalendarEvent[];
@@ -41,7 +41,8 @@ export default function InstructorCourseDashboard({
   const publishedCount = lessons.filter((l) => l.isPublished).length;
   const quizCount = lessons.filter((l) => l.type === "quiz").length;
   const externalCount = lessons.filter((l) => l.type === "external").length;
-  const learnerCount = activity.learners.length;
+  const { learnerCount, learnerPage, learnerPageCount } = activity;
+  const pageHref = (page: number) => `/instructor/${course.code}?learnersPage=${page}`;
 
   return (
     <main className="min-h-screen bg-gray-50 text-black">
@@ -152,6 +153,15 @@ export default function InstructorCourseDashboard({
                       ))}
                     </tbody>
                   </table>
+                  {learnerPageCount > 1 && (
+                    <nav aria-label="Learner pages" className="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-3 text-xs">
+                      <span>Page {learnerPage} of {learnerPageCount}</span>
+                      <div className="flex gap-3">
+                        {learnerPage > 1 && <Link href={pageHref(learnerPage - 1)} prefetch={false}>Previous</Link>}
+                        {learnerPage < learnerPageCount && <Link href={pageHref(learnerPage + 1)} prefetch={false}>Next</Link>}
+                      </div>
+                    </nav>
+                  )}
                 </div>
               )}
             </section>

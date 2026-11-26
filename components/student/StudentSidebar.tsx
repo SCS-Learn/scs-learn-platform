@@ -65,12 +65,6 @@ export default function StudentSidebar({
             <div className="flex flex-col gap-0.5">
               {unit.lessons.map((lesson) => {
                 const isSelected = lesson.id === selectedLessonId;
-                const hasAutolab = lesson.autolab !== null;
-                const hasLti = lesson.lti !== null;
-                const hasQuizSubmission = lesson.quizSubmission !== null;
-                const isQuizLesson =
-                  !hasLti &&
-                  (lesson.type === "quiz" || lesson.blocks.some((b) => (b.questions?.length ?? 0) > 0));
                 const isComplete = lesson.completedAt != null;
                 return (
                   <button
@@ -90,14 +84,14 @@ export default function StudentSidebar({
                     </span>
                     {isComplete ? (
                       <CheckCircle2 size={13} className="text-green-500 shrink-0" role="img" aria-label="Completed" />
-                    ) : hasAutolab && lesson.autolab?.score != null ? (
+                    ) : lesson.autolab?.score != null ? (
                       <CheckCircle2 size={13} className="text-green-500 shrink-0" role="img" aria-label="Scored" />
-                    ) : hasLti && lesson.lti?.score != null ? (
+                    ) : lesson.lti?.score != null ? (
                       <CheckCircle2 size={13} className="text-green-500 shrink-0" role="img" aria-label="Scored" />
-                    ) : !hasAutolab && isQuizLesson && hasQuizSubmission ? (
+                    ) : lesson.quizScore !== null ? (
                       <span className="text-[10px] font-bold text-green-700 shrink-0">
                         <span className="sr-only">Quiz score </span>
-                        {lesson.quizSubmission!.scorePercent}%
+                        {lesson.quizScore}%
                       </span>
                     ) : null}
                   </button>

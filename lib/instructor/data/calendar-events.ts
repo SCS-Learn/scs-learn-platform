@@ -39,11 +39,12 @@ function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
 // Only events for courses this instructor teaches, plus global events —
 // never another instructor's course-specific events. Computed server-side
 // instead of the old client-side `.filter()`.
-export async function getVisibleCalendarEvents(): Promise<CalendarEvent[]> {
+export async function getVisibleCalendarEvents(courseId?: string): Promise<CalendarEvent[]> {
   const { id: instructorId } = await requireInstructor();
   const supabase = await createClient();
 
-  const ownCourseIds = await getTaughtCourseIds(instructorId);
+  const taught = await getTaughtCourseIds(instructorId);
+  const ownCourseIds = courseId === undefined ? taught : taught.filter((id) => id === courseId);
   const orFilter =
     ownCourseIds.length > 0
       ? `scope.eq.global,course_id.in.(${ownCourseIds.join(",")})`
