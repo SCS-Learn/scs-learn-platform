@@ -1,0 +1,128 @@
+name: Shared deployment
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+      commit_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Validate release candidate
+    runs-on: ubuntu-24.04
+    if: ${{ vars.SHARED_DEPLOYMENTS_ENABLED == 'true' && (inputs.target != 'production' || vars.SHARED_PRODUCTION_ENABLED == 'true') }}
+    outputs:
+      target: ${{ steps.candidate.outputs.target }}
+      commit_sha: ${{ steps.candidate.outputs.commit_sha }}
+      registry: ${{ steps.candidate.outputs.registry }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_TARGETS_JSON: ${{ vars.DEPLOY_TARGETS_JSON }}
+          REQUESTED_TARGET: ${{ inputs.target }}
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: node scripts/deploy-shared.mjs resolve "$REQUESTED_TARGET" "$REQUESTED_SHA"
+
+  check:
+    name: Check release candidate
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # No environment, secrets or write permissions: dependency code from the candidate runs here first.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check deployment runner
+        run: npm run test:deploy
+
+  deploy:
+    name: Deploy and verify
+    needs: [validate, check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: ${{ needs.validate.outputs.target }}
+    concurrency:
+      group: shared-deploy-${{ needs.validate.outputs.target }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install deployment tools
+        run: |
+          npm install --global --ignore-scripts --no-audit --no-fund supabase@2.117.0 vercel@67.0.0
+          sudo apt-get update -q
+          sudo apt-get install -y postgresql-common
+          if ! apt-cache show postgresql-client-17 >/dev/null 2>&1; then
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          fi
+          sudo apt-get install -y age postgresql-client-17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+          aws --version
+      # Lifecycle scripts never run in this credentialed job. Playwright needs none; its
+      # browser download is the explicit, locked CLI command below.
+      - name: Install staging smoke dependencies
+        if: ${{ needs.validate.outputs.target == 'staging' }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --no-install playwright install --with-deps chromium
+      - name: Release the verified candidate
+        env:
+          DEPLOY_ENV: ${{ needs.validate.outputs.target }}
+          DEPLOY_COMMIT: ${{ needs.validate.outputs.commit_sha }}
+          DEPLOY_TARGETS_JSON: ${{ needs.validate.outputs.registry }}
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_DATABASE_URL: ${{ secrets.DEPLOY_DATABASE_URL }}
+          DEPLOY_DATABASE_CA_PEM: ${{ secrets.DEPLOY_DATABASE_CA_PEM }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          BACKUP_S3_BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
+          BACKUP_S3_BUCKET_OWNER: ${{ vars.BACKUP_S3_BUCKET_OWNER }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_COURSE_CODE: ${{ vars.SMOKE_COURSE_CODE }}
+          SMOKE_LESSON_ID: ${{ vars.SMOKE_LESSON_ID }}
+          SMOKE_MEDIA_LESSON_ID: ${{ vars.SMOKE_MEDIA_LESSON_ID }}
+          SMOKE_CORRECT_OPTION: ${{ vars.SMOKE_CORRECT_OPTION }}
+          SMOKE_MEDIA_PATH: ${{ vars.SMOKE_MEDIA_PATH }}
+          SMOKE_BUNDLE_DESTINATION_ID: ${{ vars.SMOKE_BUNDLE_DESTINATION_ID }}
+          SMOKE_BUNDLE_VERSION: ${{ vars.SMOKE_BUNDLE_VERSION }}
+          SMOKE_BUNDLE_SHA256: ${{ vars.SMOKE_BUNDLE_SHA256 }}
+        run: node scripts/deploy-shared.mjs deploy

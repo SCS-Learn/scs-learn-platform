@@ -1,0 +1,34 @@
+name: Deploy shared dev
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  resolve:
+    name: Resolve protected main
+    if: ${{ vars.SHARED_DEPLOYMENTS_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    runs-on: ubuntu-24.04
+    outputs:
+      commit_sha: ${{ steps.main.outputs.commit_sha }}
+    steps:
+      - id: main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          candidate=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [[ ! "$candidate" =~ ^[a-f0-9]{40}$ ]]; then
+            exit 1
+          fi
+          echo "commit_sha=$candidate" >> "$GITHUB_OUTPUT"
+  dev:
+    name: Shared dev
+    needs: resolve
+    uses: ./.github/workflows/deploy-shared.yml
+    with:
+      target: dev
+      commit_sha: ${{ needs.resolve.outputs.commit_sha }}
+    secrets: inherit

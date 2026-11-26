@@ -42,14 +42,15 @@ The scratch script uses the same profile selection and target checks. It needs
 the Supabase API URL and service-role key and reads the course by default.
 
 ```bash
-node scratch-inspect-course.mjs --env-file .env.dev.personal 02-180
+node -- scratch-inspect-course.mjs --env-file .env.dev.personal 02-180
 ```
 
 `--delete-from-position <n>` deletes units at or above the given position in the
 selected development database. Run the read command first to verify the target
 course and positions.
 
-Run the development profile tests with `node --test scripts/dev-profile.test.mjs`.
+Run the development profile tests with `npm run test:dev`. See the [database
+migration guide](supabase/README.md) for local schema setup and `npm run test:rls`.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -64,8 +65,7 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Follow the [environment rollout checklist](docs/release-rollout.md) for shared dev,
+staging, and production.

@@ -8,9 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test:lti": "node --experimental-strip-types --test lib/lti/*.test.ts",
+    "test:quiz": "tsx --test lib/quiz/*.test.ts",
+    "test:staging-smoke": "node --test scripts/staging-smoke.test.mjs",
+    "smoke:staging": "node scripts/staging-smoke.mjs",
     "test:dev": "node --test scripts/dev-profile.test.mjs",
     "test:rls": "npm exec --yes --package=supabase@2.117.0 -- bash supabase/tests/rls/run.sh",
     "test:backup": "python3 -B supabase/tests/backup/test_backup.py",
+    "test:deploy": "node --test scripts/tests/deploy-shared.test.mjs",
     "data:pull": "node -- scripts/course-bundle.mjs data-pull",
     "course:bundle": "node -- scripts/course-bundle.mjs",
     "course:bundle:maintain": "node -- scripts/maintain-course-bundle.mjs",
@@ -75,8 +79,11 @@
     "class-variance-authority": "^0.7.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "js-yaml": "4.3.1",
+    "playwright": "1.58.2",
     "sass": "^1.102.0",
     "tailwindcss": "^4",
+    "tsx": "4.20.6",
     "typescript": "^5"
   }
 }

@@ -1,0 +1,29 @@
+name: Release shared environments
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  staging:
+    name: Staging
+    if: ${{ vars.SHARED_DEPLOYMENTS_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    uses: ./.github/workflows/deploy-shared.yml
+    with:
+      target: staging
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
+  production:
+    name: Production
+    needs: staging
+    if: ${{ vars.SHARED_PRODUCTION_ENABLED == 'true' && github.run_attempt == '1' && needs.staging.result == 'success' }}
+    uses: ./.github/workflows/deploy-shared.yml
+    with:
+      target: production
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
