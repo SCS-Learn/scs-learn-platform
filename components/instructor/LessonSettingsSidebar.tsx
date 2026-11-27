@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { Eye, FileText, Save, Send, Upload, X } from "lucide-react";
+import { Code2, Eye, FileText, Loader2, Save, Send, Upload, X } from "lucide-react";
+import { addCodeTaskToLesson } from "@/lib/code-task/actions";
 import { lessonTypeOptions, type Attachment } from "@/lib/instructor/mock-data";
 import { uploadLessonFile } from "@/lib/instructor/upload";
 import { addAttachment, deleteAttachment } from "@/lib/instructor/data/attachments";
@@ -20,6 +21,50 @@ function SectionBlock({ label, children }: { label: string; children: ReactNode 
       <SectionLabel>{label}</SectionLabel>
       <div className="text-sm leading-relaxed text-gray-800">{children}</div>
     </section>
+  );
+}
+
+function IdeTaskSection({ courseCode, lessonId, hasCodeTask }: { courseCode: string; lessonId: string; hasCodeTask: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (hasCodeTask) {
+    return (
+      <SectionBlock label="IDE task">
+        <p className="text-sm text-gray-500 leading-relaxed">
+          This lesson is a programming task with an in-browser editor and autograder.
+        </p>
+      </SectionBlock>
+    );
+  }
+
+  return (
+    <SectionBlock label="IDE task">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (!window.confirm("Turn this lesson into a programming task? Its editor content is replaced by a code editor and autograder.")) return;
+          setBusy(true);
+          setError(null);
+          try {
+            await addCodeTaskToLesson(courseCode, lessonId);
+            window.location.reload();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not add the IDE task.");
+            setBusy(false);
+          }
+        }}
+        className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold border border-gray-300 rounded-lg px-3 py-2.5 btn-fill-gray-50 disabled:opacity-50"
+      >
+        {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Code2 size={14} aria-hidden />}
+        Make this an IDE task
+      </button>
+      <p className="mt-3 text-sm text-gray-500 leading-relaxed">
+        Students write code in the browser and run your Gradescope autograder&apos;s tests.
+      </p>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </SectionBlock>
   );
 }
 
@@ -44,7 +89,13 @@ export default function LessonSettingsSidebar({
   onPreview,
   onSaveDraft,
   onPublish,
+  courseCode,
+  hasCodeTask = false,
 }: {
+  /** Needed for the "Add IDE task" action; omit to hide it. */
+  courseCode?: string;
+  /** The lesson already is an IDE task. */
+  hasCodeTask?: boolean;
   lessonId: string;
   attachments: Attachment[];
   /** Keeps the editor's copy of the lesson in sync, so uploads survive switching lessons. */
@@ -137,6 +188,8 @@ export default function LessonSettingsSidebar({
         <SectionBlock label="Module">
           <p className="leading-relaxed truncate">{currentModule || "—"}</p>
         </SectionBlock>
+
+        {courseCode && lessonId && <IdeTaskSection courseCode={courseCode} lessonId={lessonId} hasCodeTask={hasCodeTask} />}
 
         <SectionBlock label="Type">
           <select

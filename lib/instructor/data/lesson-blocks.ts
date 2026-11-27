@@ -4,7 +4,7 @@ import { requireInstructor } from "@/lib/instructor/data/current-instructor";
 
 import { createClient } from "@/lib/supabase/server";
 
-export type LessonBlockKind = "slide_file" | "video" | "question_group" | "course_notes";
+export type LessonBlockKind = "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
 export type SlideFileRenderMode = "pdf_embed" | "slide_card_images" | "slide_rendered_images";
 
 export type LessonBlockPatch =

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTaughtCourseIds, requireCourseInstructor, requireInstructor } from "@/lib/instructor/data/current-instructor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
+import { attachCodeTasks } from "@/lib/code-task/data";
 import type {
   InstructorCourse,
   Unit,
@@ -39,7 +40,7 @@ type QuestionRow = {
 
 type LessonBlockRow = {
   id: string;
-  kind: "slide_file" | "video" | "question_group" | "course_notes";
+  kind: "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
   position: number;
   title: string | null;
   render_mode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
@@ -196,7 +197,12 @@ export async function getInstructorCourseList(): Promise<InstructorCourse[]> {
     .order("code");
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => toInstructorCourse(row as unknown as CourseRow));
+  return Promise.all(
+    (data ?? []).map(async (row) => {
+      const course = toInstructorCourse(row as unknown as CourseRow);
+      return { ...course, units: await attachCodeTasks(supabase, course.units) };
+    })
+  );
 }
 
 export async function getCourseWithContent(courseCode: string): Promise<InstructorCourse | null> {
@@ -213,7 +219,8 @@ export async function getCourseWithContent(courseCode: string): Promise<Instruct
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  const course = toInstructorCourse(data as unknown as CourseRow);
+  const mapped = toInstructorCourse(data as unknown as CourseRow);
+  const course = { ...mapped, units: await attachCodeTasks(supabase, mapped.units) };
   const lessonIds = course.units.flatMap((unit) => unit.lessons.map((lesson) => lesson.id));
   if (lessonIds.length === 0) return course;
 

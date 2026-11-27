@@ -7,7 +7,7 @@ import LessonTitle from "@/components/lesson/LessonTitle";
 
 export type TopicLessonBlock = {
   id: string;
-  kind: "slide_file" | "video" | "question_group" | "course_notes";
+  kind: "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
   title: string | null;
   renderMode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
   bodyHtml: string | null;

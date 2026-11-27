@@ -2,6 +2,7 @@ export type LessonType = "lesson" | "quiz" | "external";
 
 import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
 import type { QuestionVariant } from "@/lib/quiz/variants";
+import type { CodeTask } from "@/lib/code-task/types";
 
 export type StudentQuestion = {
   id: string;
@@ -18,7 +19,7 @@ export type StudentQuestion = {
 
 export type StudentLessonBlock = {
   id: string;
-  kind: "slide_file" | "video" | "question_group" | "course_notes";
+  kind: "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
   title: string | null;
   renderMode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
   bodyHtml: string | null;
@@ -26,6 +27,8 @@ export type StudentLessonBlock = {
   pdfUrl: string | null;
   videoUrl: string | null;
   questions: StudentQuestion[] | null;
+  /** kind "code_task" only: the IDE task (editor + autograder). */
+  codeTask?: CodeTask | null;
 };
 
 /** Cogniterra LTI activity linked to this lesson — see lib/lti/tools.ts. */

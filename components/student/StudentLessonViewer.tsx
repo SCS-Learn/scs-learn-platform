@@ -8,6 +8,7 @@ import { markLessonComplete, unmarkLessonComplete } from "@/lib/student/data/les
 import QuizBlock from "@/components/student/QuizBlock";
 import AutogradedAssignmentCard from "@/components/student/AutogradedAssignmentCard";
 import ExternalActivity from "@/components/lti/ExternalActivity";
+import CodeTaskBlock from "@/components/code-task/CodeTaskBlock";
 import { handleTabListKeyDown } from "@/lib/a11y/tabs";
 
 type ExternalTab = "assignment" | "writeup";
@@ -86,6 +87,11 @@ export default function StudentLessonViewer({
   const [completedAt, setCompletedAt] = useState(lesson.completedAt);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const codeTaskBlocks = useMemo(
+    () => lesson.blocks.filter((block) => block.kind === "code_task" && block.codeTask),
+    [lesson.blocks]
+  );
 
   const writeupBlock = useMemo(
     () => lesson.blocks.find((block) => block.kind === "course_notes" && block.bodyHtml),
@@ -255,6 +261,15 @@ export default function StudentLessonViewer({
         {lesson.contentSource === "blocks" ? (
           lesson.blocks.length === 0 ? (
             <p className="px-8 py-6 text-sm text-gray-500">This lesson has no content yet.</p>
+          ) : codeTaskBlocks.length > 0 ? (
+            <>
+              <div className="px-8 pt-6">
+                <h1 className="topic-lesson-title">{lesson.title}</h1>
+              </div>
+              {codeTaskBlocks.map((block) => (
+                <CodeTaskBlock key={block.id} blockId={block.id} task={block.codeTask!} />
+              ))}
+            </>
           ) : isAssessment ? (
             <>
               <div className="px-8 pt-6 pb-2">

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Copy the student's file next to the tests, then run them into results.json.
+cp /autograder/submission/reverse_complement.py /autograder/source/reverse_complement.py
+cd /autograder/source
+python3 run_tests.py
