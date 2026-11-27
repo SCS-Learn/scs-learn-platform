@@ -21,7 +21,10 @@ operation through the maintainer's privileged database access.
 
 From the repository root, run the RLS harness with a Supabase CLI and
 `initdb`, `pg_ctl` and `psql` on PATH. PostgreSQL 17 matches the local stack
-configuration. PostgreSQL 14 also works for the baseline harness.
+configuration. The server also needs the pgvector extension, because
+`20261126014818_add_lesson_embeddings.sql` creates `vector` (for example
+Homebrew's `pgvector`, or run the harness inside the `pgvector/pgvector:pg17`
+image as the `postgres` user).
 
 ```sh
 bash supabase/tests/rls/run.sh

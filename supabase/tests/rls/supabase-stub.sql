@@ -14,14 +14,15 @@ create function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 
 create schema storage;
-create table storage.buckets (id text primary key, name text, public boolean);
+create table storage.buckets (id text primary key, name text, public boolean,
+  file_size_limit bigint, allowed_mime_types text[]);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
 alter table storage.objects enable row level security;
 
 create schema extensions;
 create extension pgcrypto with schema extensions;
 
-grant usage on schema public, auth, storage to anon, authenticated, service_role;
+grant usage on schema public, auth, storage, extensions to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 grant all on storage.objects, storage.buckets to anon, authenticated, service_role;
 

@@ -55,6 +55,11 @@ export async function deleteAttachment(attachmentId: string) {
   const { error: deleteError } = await supabase.from("attachments").delete().eq("id", attachmentId);
   if (deleteError) throw new Error(deleteError.message);
 
+  // Deliberately the user's client, not the service role: storage_path comes
+  // from the client when the attachment is created, so only RLS keeps this
+  // from deleting another course's file. Own "<lesson id>/..." uploads are
+  // removed; shared drive-import/ files (possibly used by other courses) are
+  // left in place.
   if (attachment?.storage_path) {
     await supabase.storage.from(BUCKET).remove([attachment.storage_path]);
   }

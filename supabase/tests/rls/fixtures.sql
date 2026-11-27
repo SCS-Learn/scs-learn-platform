@@ -84,3 +84,15 @@ insert into public.autolab_links (id, lesson_id, course_name, assessment_name) v
   ('00000000-0000-0000-0000-000000000902', '00000000-0000-0000-0000-000000000313', 'b-course', 'hw1');
 insert into public.autolab_scores (link_id, platform_user_id, autolab_email, score) values
   ('00000000-0000-0000-0000-000000000901', '22222222-0000-0000-0000-000000000002', 'l2@example.edu', 10);
+
+-- lesson-media objects: A's lesson 301, B's lesson 313, the shared 102 lesson
+-- 314, and a server-written Drive import path.
+insert into storage.objects (bucket_id, name) values
+  ('lesson-media', '00000000-0000-0000-0000-000000000301/a-upload.png'),
+  ('lesson-media', '00000000-0000-0000-0000-000000000313/b-upload.png'),
+  ('lesson-media', '00000000-0000-0000-0000-000000000314/shared-upload.png'),
+  ('lesson-media', 'drive-import/drive-file-1/figure.png');
+
+insert into public.lesson_embeddings (lesson_id, source_type, chunk_text, content_hash, embedding) values
+  ('00000000-0000-0000-0000-000000000303', 'quiz_question', 'Q published: A', 'h1',
+   array_fill(0.1::real, array[1536])::extensions.vector);
