@@ -15,5 +15,15 @@ begin
   ) then
     raise exception 'Expected the public lesson-media bucket after migration replay';
   end if;
+
+  if not exists (
+    select 1 from storage.buckets
+    where id = 'lesson-media' and file_size_limit = 52428800
+      and 'application/pdf' = any (allowed_mime_types)
+      and not ('text/html' = any (allowed_mime_types))
+      and not ('image/svg+xml' = any (allowed_mime_types))
+  ) then
+    raise exception 'Expected lesson-media type and size limits after migration replay';
+  end if;
 end;
 $$;

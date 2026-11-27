@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const BUCKET = "lesson-media";
 
@@ -8,7 +7,8 @@ const BUCKET = "lesson-media";
  * (a PDF, say) rather than an extracted figure - the organize pipeline copies
  * every whole asset into Supabase Storage at import time (durable even if the
  * instructor later un-shares the source Drive folder) instead of linking
- * Drive's own preview live.
+ * Drive's own preview live. Service role, like upload-drive-image.ts: callers
+ * have already passed requireCourseInstructor.
  */
 export async function uploadDriveFile(
   driveFileId: string,
@@ -16,7 +16,7 @@ export async function uploadDriveFile(
   contentType: string,
   filename: string
 ): Promise<{ url: string; storagePath: string } | null> {
-  const supabase = createAdminClient() ?? (await createClient());
+  const supabase = createServiceClient();
   const slug = filename.replace(/[^a-zA-Z0-9.]+/g, "-").replace(/^-+|-+$/g, "") || "file";
   const path = `drive-import/${driveFileId}/${slug}`;
 

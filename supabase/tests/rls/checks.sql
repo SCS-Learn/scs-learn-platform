@@ -81,6 +81,8 @@ select r from (values
   (_t('wipe quiz submissions',                   'anon', null, $q$delete from public.quiz_submissions returning 1$q$, 'denied')),
   (_t('call a private helper',                   'anon', null, $q$select private.current_instructor_id()$q$, 'denied')),
   (_t('upload to lesson-media',                  'anon', null, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'x.html') returning 1$q$, 'denied')),
+  (_t('read lesson embeddings',                  'anon', null, $q$select 1 from public.lesson_embeddings$q$, 'denied')),
+  (_t('search lesson embeddings',                'anon', null, $q$select 1 from public.match_lesson_chunks(array_fill(0.1::real, array[1536])::extensions.vector, '00000000-0000-0000-0000-000000000101', 5, true)$q$, 'denied')),
 
   -- Learner L1: reads published content and their own rows, writes nothing else.
   (_t('read instructor names',                   'authenticated', :L1, $q$select id, name, initials from public.instructors$q$, 'rows')),
@@ -107,6 +109,10 @@ select r from (values
   (_t('write an LTI score',                      'authenticated', :L1, $q$update public.lti_results set score = 100 returning 1$q$, 'denied')),
   (_t('complete lesson as another learner',      'authenticated', :L1, $q$insert into public.lesson_completions (lesson_id, platform_user_id) values ('00000000-0000-0000-0000-000000000303', '22222222-0000-0000-0000-000000000002') returning 1$q$, 'denied')),
   (_t('upload to lesson-media',                  'authenticated', :L1, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'x.html') returning 1$q$, 'denied')),
+  (_t('upload under a published lesson',         'authenticated', :L1, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', '00000000-0000-0000-0000-000000000301/x.png') returning 1$q$, 'denied')),
+  (_t('list lesson-media objects',               'authenticated', :L1, $q$select 1 from storage.objects$q$, 'zero')),
+  (_t('read lesson embeddings (quiz answers)',   'authenticated', :L1, $q$select 1 from public.lesson_embeddings$q$, 'zero')),
+  (_t('search lesson embeddings',                'authenticated', :L1, $q$select 1 from public.match_lesson_chunks(array_fill(0.1::real, array[1536])::extensions.vector, '00000000-0000-0000-0000-000000000101', 5, true)$q$, 'denied')),
   (_t('read LTI shared secrets',                 'authenticated', :L1, $q$select shared_secret from public.lti_tools$q$, 'zero')),
   (_t('read mailing list',                       'authenticated', :L1, $q$select email from public.email_signups$q$, 'zero')),
   (_t('read Cogniterra course config',           'authenticated', :L1, $q$select 1 from public.cogniterra_course_config$q$, 'zero')),
@@ -157,7 +163,17 @@ select r from (values
   (_t('add event to a course not taught',        'authenticated', :A, $q$insert into public.calendar_events (date, title, type, scope, course_id, host_instructor_id) values (current_date, 't', 'live-talk', 'course', '00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-000000000001') returning 1$q$, 'denied')),
   (_t('edit lesson in a course not taught',      'authenticated', :A, $q$update public.lessons set title = 'x' where id = '00000000-0000-0000-0000-000000000313' returning 1$q$, 'zero')),
   (_t('delete a course not owned',               'authenticated', :A, $q$delete from public.courses where id = '00000000-0000-0000-0000-000000000103' returning 1$q$, 'zero')),
-  (_t('upload to lesson-media',                  'authenticated', :A, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'a.png') returning 1$q$, 'rows')),
+  (_t('upload under own lesson (101)',           'authenticated', :A, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', '00000000-0000-0000-0000-000000000302/a.png') returning 1$q$, 'rows')),
+  (_t('upload under 103 lesson (outsider)',      'authenticated', :A, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', '00000000-0000-0000-0000-000000000313/a.png') returning 1$q$, 'denied')),
+  (_t('upload outside any lesson folder',        'authenticated', :A, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'a.png') returning 1$q$, 'denied')),
+  (_t('upload into drive-import/',               'authenticated', :A, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'drive-import/x/a.png') returning 1$q$, 'denied')),
+  (_t('overwrite own lesson upload',             'authenticated', :A, $q$update storage.objects set name = name where name = '00000000-0000-0000-0000-000000000301/a-upload.png' returning 1$q$, 'rows')),
+  (_t('delete own lesson upload',                'authenticated', :A, $q$delete from storage.objects where name = '00000000-0000-0000-0000-000000000301/a-upload.png' returning 1$q$, 'rows')),
+  (_t('list 103 lesson uploads',                 'authenticated', :A, $q$select 1 from storage.objects where name like '00000000-0000-0000-0000-000000000313/%'$q$, 'zero')),
+  (_t('delete 103 lesson upload',                'authenticated', :A, $q$delete from storage.objects where name = '00000000-0000-0000-0000-000000000313/b-upload.png' returning 1$q$, 'zero')),
+  (_t('delete a drive-import file',              'authenticated', :A, $q$delete from storage.objects where name = 'drive-import/drive-file-1/figure.png' returning 1$q$, 'zero')),
+  (_t('read lesson embeddings',                  'authenticated', :A, $q$select 1 from public.lesson_embeddings$q$, 'zero')),
+  (_t('search lesson embeddings',                'authenticated', :A, $q$select 1 from public.match_lesson_chunks(array_fill(0.1::real, array[1536])::extensions.vector, '00000000-0000-0000-0000-000000000101', 5, true)$q$, 'denied')),
   (_t('read Google refresh tokens',              'authenticated', :A, $q$select 1 from public.instructor_google_credentials$q$, 'zero')),
   (_t('read admins list',                        'authenticated', :A, $q$select 1 from public.admins$q$, 'zero')),
 
@@ -174,11 +190,17 @@ select r from (values
   (_t('add self as staff on 101',                'authenticated', :B, $q$insert into public.course_instructors (course_id, instructor_id) values ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000002') returning 1$q$, 'denied')),
   (_t('delete 101 announcements',                'authenticated', :B, $q$delete from public.announcements where course_id = '00000000-0000-0000-0000-000000000101' returning 1$q$, 'zero')),
 
+  (_t('upload under co-staffed 102 lesson',      'authenticated', :B, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', '00000000-0000-0000-0000-000000000314/b.png') returning 1$q$, 'rows')),
+  (_t('overwrite 101 lesson upload (outsider)',  'authenticated', :B, $q$update storage.objects set name = name where name = '00000000-0000-0000-0000-000000000301/a-upload.png' returning 1$q$, 'zero')),
+  (_t('delete 101 lesson upload (outsider)',     'authenticated', :B, $q$delete from storage.objects where name = '00000000-0000-0000-0000-000000000301/a-upload.png' returning 1$q$, 'zero')),
+
   -- Service role (server code after its own checks) is unaffected.
   (_t('link an instructor',                      'service_role', null, $q$update public.instructors set name = name returning 1$q$, 'rows')),
   (_t('read LTI secrets',                        'service_role', null, $q$select 1 from public.lti_tools$q$, 'rows')),
   (_t('write LTI scores',                        'service_role', null, $q$update public.lti_results set score = 1 returning 1$q$, 'rows')),
   (_t('link a lesson to a tool',                 'service_role', null, $q$insert into public.lti_links (lesson_id, tool_id) values ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000702') returning 1$q$, 'rows')),
   (_t('save a graded quiz submission',           'service_role', null, $q$update public.quiz_submissions set score_percent = 80 returning 1$q$, 'rows')),
-  (_t('read questions with answer keys',         'service_role', null, $q$select answer_key from public.questions$q$, 'rows'))
+  (_t('read questions with answer keys',         'service_role', null, $q$select answer_key from public.questions$q$, 'rows')),
+  (_t('write a drive-import file',               'service_role', null, $q$insert into storage.objects (bucket_id, name) values ('lesson-media', 'drive-import/x/y.png') returning 1$q$, 'rows')),
+  (_t('search lesson embeddings',                'service_role', null, $q$select 1 from public.match_lesson_chunks(array_fill(0.1::real, array[1536])::extensions.vector, '00000000-0000-0000-0000-000000000101', 5, true)$q$, 'rows'))
 ) t(r);
