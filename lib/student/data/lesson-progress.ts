@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
-import { reconcileQuizSubmission } from "@/lib/quiz/grading";
-import { applyQuestionVariants } from "@/lib/quiz/variants";
+import { totalScore } from "@/lib/quiz/score";
 import {
   assertUuid,
   getPublishedLesson,
@@ -21,7 +20,7 @@ async function assertQuizMayBeCompleted(lesson: PublishedLesson, platformUserId:
   const supabase = await createClient();
   const { data: submission, error: submissionError } = await supabase
     .from("quiz_submissions")
-    .select("submitted_at, variant_index, quiz_responses(question_id, response_text)")
+    .select("quiz_responses(question_id, score_fraction)")
     .eq("lesson_id", lesson.id)
     .eq("platform_user_id", platformUserId)
     .maybeSingle();
@@ -33,22 +32,17 @@ async function assertQuizMayBeCompleted(lesson: PublishedLesson, platformUserId:
     );
   }
 
-  const responses: Record<string, string> = {};
+  // The per-question fractions the server stored when it graded the attempt,
+  // weighted by the current points: the same total the learner was shown.
+  const fractions: Record<string, number> = {};
   for (const response of (submission.quiz_responses ?? []) as {
     question_id: string;
-    response_text: string;
+    score_fraction: number | null;
   }[]) {
-    responses[response.question_id] = response.response_text;
+    if (response.score_fraction !== null) fractions[response.question_id] = Number(response.score_fraction);
   }
 
-  const variantIndex = (submission.variant_index as number | null | undefined) ?? 0;
-  const scoredQuestions = applyQuestionVariants(questions, variantIndex);
-
-  const reconciled = reconcileQuizSubmission(scoredQuestions, {
-    submittedAt: submission.submitted_at as string,
-    responses,
-  });
-  if (!reconciled || reconciled.scorePercent < threshold) {
+  if (totalScore(questions, fractions).scorePercent < threshold) {
     throw new Error(
       `Quiz lessons can only be marked complete after scoring at least ${threshold}%.`
     );

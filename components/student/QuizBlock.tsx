@@ -62,7 +62,10 @@ export default function QuizBlock({
   const [revealedAnswers, setRevealedAnswers] = useState<Set<string>>(new Set());
 
   const activeQuestions = applyQuestionVariants(questions, variantIndex);
-  const gradableQuestions = activeQuestions.filter((q) => isGradable(q) || isLlmGradable(q));
+  // Learners get answerKey null, so the server says which questions count
+  // (lib/quiz/learner-view.ts); questions that still carry their key decide
+  // for themselves.
+  const gradableQuestions = activeQuestions.filter((q) => q.gradable ?? (isGradable(q) || isLlmGradable(q)));
   const correctCount = submission?.correctCount ?? 0;
 
   const handleSubmit = () => {

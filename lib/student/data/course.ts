@@ -12,8 +12,8 @@ import {
   questionBlockKey,
 } from "@/lib/student/data/learner-records";
 import { sanitizeLessonHtml } from "@/lib/html/sanitize-lesson-html";
-import { reconcileQuizSubmission, scoreQuiz } from "@/lib/quiz/grading";
 import { revealedAnswers, withoutAnswerKey } from "@/lib/quiz/learner-view";
+import { scoreStoredAttempt, totalScore } from "@/lib/quiz/score";
 import { DEFAULT_QUIZ_COMPLETION_THRESHOLD } from "@/lib/quiz/types";
 import { applyQuestionVariants } from "@/lib/quiz/variants";
 import type {
@@ -253,7 +253,8 @@ function toLesson(row: LessonRow, ctx: LearnerContext): StudentLesson {
   const questions = blocks.flatMap((block) => block.questions ?? []);
   const variantIndex = quizSubmission?.variantIndex ?? 0;
   const scoredQuestions = applyQuestionVariants(questions, variantIndex);
-  const reconciled = reconcileQuizSubmission(scoredQuestions, quizSubmission);
+  // The stored per-question grades, totalled the same way as at submit time.
+  const reconciled = scoreStoredAttempt(scoredQuestions, quizSubmission);
 
   return {
     id: row.id,
@@ -315,7 +316,8 @@ async function loadOutlineProgress(course: CourseRow, learnerId: string): Promis
     fetchQuizResponsesForOutline(quizLessons.map((lesson) => lesson.id), learnerId),
   ]);
 
-  // Only submitted quizzes need answer keys to display a score against the live questions.
+  // Only submitted quizzes need their questions (current points, and which
+  // ones still exist) to total the stored grades.
   const submittedQuizBlocks = quizLessons
     .filter(({ id }) => attempts.has(id) && !lti.has(id) && !autolab.has(id))
     .flatMap(questionBlocks);
@@ -326,8 +328,7 @@ async function loadOutlineProgress(course: CourseRow, learnerId: string): Promis
     if (!attempt || lti.has(lesson.id) || autolab.has(lesson.id)) continue;
     const quizQuestions = questionBlocks(lesson).flatMap((block) => questions.get(questionBlockKey(block)) ?? []);
     if (lesson.type === "quiz" || quizQuestions.length > 0) {
-      const scoredQuestions = applyQuestionVariants(quizQuestions, attempt.variantIndex);
-      quizScores.set(lesson.id, scoreQuiz(scoredQuestions, attempt.responses).scorePercent);
+      quizScores.set(lesson.id, totalScore(quizQuestions, attempt.fractions).scorePercent);
     }
   }
   const units: StudentUnit[] = course.units

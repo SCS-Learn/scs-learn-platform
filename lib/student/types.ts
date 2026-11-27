@@ -14,6 +14,11 @@ export type StudentQuestion = {
    */
   answerKey: string | null;
   questionType: QuestionType;
+  /**
+   * Whether the question counts toward the score. Set by the server in what
+   * learners receive, since they can't tell from answerKey (always null there).
+   */
+  gradable?: boolean;
   /** Weight toward the quiz's 100-point total — see supabase/migrations/add-question-points.sql. */
   points: number;
   /** Full rotation pool (length 10) when generated; empty/absent = no rotation. */

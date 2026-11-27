@@ -204,15 +204,18 @@ export async function fetchQuizSubmissionsForLessons(
   }
 }
 
-/** The fields needed to reconcile displayed grades, without feedback or grading details. */
+/**
+ * The stored per-question grades of each attempt, for totalling outline
+ * scores (lib/quiz/score.ts), without responses, feedback or grading details.
+ */
 export async function fetchQuizResponsesForOutline(lessonIds: string[], learnerId: string) {
-  const attempts = new Map<string, { variantIndex: number; responses: Record<string, string> }>();
+  const attempts = new Map<string, { fractions: Record<string, number> }>();
   if (lessonIds.length === 0) return attempts;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("quiz_submissions")
-    .select("lesson_id, variant_index, quiz_responses(question_id, response_text)")
+    .select("lesson_id, quiz_responses(question_id, score_fraction)")
     .eq("platform_user_id", learnerId)
     .in("lesson_id", lessonIds);
   if (error) {
@@ -220,10 +223,11 @@ export async function fetchQuizResponsesForOutline(lessonIds: string[], learnerI
     return attempts;
   }
   for (const attempt of data ?? []) {
-    attempts.set(attempt.lesson_id as string, {
-      variantIndex: (attempt.variant_index as number | null) ?? 0,
-      responses: Object.fromEntries(attempt.quiz_responses.map((row) => [row.question_id, row.response_text])),
-    });
+    const fractions: Record<string, number> = {};
+    for (const row of attempt.quiz_responses as { question_id: string; score_fraction: number | null }[]) {
+      if (row.score_fraction !== null) fractions[row.question_id] = Number(row.score_fraction);
+    }
+    attempts.set(attempt.lesson_id as string, { fractions });
   }
   return attempts;
 }

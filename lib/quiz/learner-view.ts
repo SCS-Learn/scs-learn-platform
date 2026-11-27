@@ -2,7 +2,8 @@ import { formatCorrectAnswer } from "@/lib/quiz/format-answer";
 import { matrixShapeFromAnswerKey } from "@/lib/quiz/matrix";
 import { parseOrderingChoices } from "@/lib/quiz/ordering";
 import { asObjectChoices } from "@/lib/quiz/parse";
-import type { QuestionChoices, QuestionType } from "@/lib/quiz/types";
+import { countsTowardScore } from "@/lib/quiz/score";
+import type { QuestionChoices, QuestionType, QuizQuestionFields } from "@/lib/quiz/types";
 import { applyQuestionVariant, hasVariantPool, type QuestionWithVariants } from "@/lib/quiz/variants";
 
 /**
@@ -16,6 +17,8 @@ import { applyQuestionVariant, hasVariantPool, type QuestionWithVariants } from 
  *   variant, and marked fixedOrder so the browser doesn't reshuffle it
  *   (shuffleAnswerOptions); grading falls back to the shown order when the
  *   learner leaves it untouched, so both sides must agree on it.
+ * Whether a question counts toward the score also depends on the key, so it
+ * is sent as `gradable` (the browser shows the quiz's points total from it).
  */
 
 function orderingWithoutKey(choices: QuestionChoices): QuestionChoices {
@@ -47,6 +50,7 @@ export function withoutAnswerKey<T extends QuestionWithVariants>(question: T): T
     ...question,
     choices: choicesWithoutKey(question.questionType, question.choices, question.answerKey),
     answerKey: null,
+    gradable: countsTowardScore(question as QuizQuestionFields),
     ...(pool
       ? {
           variants: pool.map((variant, index) => {

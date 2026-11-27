@@ -356,39 +356,3 @@ export function isCorrect(question: QuizQuestionFields, response: string): boole
 
   return normalize(response) === normalize(question.answerKey);
 }
-
-export type ScoredQuizQuestion = QuizQuestionFields & { id: string };
-
-/** Grade a full attempt against the current question set (denominator = live gradable count). */
-export function scoreQuiz(
-  questions: ScoredQuizQuestion[],
-  responses: Record<string, string>
-): { correctCount: number; gradableCount: number; scorePercent: number } {
-  const gradableQuestions = questions.filter(isGradable);
-  const correctCount = gradableQuestions.filter((q) => isCorrect(q, responses[q.id] ?? "")).length;
-  const gradableCount = gradableQuestions.length;
-  return {
-    correctCount,
-    gradableCount,
-    scorePercent: gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0,
-  };
-}
-
-/** Drop responses for removed questions and rescore against the live question list. */
-export function reconcileQuizSubmission<T extends { responses: Record<string, string>; submittedAt: string }>(
-  questions: ScoredQuizQuestion[],
-  submission: T | null
-): (T & { correctCount: number; gradableCount: number; scorePercent: number }) | null {
-  if (!submission) return null;
-  const responses: Record<string, string> = {};
-  for (const question of questions) {
-    if (question.id in submission.responses) {
-      responses[question.id] = submission.responses[question.id];
-    }
-  }
-  return {
-    ...submission,
-    ...scoreQuiz(questions, responses),
-    responses,
-  };
-}

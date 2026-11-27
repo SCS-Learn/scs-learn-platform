@@ -1,5 +1,8 @@
+import "server-only";
+
 import { isCorrect, isGradable, isLlmGradable } from "@/lib/quiz/grading";
 import { gradeFreeResponseBatch } from "@/lib/quiz/grade-free-response";
+import { totalScore } from "@/lib/quiz/score";
 import type { QuizQuestionFields } from "@/lib/quiz/types";
 
 export type QuestionScore = {
@@ -65,15 +68,8 @@ export async function computeQuizGrading(
     }
   }
 
-  const pointsByQuestionId = new Map(questions.map((q) => [q.id, q.points]));
-  let correctCount = 0;
-  let gradableCount = 0;
-  for (const [questionId, score] of Object.entries(scores)) {
-    const points = pointsByQuestionId.get(questionId) ?? 0;
-    gradableCount += points;
-    correctCount += score.fraction * points;
-  }
-  const scorePercent = gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 0;
-
-  return { correctCount, gradableCount, scorePercent, scores };
+  // Same total the completion gate and every later read compute from the
+  // stored fractions (lib/quiz/score.ts).
+  const fractions = Object.fromEntries(Object.entries(scores).map(([id, score]) => [id, score.fraction]));
+  return { ...totalScore(questions, fractions), scores };
 }
