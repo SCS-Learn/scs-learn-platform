@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { useEffect, useState, type ClipboardEvent } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, X } from "lucide-react";
 import { getDriveImportPreview, getDriveShareEmail } from "@/lib/instructor/data/google-drive";
 import { runDriveImportOrganize } from "@/lib/instructor/data/google-drive-organize";
 import { getGoogleOAuthConnectionStatus } from "@/lib/instructor/data/google-oauth";
@@ -13,6 +13,123 @@ import {
 import CogniterraSetupFields from "@/components/instructor/CogniterraSetupFields";
 
 type Status = "input" | "scanning" | "confirm" | "importing" | "error";
+
+/** "ai": AI invents the unit list. "scaffold": the instructor names the units; AI only sorts files into them. */
+type StructureMode = "ai" | "scaffold";
+
+function UnitOutlineEditor({
+  unitNames,
+  onChange,
+  folderNames,
+}: {
+  unitNames: string[];
+  onChange: (next: string[]) => void;
+  folderNames: string[];
+}) {
+  const update = (index: number, value: string) => onChange(unitNames.map((n, i) => (i === index ? value : n)));
+  const remove = (index: number) => {
+    const next = unitNames.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? next : [""]);
+  };
+  const move = (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= unitNames.length) return;
+    const next = [...unitNames];
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    onChange(next);
+  };
+  // Pasting a multi-line list (from a syllabus, say) into one field becomes
+  // one unit per line, inserted where the paste happened.
+  const handlePaste = (index: number, event: ClipboardEvent<HTMLInputElement>) => {
+    const lines = event.clipboardData
+      .getData("text")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)]|unit\s+\d+\s*[:.-])\s*/i, "").trim())
+      .filter(Boolean);
+    if (lines.length < 2) return;
+    event.preventDefault();
+    const before = unitNames.slice(0, index);
+    const after = unitNames.slice(index + 1);
+    const current = unitNames[index]?.trim() ? [unitNames[index]!] : [];
+    onChange([...before, ...current, ...lines, ...after]);
+  };
+
+  return (
+    <div className="mt-3">
+      <ol className="flex flex-col gap-2">
+        {unitNames.map((name, index) => (
+          <li key={index} className="flex items-center gap-1.5">
+            <span className="w-6 shrink-0 text-right text-xs font-bold text-gray-400 tabular-nums">{index + 1}.</span>
+            <input
+              type="text"
+              value={name}
+              aria-label={`Unit ${index + 1} name`}
+              placeholder={index === 0 ? "e.g. Introduction to Python" : "Unit name"}
+              onChange={(e) => update(index, e.target.value)}
+              onPaste={(e) => handlePaste(index, e)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onChange([...unitNames.slice(0, index + 1), "", ...unitNames.slice(index + 1)]);
+                }
+              }}
+              className="min-w-0 flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => move(index, -1)}
+              disabled={index === 0}
+              aria-label={`Move unit ${index + 1} up`}
+              className="grid size-7 place-items-center rounded text-gray-500 btn-fill-gray-50 disabled:opacity-30"
+            >
+              <ArrowUp size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => move(index, 1)}
+              disabled={index === unitNames.length - 1}
+              aria-label={`Move unit ${index + 1} down`}
+              className="grid size-7 place-items-center rounded text-gray-500 btn-fill-gray-50 disabled:opacity-30"
+            >
+              <ArrowDown size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(index)}
+              aria-label={`Remove unit ${index + 1}`}
+              className="grid size-7 place-items-center rounded text-gray-500 btn-fill-gray-50"
+            >
+              <X size={14} />
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-2 flex flex-wrap items-center gap-3 pl-7">
+        <button
+          type="button"
+          onClick={() => onChange([...unitNames, ""])}
+          className="inline-flex items-center gap-1 text-xs font-bold text-black underline-offset-2 hover:underline"
+        >
+          <Plus size={13} /> Add unit
+        </button>
+        {folderNames.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([...folderNames])}
+            className="text-xs font-bold text-gray-600 underline-offset-2 hover:underline"
+          >
+            Use the folder&apos;s {folderNames.length} subfolder names
+          </button>
+        )}
+      </div>
+      <p className="mt-2 pl-7 text-xs text-gray-500">
+        Units are created in this order. AI puts each file in the best-fitting unit and builds the lessons
+        inside it. A name that matches an existing unit adds to that unit. Tip: paste a list to add one unit
+        per line.
+      </p>
+    </div>
+  );
+}
 
 export default function GoogleDriveImportModal({
   courseCode,
@@ -28,6 +145,7 @@ export default function GoogleDriveImportModal({
     cogniterraWired: number;
     skippedAlreadyImportedCount: number;
     failedUnitTitles: string[];
+    emptyUnitTitles?: string[];
   }) => void;
 }) {
   const [status, setStatus] = useState<Status>("input");
@@ -39,7 +157,11 @@ export default function GoogleDriveImportModal({
     lessonCount: number;
     isFlat: boolean;
     fileCount: number;
+    folderNames?: string[];
   } | null>(null);
+  const [structureMode, setStructureMode] = useState<StructureMode>("ai");
+  const [unitNames, setUnitNames] = useState<string[]>([""]);
+  const cleanUnitNames = unitNames.map((n) => n.trim()).filter(Boolean);
   const [shareEmail, setShareEmail] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [cogniterraOAuthConnected, setCogniterraOAuthConnected] = useState<boolean | null>(null);
@@ -105,7 +227,7 @@ export default function GoogleDriveImportModal({
         courseCode,
         folderUrl,
         playlistUrl.trim() || undefined,
-        { cogniterra }
+        { cogniterra, unitOutline: structureMode === "scaffold" ? cleanUnitNames : undefined }
       );
       onImportComplete(result);
       onClose();
@@ -270,10 +392,58 @@ export default function GoogleDriveImportModal({
           <div className="py-4">
             <p className="text-sm text-gray-600 mb-4">
               Found <span className="font-bold">{preview.fileCount ?? preview.lessonCount}</span> file
-              {(preview.fileCount ?? preview.lessonCount) === 1 ? "" : "s"}. On import, AI will
-              structure them into units and lessons.
+              {(preview.fileCount ?? preview.lessonCount) === 1 ? "" : "s"}.
               {cogniterraReady ? " Cogniterra assignments will be linked automatically." : ""}
             </p>
+
+            <fieldset className="mb-5">
+              <legend className="text-xs font-bold text-gray-600 mb-2">Units</legend>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="structure-mode"
+                    checked={structureMode === "ai"}
+                    onChange={() => setStructureMode("ai")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-bold">Let AI choose the units</span>
+                    <span className="block text-xs text-gray-500">
+                      AI reads every file, then decides the units, their order, and the lessons.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="structure-mode"
+                    checked={structureMode === "scaffold"}
+                    onChange={() => {
+                      setStructureMode("scaffold");
+                      // Start from the Drive subfolders when the outline is still blank.
+                      if (cleanUnitNames.length === 0 && preview.folderNames?.length) {
+                        setUnitNames([...preview.folderNames]);
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-bold">I&apos;ll name the units</span>
+                    <span className="block text-xs text-gray-500">
+                      You set the unit names and order. AI sorts files into them and builds the lessons.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {structureMode === "scaffold" && (
+                <UnitOutlineEditor
+                  unitNames={unitNames}
+                  onChange={setUnitNames}
+                  folderNames={preview.folderNames ?? []}
+                />
+              )}
+            </fieldset>
 
             <div className="flex justify-end gap-2">
               <button
@@ -286,10 +456,17 @@ export default function GoogleDriveImportModal({
               <button
                 type="button"
                 onClick={confirmImport}
-                disabled={(preview.fileCount ?? preview.lessonCount) === 0}
+                disabled={
+                  structureMode === "scaffold"
+                    ? cleanUnitNames.length === 0
+                    : (preview.fileCount ?? preview.lessonCount) === 0
+                }
                 className="text-sm font-bold text-black border border-black px-4 py-2 rounded btn-fill-gray-50 disabled:opacity-40"
               >
-                Import{cogniterraReady ? " & link Cogniterra" : ""}
+                {structureMode === "scaffold"
+                  ? `Import into ${cleanUnitNames.length} unit${cleanUnitNames.length === 1 ? "" : "s"}`
+                  : "Import"}
+                {cogniterraReady ? " & link Cogniterra" : ""}
               </button>
             </div>
           </div>
@@ -298,7 +475,9 @@ export default function GoogleDriveImportModal({
         {status === "importing" && (
           <div className="flex flex-col items-center gap-2 text-sm text-gray-500 py-10" role="status">
             <Loader2 size={20} className="animate-spin" aria-hidden />
-            Rendering slides, structuring the courseware, and matching Cogniterra assignments...
+            {structureMode === "scaffold"
+              ? "Rendering slides, sorting files into your units, and matching Cogniterra assignments..."
+              : "Rendering slides, structuring the courseware, and matching Cogniterra assignments..."}
           </div>
         )}
 

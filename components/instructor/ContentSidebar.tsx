@@ -545,6 +545,7 @@ export default function ContentSidebar({
             youtubePlaylistWarning,
             skippedAlreadyImportedCount,
             failedUnitTitles,
+            emptyUnitTitles = [],
           }) => {
             const message = `Imported ${unitIds.length} unit${unitIds.length === 1 ? "" : "s"} and ${lessonIds.length} lesson${
               lessonIds.length === 1 ? "" : "s"
@@ -555,6 +556,10 @@ export default function ContentSidebar({
             }${
               failedUnitTitles.length > 0
                 ? `\n\n${failedUnitTitles.length} unit${failedUnitTitles.length === 1 ? "" : "s"} failed to import and were skipped (likely a transient error) — re-run import to retry: ${failedUnitTitles.join(", ")}`
+                : ""
+            }${
+              emptyUnitTitles.length > 0
+                ? `\n\nNo files matched ${emptyUnitTitles.length === 1 ? "this unit" : "these units"}, so ${emptyUnitTitles.length === 1 ? "it is" : "they are"} empty for now: ${emptyUnitTitles.join(", ")}`
                 : ""
             }${youtubePlaylistWarning ? `\n\nYouTube playlist: ${youtubePlaylistWarning}` : ""}`;
             window.alert(message);

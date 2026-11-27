@@ -188,7 +188,14 @@ export async function getDriveShareEmail(): Promise<string | null> {
 
 export async function getDriveImportPreview(
   folderUrl: string
-): Promise<{ unitCount: number; lessonCount: number; isFlat: boolean; fileCount: number }> {
+): Promise<{
+  unitCount: number;
+  lessonCount: number;
+  isFlat: boolean;
+  fileCount: number;
+  /** Subfolder names that hold files, in Drive order - a starting point for a scaffolded unit outline. */
+  folderNames: string[];
+}> {
   await requireInstructor();
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const drive = await getDriveClient();
@@ -202,6 +209,9 @@ export async function getDriveImportPreview(
       lessonCount: fileCount,
       fileCount,
       isFlat: true,
+      folderNames: tree.isFlat
+        ? []
+        : tree.units.filter((u) => u.files.length > 0).map((u) => u.folderName.trim()).filter(Boolean),
     };
   } catch (error) {
     throw new Error(driveErrorMessage(error));

@@ -168,6 +168,131 @@ ${JSON.stringify(files, null, 2)}`,
   return { units: parsed.units ?? [], unclassified: parsed.unclassified ?? [] };
 }
 
+const SCAFFOLD_SCHEMA = {
+  type: "object",
+  properties: {
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          driveFileId: { type: "string" },
+          unitNumber: { type: "integer" },
+        },
+        required: ["driveFileId", "unitNumber"],
+        additionalProperties: false,
+      },
+    },
+    unclassified: GROUPING_SCHEMA.properties.unclassified,
+  },
+  required: ["assignments", "unclassified"],
+  additionalProperties: false,
+};
+
+/**
+ * Scaffolded replacement for the manager pass: the instructor has already
+ * named the units and their order, so the model only decides which of those
+ * units each file belongs to. Units are referenced by number, never by title,
+ * so a reworded title can't spawn an extra unit. Every unit the instructor
+ * named comes back, in their order, even one that ends up with no files.
+ */
+async function classifyIntoScaffoldUnits(
+  client: Anthropic,
+  course: { title: string; department: string },
+  unitTitles: string[],
+  files: FileForModel[]
+): Promise<OrganizeGroupingPlan> {
+  const numberedUnits = unitTitles.map((title, i) => ({ unitNumber: i + 1, title }));
+  const response = await client.messages.create(
+    {
+      model: "claude-opus-5-5",
+      max_tokens: 16000,
+      output_config: { format: { type: "json_schema", schema: SCAFFOLD_SCHEMA } },
+      messages: [
+        {
+          role: "user",
+          content: `You are sorting a flat list of Google Drive files into the units of "${course.title}" (${course.department}). The instructor has already decided the units and their order. Do NOT invent, rename, merge, split, or reorder units. Your only job is to say which of the instructor's units each file belongs to.
+
+Use each file's content-derived title, category, and topicSummary to decide. "folderPathHint" is only a weak signal; folder names that match a unit title are a moderate signal.
+
+Rules:
+- Reference a unit ONLY by its unitNumber from the list below.
+- Every driveFileId you use must appear in the input list. Never invent IDs.
+- Each file appears at most once: either in "assignments" or in "unclassified".
+- Homework, quizzes, practice problems, and recitations go in the unit whose topic they cover. Do not leave them unclassified for being assessments.
+- Recitations or reviews numbered against a lecture/week go with that week's unit.
+- A cumulative/final review goes in the last unit unless the instructor named a review unit.
+- Unclassified: administrative junk, unrelated files, or anything that fits none of the instructor's units, with a short reason. Prefer the closest unit over unclassified when a file is genuine course content.
+
+Instructor's units (JSON):
+${JSON.stringify(numberedUnits, null, 2)}
+
+Files (JSON):
+${JSON.stringify(files, null, 2)}`,
+        },
+      ],
+    },
+    { timeout: 5 * 60 * 1000 }
+  );
+
+  logAnthropicUsage("organize-scaffold-units", response);
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error(
+      `Scaffold grouping response contained no text content (stop_reason: ${response.stop_reason ?? "unknown"}, ${files.length} file(s) submitted).`
+    );
+  }
+
+  const parsed = JSON.parse(textBlock.text) as {
+    assignments?: { driveFileId: string; unitNumber: number }[];
+    unclassified?: OrganizeGroupingPlan["unclassified"];
+  };
+  return scaffoldPlanFromAssignments(unitTitles, files, parsed.assignments ?? [], parsed.unclassified ?? []);
+}
+
+/**
+ * Turns per-file unit numbers into the grouping shape, enforcing in code what
+ * the prompt only asks for: known ids, valid unit numbers, one home per file.
+ * A file the model silently skipped is reported as unclassified rather than
+ * dropped without a trace.
+ */
+function scaffoldPlanFromAssignments(
+  unitTitles: string[],
+  files: FileForModel[],
+  assignments: { driveFileId: string; unitNumber: number }[],
+  unclassifiedIn: OrganizeGroupingPlan["unclassified"]
+): OrganizeGroupingPlan {
+  const fileById = new Map(files.map((f) => [f.driveFileId, f]));
+  const units = unitTitles.map((title, i) => ({ title, order: i + 1, fileIds: [] as string[] }));
+  const placed = new Set<string>();
+
+  for (const { driveFileId, unitNumber } of assignments) {
+    if (!fileById.has(driveFileId) || placed.has(driveFileId)) continue;
+    const unit = Number.isInteger(unitNumber) ? units.at(unitNumber - 1) : undefined;
+    if (!unit || unitNumber < 1) continue;
+    unit.fileIds.push(driveFileId);
+    placed.add(driveFileId);
+  }
+
+  const unclassified: OrganizeGroupingPlan["unclassified"] = [];
+  for (const item of unclassifiedIn) {
+    if (!fileById.has(item.driveFileId) || placed.has(item.driveFileId)) continue;
+    placed.add(item.driveFileId);
+    unclassified.push(item);
+  }
+  for (const file of files) {
+    if (placed.has(file.driveFileId)) continue;
+    unclassified.push({
+      driveFileId: file.driveFileId,
+      name: file.fileName,
+      reason: "Not assigned to any of the instructor's units.",
+    });
+  }
+
+  return { units, unclassified };
+}
+
 type OrganizeUnitLessonsPlan = {
   lessons: OrganizeLessonPlan[];
   unclassified: { driveFileId: string; name: string; reason: string }[];
@@ -311,13 +436,20 @@ const UNIT_WORKER_CONCURRENCY = 4;
 export async function classifyOrganizeImport(
   course: { title: string; department: string },
   importTree: DriveImportTree,
-  analysisByFileId: Map<string, DriveFileAnalysis>
+  analysisByFileId: Map<string, DriveFileAnalysis>,
+  options?: { unitTitles?: string[] }
 ): Promise<OrganizeClassification> {
   const client = new Anthropic();
   const files = buildFilesForModel(importTree, analysisByFileId);
   const filesById = new Map(files.map((f) => [f.driveFileId, f]));
 
-  const grouping = await classifyOrganizeGrouping(client, course, files);
+  // Scaffolded import: the instructor's unit names replace the manager pass.
+  // The per-unit lesson workers below run the same either way.
+  const unitTitles = options?.unitTitles ?? [];
+  const grouping =
+    unitTitles.length > 0
+      ? await classifyIntoScaffoldUnits(client, course, unitTitles, files)
+      : await classifyOrganizeGrouping(client, course, files);
 
   for (const item of grouping.unclassified) {
     console.log(
@@ -416,7 +548,8 @@ function resolveEntries(ids: string[], driveFilesById: Map<string, DriveEntry>, 
 export function organizeClassificationToPersistable(
   classification: OrganizeClassification,
   driveFilesById: Map<string, DriveEntry>,
-  rootFolderId: string
+  rootFolderId: string,
+  options?: { keepEmptyUnits?: boolean }
 ): { units: OrganizeUnitForPersist[]; extraDuplicates: DriveDuplicate[] } {
   const duplicateFileIds = new Set(classification.duplicates.map((d) => d.driveFileId));
   const used = new Set<string>(duplicateFileIds);
@@ -487,7 +620,9 @@ export function organizeClassificationToPersistable(
       });
     }
 
-    if (topics.length === 0 && quizzes.length === 0) continue;
+    // An instructor-named unit stays even when no file landed in it - they
+    // asked for it, and a YouTube video or a later import may still fill it.
+    if (topics.length === 0 && quizzes.length === 0 && !options?.keepEmptyUnits) continue;
 
     units.push({
       title: unit.title,
@@ -499,6 +634,36 @@ export function organizeClassificationToPersistable(
   }
 
   return { units, extraDuplicates };
+}
+
+/**
+ * DRIVE_IMPORT_SKIP_AI version of scaffolded grouping: a file goes to the
+ * instructor's unit whose title matches one of its folder names
+ * (case-insensitive), else to the first unit. Lessons are one per file, as
+ * in classifyOrganizeFromStructure.
+ */
+export function classifyScaffoldFromStructure(
+  importTree: DriveImportTree,
+  analysisByFileId: Map<string, DriveFileAnalysis>,
+  unitTitles: string[]
+): OrganizeClassification {
+  const normalized = unitTitles.map((t) => t.trim().toLowerCase());
+  const units: OrganizeUnitPlan[] = unitTitles.map((title, i) => ({ title, order: i + 1, lessons: [] }));
+  for (const file of importTree.units.flatMap((u) => u.files)) {
+    const folders = file.folderPath.map((p) => p.trim().toLowerCase());
+    const matched = normalized.findIndex((t) => folders.includes(t));
+    const unit = units.at(matched >= 0 ? matched : 0)!;
+    unit.lessons.push({
+      title: analysisByFileId.get(file.id)?.title ?? file.name,
+      order: unit.lessons.length + 1,
+      type: "lesson",
+      videoFileIds: [],
+      contentFileIds: [],
+      fileTabFileIds: [file.id],
+      quizFileIds: [],
+    });
+  }
+  return { units, unclassified: [], duplicates: [] };
 }
 
 function cleanTitle(name: string): string {
