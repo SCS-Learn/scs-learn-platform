@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Copy the student's file next to the tests, then run them into results.json.
+cp /autograder/submission/frequent_words.py /autograder/source/frequent_words.py
+cd /autograder/source
+python3 run_tests.py

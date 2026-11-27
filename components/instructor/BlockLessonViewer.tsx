@@ -4,6 +4,7 @@ import { useState } from "react";
 import TopicLessonViewer, { type TopicLessonBlock } from "@/components/lesson/TopicLessonViewer";
 import InstructorQuizEditor from "@/components/instructor/InstructorQuizEditor";
 import LessonTitle from "@/components/lesson/LessonTitle";
+import InstructorCodeTaskPane from "@/components/instructor/InstructorCodeTaskPane";
 import type { LessonBlockView, LessonType, QuestionView } from "@/lib/instructor/mock-data";
 
 export default function BlockLessonViewer({
@@ -40,6 +41,20 @@ export default function BlockLessonViewer({
           This lesson has no content yet.
         </div>
       </div>
+    );
+  }
+
+  const codeTaskBlock = blocks.find((b) => b.kind === "code_task" && b.codeTask);
+  if (codeTaskBlock?.codeTask) {
+    return (
+      <InstructorCodeTaskPane
+        key={codeTaskBlock.id}
+        courseCode={courseCode}
+        blockId={codeTaskBlock.id}
+        initialTask={codeTaskBlock.codeTask}
+        lessonTitle={lessonTitle}
+        onTitleChange={onTitleChange}
+      />
     );
   }
 

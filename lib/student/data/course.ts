@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getLaunchingUser } from "@/lib/lti/config";
 import { cogniterraLessonUrl } from "@/lib/cogniterra/client";
+import { attachCodeTasks } from "@/lib/code-task/data";
 import { fetchLessonCompletionsForLessons } from "@/lib/student/data/lesson-progress";
 import { fetchQuizSubmissionsForLessons } from "@/lib/student/data/quiz-progress";
 import { reconcileQuizSubmission } from "@/lib/quiz/grading";
@@ -51,7 +52,7 @@ type AutolabLinkRow = {
 
 type LessonBlockRow = {
   id: string;
-  kind: "slide_file" | "video" | "question_group" | "course_notes";
+  kind: "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
   position: number;
   title: string | null;
   render_mode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
@@ -415,5 +416,6 @@ export async function getStudentCourse(courseCode: string): Promise<StudentCours
     fetchLessonCompletionsForLessons(lessonIds, learner.id),
   ]);
 
-  return toCourse(course, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId);
+  const studentCourse = toCourse(course, autolabByLessonId, ltiByLessonId, quizByLessonId, completedByLessonId);
+  return { ...studentCourse, units: await attachCodeTasks(supabase, studentCourse.units) };
 }

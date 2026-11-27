@@ -1,6 +1,7 @@
 export type LessonType = "lesson" | "quiz" | "external";
 
 import type { QuestionChoices } from "@/lib/quiz/types";
+import type { CodeTask } from "@/lib/code-task/types";
 
 export type QuestionView = {
   id: string;
@@ -16,7 +17,7 @@ export type QuestionView = {
 /** A whole existing asset (a slide file, a video, or a question set) composing an organize-mode lesson - see lesson_blocks in supabase/schema.sql. */
 export type LessonBlockView = {
   id: string;
-  kind: "slide_file" | "video" | "question_group" | "course_notes";
+  kind: "slide_file" | "video" | "question_group" | "course_notes" | "code_task";
   title: string | null;
   renderMode: "pdf_embed" | "slide_card_images" | "slide_rendered_images" | null;
   bodyHtml: string | null;
@@ -26,6 +27,8 @@ export type LessonBlockView = {
   videoUrl: string | null;
   questionGroupId: string | null;
   questions: QuestionView[] | null;
+  /** kind "code_task" only: the IDE task (editor + autograder). */
+  codeTask?: CodeTask | null;
 };
 
 export type LessonContentSource = "html" | "blocks";

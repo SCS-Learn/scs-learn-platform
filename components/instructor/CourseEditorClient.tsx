@@ -563,6 +563,8 @@ export default function CourseEditorClient({
       <LessonSettingsSidebar
         key={`module-settings-${selectedLessonId}`}
         lessonId={selectedLessonId}
+        courseCode={course.code}
+        hasCodeTask={selectedLesson?.blocks.some((b) => b.kind === "code_task") ?? false}
         attachments={selectedLesson?.attachments ?? []}
         onAttachmentsChange={(lessonId, update) =>
           setUnits((prev) =>

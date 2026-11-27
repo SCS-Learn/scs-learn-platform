@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Copy the student's file next to the tests, then run them into results.json.
+cp /autograder/submission/pattern_count.py /autograder/source/pattern_count.py
+cd /autograder/source
+python3 run_tests.py
