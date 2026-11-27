@@ -108,9 +108,14 @@ async function placeVideoGroup(
   course: { title: string; department: string },
   groupVideos: YoutubePlaylistVideo[],
   groupLabel: string | null,
-  existingUnits: YoutubeExistingUnit[]
+  existingUnits: YoutubeExistingUnit[],
+  lockUnits = false
 ): Promise<YoutubePlacementResult> {
   const client = new Anthropic();
+  // Scaffolded import: the instructor fixed the unit list, so no new units.
+  const lockHint = lockUnits
+    ? `\n\nIMPORTANT: The instructor has fixed this course's unit list. "newUnits" MUST be empty. Place each video only into one of the existing unit ids given (as a new or existing topic), or leave it out if it fits none of them.`
+    : "";
 
   const payloadVideos = groupVideos.map((v) => ({
     videoId: v.videoId,
@@ -126,7 +131,7 @@ async function placeVideoGroup(
       messages: [
         {
           role: "user",
-          content: `${placementPrompt(groupLabel)}\n\nCourse: "${course.title}" (${course.department})\n\nExisting course structure (JSON):\n${JSON.stringify(existingUnits, null, 2)}\n\nVideos to place (JSON):\n${JSON.stringify(payloadVideos, null, 2)}`,
+          content: `${placementPrompt(groupLabel)}${lockHint}\n\nCourse: "${course.title}" (${course.department})\n\nExisting course structure (JSON):\n${JSON.stringify(existingUnits, null, 2)}\n\nVideos to place (JSON):\n${JSON.stringify(payloadVideos, null, 2)}`,
         },
       ],
     },
@@ -165,7 +170,7 @@ async function placeVideoGroup(
 
   const newUnits: YoutubeNewUnit[] = [];
   const seenNewUnitKeys = new Set<string>();
-  for (const nu of raw.newUnits ?? []) {
+  for (const nu of lockUnits ? [] : raw.newUnits ?? []) {
     if (!nu || typeof nu.key !== "string" || !nu.key || typeof nu.title !== "string" || !nu.title.trim()) continue;
     if (existingUnitIds.has(nu.key) || seenNewUnitKeys.has(nu.key)) continue;
     seenNewUnitKeys.add(nu.key);
@@ -279,7 +284,8 @@ type WorkingUnit = { id: string; title: string; topics: WorkingTopic[] };
 export async function placeYoutubeVideos(
   course: { title: string; department: string },
   videos: YoutubePlaylistVideo[],
-  existingUnits: YoutubeExistingUnit[]
+  existingUnits: YoutubeExistingUnit[],
+  options?: { lockUnits?: boolean }
 ): Promise<YoutubePlacementResult> {
   if (videos.length === 0) return { newUnits: [], placements: [] };
 
@@ -300,7 +306,7 @@ export async function placeYoutubeVideos(
 
     let groupResult: YoutubePlacementResult;
     try {
-      groupResult = await placeVideoGroup(course, group.videos, group.label, working);
+      groupResult = await placeVideoGroup(course, group.videos, group.label, working, options?.lockUnits);
     } catch (error) {
       console.error(
         `placeYoutubeVideos: group "${group.label ?? "(ungrouped chunk)"}" (${group.videos.length} video(s)) failed, skipping it:`,

@@ -14,6 +14,7 @@ import {
 import { detectDuplicatesFromUnits, type TopicGroup } from "@/lib/google/classify-drive-topics";
 import {
   classifyOrganizeImport,
+  classifyScaffoldFromStructure,
   organizeClassificationToPersistable,
   type OrganizeUnitForPersist,
 } from "@/lib/google/classify-drive-organize";
@@ -781,7 +782,8 @@ async function attachYoutubePlaylistVideos(
   units: OrganizeUnitForPersist[],
   folderId: string,
   playlistOrChannelUrl: string,
-  alreadyPlacedVideoIds: Set<string>
+  alreadyPlacedVideoIds: Set<string>,
+  lockUnits = false
 ): Promise<string | null> {
   let videos: YoutubePlaylistVideo[];
   let truncatedNote: string | null = null;
@@ -846,7 +848,7 @@ async function attachYoutubePlaylistVideos(
 
   let result;
   try {
-    result = await placeYoutubeVideos(course, videos, existingUnits);
+    result = await placeYoutubeVideos(course, videos, existingUnits, { lockUnits });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not place playlist videos into the courseware.";
     console.error("attachYoutubePlaylistVideos: placement failed:", message);
@@ -1015,11 +1017,46 @@ async function releaseImportLock(courseId: string): Promise<void> {
   await supabase.from("courses").update({ import_lock_started_at: null }).eq("id", courseId);
 }
 
+const MAX_SCAFFOLD_UNITS = 60;
+const MAX_SCAFFOLD_UNIT_TITLE_LENGTH = 200;
+
+/**
+ * Cleans an instructor's unit outline: trims, drops blanks and
+ * case-insensitive repeats, caps length and count. Server actions are public
+ * endpoints, so this runs on the server rather than trusting the dialog.
+ */
+function normalizeUnitOutline(outline: string[] | undefined): string[] {
+  if (!Array.isArray(outline)) return [];
+  const seen = new Set<string>();
+  const titles: string[] = [];
+  for (const raw of outline) {
+    if (typeof raw !== "string") continue;
+    const title = raw.trim().replace(/\s+/g, " ").slice(0, MAX_SCAFFOLD_UNIT_TITLE_LENGTH);
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    titles.push(title);
+    if (titles.length >= MAX_SCAFFOLD_UNITS) break;
+  }
+  return titles;
+}
+
+type DriveImportOptions = {
+  cogniterra?: CogniterraSetupInput;
+  /**
+   * Scaffolded import: the instructor's own unit names, in order. When set,
+   * AI only sorts files into these units (and builds lessons inside them)
+   * instead of inventing the unit list. A unit whose title matches an
+   * existing unit in the course is filled in place, not duplicated.
+   */
+  unitOutline?: string[];
+};
+
 export async function runDriveImportOrganize(
   courseCode: string,
   folderUrl: string,
   youtubePlaylistUrl?: string,
-  options?: { cogniterra?: CogniterraSetupInput }
+  options?: DriveImportOptions
 ): Promise<{
   unitIds: string[];
   lessonIds: string[];
@@ -1027,6 +1064,8 @@ export async function runDriveImportOrganize(
   cogniterraWired: number;
   skippedAlreadyImportedCount: number;
   failedUnitTitles: string[];
+  /** Scaffolded import only: instructor-named units that received no lessons. */
+  emptyUnitTitles?: string[];
 }> {
   await requireCourseInstructor(courseCode);
   const lockSupabase = await createClient();
@@ -1044,7 +1083,10 @@ export async function runDriveImportOrganize(
   }
 
   try {
-    return await runDriveImportOrganizeLocked(courseCode, folderUrl, youtubePlaylistUrl, options);
+    return await runDriveImportOrganizeLocked(courseCode, folderUrl, youtubePlaylistUrl, {
+      ...options,
+      unitOutline: normalizeUnitOutline(options?.unitOutline),
+    });
   } finally {
     await releaseImportLock(lockCourse.id);
   }
@@ -1054,7 +1096,7 @@ async function runDriveImportOrganizeLocked(
   courseCode: string,
   folderUrl: string,
   youtubePlaylistUrl?: string,
-  options?: { cogniterra?: CogniterraSetupInput }
+  options?: DriveImportOptions
 ): Promise<{
   unitIds: string[];
   lessonIds: string[];
@@ -1062,6 +1104,8 @@ async function runDriveImportOrganizeLocked(
   cogniterraWired: number;
   skippedAlreadyImportedCount: number;
   failedUnitTitles: string[];
+  /** Scaffolded import only: instructor-named units that received no lessons. */
+  emptyUnitTitles?: string[];
 }> {
   const { folderId, resourceKey } = parseDriveFolderUrl(folderUrl);
   const resourceKeyHeader = resourceKey ? `${folderId}/${resourceKey}` : undefined;
@@ -1199,7 +1243,10 @@ async function runDriveImportOrganizeLocked(
   // the actual lecture videos) is only a dead end when there's no YouTube
   // source to build the course from instead - otherwise plannedUnits starts
   // empty and attachYoutubePlaylistVideos below builds it from scratch.
-  if (classifiableCount === 0 && !trimmedPlaylistUrl) {
+  const unitOutline = options?.unitOutline ?? [];
+  const isScaffolded = unitOutline.length > 0;
+
+  if (classifiableCount === 0 && !trimmedPlaylistUrl && !isScaffolded) {
     revalidatePath(`/instructor/${courseCode}`, "layout");
     return {
       unitIds: [],
@@ -1218,8 +1265,10 @@ async function runDriveImportOrganizeLocked(
   if (classifiableCount > 0) {
     const basenameDupes = detectDuplicatesFromUnits(filteredTree.units);
     const classification = skipImportAi()
-      ? classifyOrganizeFromStructure(filteredTree, filteredAnalysis)
-      : await classifyOrganizeImport(course, filteredTree, filteredAnalysis);
+      ? isScaffolded
+        ? classifyScaffoldFromStructure(filteredTree, filteredAnalysis, unitOutline)
+        : classifyOrganizeFromStructure(filteredTree, filteredAnalysis)
+      : await classifyOrganizeImport(course, filteredTree, filteredAnalysis, { unitTitles: unitOutline });
     unclassified = classification.unclassified;
 
     // Prefer model duplicates; fold in basename-detected pairs the model missed.
@@ -1234,7 +1283,8 @@ async function runDriveImportOrganizeLocked(
     const { units, extraDuplicates } = organizeClassificationToPersistable(
       { ...classification, duplicates },
       driveFilesById,
-      folderId
+      folderId,
+      { keepEmptyUnits: isScaffolded }
     );
     plannedUnits = units;
 
@@ -1245,16 +1295,41 @@ async function runDriveImportOrganizeLocked(
     }
   }
 
+  if (isScaffolded) {
+    // Every unit the instructor named exists, in their order, even when no
+    // file was classifiable at all (folder of links + a playlist, or an
+    // instructor laying out the course skeleton up front).
+    const plannedByTitle = new Map(plannedUnits.map((u) => [u.title.toLowerCase(), u]));
+    plannedUnits = unitOutline.map(
+      (title, i) =>
+        plannedByTitle.get(title.toLowerCase()) ?? {
+          title,
+          order: i + 1,
+          sourceDriveFolderId: folderId,
+          topics: [],
+          quizzes: [],
+        }
+    );
+  }
+
   const youtubePlaylistWarning = trimmedPlaylistUrl
-    ? await attachYoutubePlaylistVideos(course, plannedUnits, folderId, trimmedPlaylistUrl, alreadyPlacedVideoIds)
+    ? await attachYoutubePlaylistVideos(
+        course,
+        plannedUnits,
+        folderId,
+        trimmedPlaylistUrl,
+        alreadyPlacedVideoIds,
+        isScaffolded
+      )
     : null;
 
   // A cumulative/final course review almost never has one clear topical home,
   // so an LLM ordering call (classifyOrganizeGrouping's prerequisite-based
   // "order", or a YouTube review video's own new-unit anchor) is never a hard
   // guarantee it lands last - this is a deterministic backstop on top of
-  // those prompts, not a replacement for them.
-  plannedUnits = moveFinalReviewUnitsToEnd(plannedUnits);
+  // those prompts, not a replacement for them. Never applied to an
+  // instructor's own outline: their order is the order.
+  if (!isScaffolded) plannedUnits = moveFinalReviewUnitsToEnd(plannedUnits);
 
   for (const item of unclassified) {
     console.log(
@@ -1266,6 +1341,25 @@ async function runDriveImportOrganizeLocked(
   const lessonIds: string[] = [];
   const externalAssignments: DriveAssignmentForMatch[] = [];
   const failedUnitTitles: string[] = [];
+  const emptyUnitTitles: string[] = [];
+
+  // Scaffolded import fills a same-titled unit that already exists (one the
+  // instructor made by hand, or from an earlier import) instead of adding a
+  // second copy. Its new lessons go after the ones it already has.
+  const existingUnitsByTitle = new Map<string, { id: string; maxLessonPosition: number }>();
+  if (isScaffolded) {
+    const { data: existingUnits, error: existingUnitsError } = await supabase
+      .from("units")
+      .select("id, title, lessons(position)")
+      .eq("course_id", course.id);
+    if (existingUnitsError) throw new Error(existingUnitsError.message);
+    for (const row of existingUnits ?? []) {
+      const key = (row.title as string).trim().toLowerCase();
+      if (existingUnitsByTitle.has(key)) continue;
+      const positions = ((row.lessons ?? []) as { position: number }[]).map((l) => l.position);
+      existingUnitsByTitle.set(key, { id: row.id as string, maxLessonPosition: Math.max(0, ...positions) });
+    }
+  }
 
   for (const unit of plannedUnits) {
     // A DB/network hiccup partway through one unit (a Supabase gateway
@@ -1290,9 +1384,12 @@ async function runDriveImportOrganizeLocked(
     unit: OrganizeUnitForPersist,
     course: { title: string; department: string }
   ): Promise<void> {
-    const newUnit = await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
+    const existingUnit = isScaffolded ? existingUnitsByTitle.get(unit.title.trim().toLowerCase()) : undefined;
+    const newUnit = existingUnit
+      ? { id: existingUnit.id }
+      : await addUnitFromImport(courseCode, unit.title, unit.sourceDriveFolderId);
     let unitLessonCount = 0;
-    let lessonPosition = 0;
+    let lessonPosition = existingUnit?.maxLessonPosition ?? 0;
 
     for (const topic of unit.topics) {
       const primaryFile =
@@ -1393,6 +1490,14 @@ async function runDriveImportOrganizeLocked(
       unitLessonCount += 1;
     }
 
+    if (unitLessonCount === 0 && isScaffolded) {
+      // The instructor named this unit, so it stays even with nothing in it.
+      // Reported back so they know which units still need content.
+      emptyUnitTitles.push(unit.title);
+      if (!existingUnit) unitIds.push(newUnit.id);
+      return;
+    }
+
     if (unitLessonCount === 0) {
       // Every topic/quiz in this unit turned out empty - don't leave a unit
       // with a title and nothing underneath it.
@@ -1449,5 +1554,6 @@ async function runDriveImportOrganizeLocked(
     cogniterraWired,
     skippedAlreadyImportedCount,
     failedUnitTitles,
+    emptyUnitTitles,
   };
 }
